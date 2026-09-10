@@ -37,6 +37,18 @@ var srv = server.listen(0, "127.0.0.1", function () {
       assert.strictEqual(r.status, 200);
       assert.ok(r.body.indexOf("pdoFromShots") !== -1);
     })
+    .then(function () { return get(port, "/review.html"); })
+    .then(function (r) {
+      assert.strictEqual(r.status, 200);
+      assert.ok(r.body.indexOf("Estimate review") !== -1);
+    })
+    .then(function () { return get(port, "/api/estimates"); })
+    .then(function (r) {
+      assert.strictEqual(r.status, 200);
+      var j = JSON.parse(r.body);
+      assert.ok(Array.isArray(j.estimates));
+      assert.ok(j.summary);
+    })
     .then(function () {
       console.log("http.test.js ok");
       srv.close();

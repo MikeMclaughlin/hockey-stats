@@ -6,11 +6,13 @@ var fs = require("fs");
 var path = require("path");
 var { URL } = require("url");
 var stats = require("./js/stats.js");
+var archive = require("./js/archive.js");
 
 var ROOT = __dirname;
 var PORT = Number(process.env.PORT || 3080);
 var CACHE_MS = 5 * 60 * 1000;
 var cache = { at: 0, body: null };
+var ESTIMATES_FILE = path.join(ROOT, "data", "estimates.json");
 
 var TYPES = {
   ".html": "text/html; charset=utf-8",
@@ -185,7 +187,7 @@ async function buildMatchups() {
   function profile(teamObj) {
     var ab = teamObj.abbrev;
     var meta = stats.teamByAbbrev(ab) || {};
-    return stats.buildTeamProfile({
+    var p = stats.buildTeamProfile({
       abbrev: ab,
       name: meta.name || (teamObj.name && teamObj.name.default) || ab,
       logo: teamObj.logo,
@@ -194,6 +196,8 @@ async function buildMatchups() {
       moneypuck: mp[ab] || {},
       last5: last5Map[ab]
     });
+    p.score = teamObj.score;
+    return p;
   }
 
   var matchups = games.map(function (g) {
@@ -233,6 +237,82 @@ async function buildMatchups() {
   };
 }
 
+function loadEstimates() {
+  try {
+    return JSON.parse(fs.readFileSync(ESTIMATES_FILE, "utf8"));
+  } catch (e) {
+    return archive.emptyStore();
+  }
+}
+
+function saveEstimates(store) {
+  fs.writeFileSync(ESTIMATES_FILE, JSON.stringify(store, null, 2));
+}
+
+function persistMatchups(body) {
+  var store = loadEstimates();
+  (body.matchups || []).forEach(function (m) {
+    var proj = m.projected || {};
+    archive.freezeEstimate(store, {
+      id: m.id,
+      seasonId: body.seasonId,
+      gameDate: m.gameDate,
+      startTimeUTC: m.startTimeUTC,
+      venue: m.venue,
+      awayAbbrev: m.away && m.away.abbrev,
+      homeAbbrev: m.home && m.home.abbrev,
+      awayName: m.away && m.away.name,
+      homeName: m.home && m.home.name,
+      projectedAway: proj.away,
+      projectedHome: proj.home,
+      gameState: m.gameState
+    });
+    var row = store.byId[String(m.id)];
+    var as = m.away && m.away.score;
+    var hs = m.home && m.home.score;
+    if (row && archive.isFinalState(m.gameState) && as != null && hs != null) {
+      archive.applyResult(row, as, hs, m.gameState);
+    }
+  });
+  saveEstimates(store);
+  return store;
+}
+
+function estimatesPayload(store) {
+  store = store || loadEstimates();
+  var estimates = archive.listEstimates(store).sort(function (a, b) {
+    return String(a.gameDate || "").localeCompare(String(b.gameDate || "")) ||
+      String(a.startTimeUTC || "").localeCompare(String(b.startTimeUTC || ""));
+  });
+  return {
+    generatedAt: new Date().toISOString(),
+    estimates: estimates,
+    summary: archive.summarize(estimates)
+  };
+}
+
+async function gradeEstimates() {
+  var store = loadEstimates();
+  var rows = archive.listEstimates(store).filter(function (r) { return !r.graded && r.gameDate; });
+  var dates = {};
+  rows.forEach(function (r) { dates[r.gameDate] = true; });
+  var today = new Date().toISOString().slice(0, 10);
+  var keys = Object.keys(dates).filter(function (d) { return d <= today; });
+  for (var i = 0; i < keys.length; i++) {
+    var payload = await getJson("https://api-web.nhle.com/v1/score/" + keys[i]);
+    (payload.games || []).forEach(function (g) {
+      var row = store.byId[String(g.id)];
+      if (!row || !archive.isFinalState(g.gameState)) return;
+      var as = g.awayTeam && g.awayTeam.score;
+      var hs = g.homeTeam && g.homeTeam.score;
+      if (as == null || hs == null) return;
+      archive.applyResult(row, as, hs, g.gameState);
+    });
+  }
+  saveEstimates(store);
+  return estimatesPayload(store);
+}
+
 function handleApi(req, res, url) {
   var pathname = url.pathname.replace(/\/+$/, "") || "/";
   if (pathname === "/api/health") {
@@ -249,6 +329,7 @@ function handleApi(req, res, url) {
         cache = { at: Date.now(), body: body };
         try {
           fs.writeFileSync(path.join(ROOT, "data", "matchups.json"), JSON.stringify(body, null, 2));
+          persistMatchups(body);
         } catch (e) { /* ignore cache write */ }
         sendJson(res, 200, body);
       })
@@ -264,6 +345,18 @@ function handleApi(req, res, url) {
           return;
         }
         sendJson(res, 502, { error: String(err.message || err), matchups: [] });
+      });
+    return true;
+  }
+  if (pathname === "/api/estimates") {
+    sendJson(res, 200, estimatesPayload());
+    return true;
+  }
+  if (pathname === "/api/estimates/grade" && (req.method === "POST" || req.method === "GET")) {
+    gradeEstimates()
+      .then(function (body) { sendJson(res, 200, body); })
+      .catch(function (err) {
+        sendJson(res, 502, { error: String(err.message || err), estimates: [], summary: archive.summarize([]) });
       });
     return true;
   }
