@@ -54,7 +54,8 @@
       awayLast5: r.awayLast5,
       homeLast5: r.homeLast5,
       awayXgf5: r.awayXgf5,
-      homeXgf5: r.homeXgf5
+      homeXgf5: r.homeXgf5,
+      notes: r.notes || ""
     };
   }
 
@@ -62,6 +63,28 @@
     return state.rows.filter(function (r) {
       return TableFilter.rowMatches(displayOf(r), state.filters, NUMERIC);
     });
+  }
+
+  function paintSummary(rows) {
+    var s = HockeyArchive.summarize(rows);
+    var mae = 0;
+    var n = 0;
+    rows.forEach(function (r) {
+      if (r.totalErr == null) return;
+      mae += r.totalErr;
+      n += 1;
+    });
+    s.maeGoals = n ? Math.round((mae / n) * 100) / 100 : null;
+    var filtered = rows.length !== state.rows.length;
+    $("meta").textContent = filtered
+      ? rows.length + " of " + state.rows.length + " games"
+      : rows.length + " graded games";
+    $("summary").innerHTML =
+      '<div class="stat"><b>' + s.total + "</b><span>" + (filtered ? "filtered" : "games") + "</span></div>" +
+      '<div class="stat"><b>' + s.graded + "</b><span>graded</span></div>" +
+      '<div class="stat"><b>' + (s.exactPct == null ? "—" : s.exactPct + "%") + "</b><span>exact score</span></div>" +
+      '<div class="stat"><b>' + (s.winnerPct == null ? "—" : s.winnerPct + "%") + "</b><span>winner</span></div>" +
+      '<div class="stat"><b>' + (s.maeGoals == null ? "—" : s.maeGoals) + "</b><span>avg |goals| miss</span></div>";
   }
 
   function render() {
@@ -86,18 +109,19 @@
         "<td class='num'>" + r.projectedLabel + "</td>" +
         "<td class='num'>" + r.actualLabel + "</td>" +
         "<td><span class='mark " + v + "'>" + label(v) + "</span></td>" +
-        "<td class='num'>" + (r.totalErr == null ? "—" : r.totalErr) + "</td>" +
         "<td class='num'>" + fmt(r.awayPdo, 1) + "</td>" +
         "<td class='num'>" + fmt(r.homePdo, 1) + "</td>" +
         "<td class='num'>" + fmt(r.awayLast5, 2) + "</td>" +
         "<td class='num'>" + fmt(r.homeLast5, 2) + "</td>" +
         "<td class='num'>" + pct(r.awayXgf5) + "</td>" +
         "<td class='num'>" + pct(r.homeXgf5) + "</td>" +
+        "<td class='notes'>" + (r.notes || "—") + "</td>" +
         "</tr>";
     }).join("");
     var shown = rows.length;
     var total = state.rows.length;
     if ($("shown")) $("shown").textContent = shown === total ? total + " games" : shown + " of " + total;
+    paintSummary(rows);
     document.querySelectorAll("#bt thead tr:first-child th").forEach(function (th) {
       th.classList.remove("sort-asc", "sort-desc");
       if (th.getAttribute("data-key") === state.sortKey) {
@@ -130,15 +154,6 @@
         $("meta").textContent = d.error;
         return;
       }
-      var s = d.summary || {};
-      $("meta").textContent = (s.graded || 0) + " graded games";
-      if ($("shown")) $("shown").textContent = (d.rows || []).length + " games";
-      $("summary").innerHTML =
-        '<div class="stat"><b>' + (s.games || s.graded || 0) + "</b><span>games</span></div>" +
-        '<div class="stat"><b>' + (s.graded || 0) + "</b><span>graded</span></div>" +
-        '<div class="stat"><b>' + (s.exactPct == null ? "—" : s.exactPct + "%") + "</b><span>exact score</span></div>" +
-        '<div class="stat"><b>' + (s.winnerPct == null ? "—" : s.winnerPct + "%") + "</b><span>winner</span></div>" +
-        '<div class="stat"><b>' + (s.maeGoals == null ? "—" : s.maeGoals) + "</b><span>avg |goals| miss</span></div>";
       state.rows = d.rows || [];
       render();
     })

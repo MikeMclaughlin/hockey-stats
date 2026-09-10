@@ -35,8 +35,86 @@
   function emptyTeam() {
     return {
       gp: 0, gf: 0, ga: 0, sf: 0, sa: 0,
-      xgf5: 0, xga5: 0, gds: [], w: 0, l: 0, otl: 0
+      xgf5: 0, xga5: 0, gds: [], results: [], dates: [],
+      lastDate: null, w: 0, l: 0, otl: 0
     };
+  }
+
+  function dayDiff(from, to) {
+    if (!from || !to) return null;
+    var a = Date.parse(String(from).slice(0, 10) + "T00:00:00Z");
+    var b = Date.parse(String(to).slice(0, 10) + "T00:00:00Z");
+    if (!isFinite(a) || !isFinite(b)) return null;
+    return Math.round((b - a) / 86400000);
+  }
+
+  function streak(results, kind) {
+    var n = 0;
+    for (var i = results.length - 1; i >= 0; i--) {
+      if (results[i] !== kind) break;
+      n += 1;
+    }
+    return n;
+  }
+
+  function loseStreak(results) {
+    var n = 0;
+    for (var i = results.length - 1; i >= 0; i--) {
+      if (results[i] === "W") break;
+      n += 1;
+    }
+    return n;
+  }
+
+  function gamesInWindow(dates, gameDate, days) {
+    var n = 0;
+    for (var i = 0; i < dates.length; i++) {
+      var d = dayDiff(dates[i], gameDate);
+      if (d != null && d >= 1 && d <= days) n += 1;
+    }
+    return n;
+  }
+
+  function buildNotes(g, ast, hst, proj) {
+    var notes = [];
+    var awayRest = dayDiff(ast.lastDate, g.gameDate);
+    var homeRest = dayDiff(hst.lastDate, g.gameDate);
+    var awayB2B = awayRest === 1;
+    var homeB2B = homeRest === 1;
+    if (awayB2B && homeB2B) notes.push("Both on a back-to-back");
+    else if (awayB2B) notes.push(g.awayAbbrev + " played last night");
+    else if (homeB2B) notes.push(g.homeAbbrev + " played last night");
+    if (homeB2B && !awayB2B && awayRest != null && awayRest >= 2) {
+      notes.push(g.awayAbbrev + " is the rested visitor");
+    }
+    if (awayB2B && !homeB2B && homeRest != null && homeRest >= 2) {
+      notes.push("Rested home team vs tired visitor");
+    }
+    if (!homeB2B && homeRest != null && homeRest >= 3) {
+      notes.push(g.homeAbbrev + " home after " + homeRest + " days rest");
+    }
+    if (gamesInWindow(ast.dates, g.gameDate, 4) >= 2) {
+      notes.push(g.awayAbbrev + " in a 3-in-4");
+    }
+    if (gamesInWindow(hst.dates, g.gameDate, 4) >= 2) {
+      notes.push(g.homeAbbrev + " in a 3-in-4");
+    }
+    var aw = streak(ast.results, "W");
+    var hw = streak(hst.results, "W");
+    var al = loseStreak(ast.results);
+    var hl = loseStreak(hst.results);
+    if (aw >= 3) notes.push(g.awayAbbrev + " on a " + aw + "-game win streak");
+    if (hw >= 3) notes.push(g.homeAbbrev + " on a " + hw + "-game win streak");
+    if (al >= 3) notes.push(g.awayAbbrev + " on a " + al + "-game skid");
+    if (hl >= 3) notes.push(g.homeAbbrev + " on a " + hl + "-game skid");
+    var homeDog = proj && proj.away > proj.home;
+    if (homeDog && !homeB2B && (awayB2B || (homeRest != null && homeRest >= 2))) {
+      notes.push("Rested home underdog (" + g.homeAbbrev + ")");
+    }
+    if (proj && proj.away === proj.home && (awayB2B || homeB2B)) {
+      notes.push("Even projection with fatigue on one side");
+    }
+    return notes.join(" · ");
   }
 
   function last5Avg(st) {
@@ -79,6 +157,11 @@
     if (extra.xgf5) st.xgf5 += extra.xgf5;
     if (extra.xga5) st.xga5 += extra.xga5;
     st.gds.push(gf - ga);
+    st.results.push(winKind);
+    if (extra.date) {
+      st.lastDate = extra.date;
+      st.dates.push(extra.date);
+    }
     if (winKind === "W") st.w += 1;
     else if (winKind === "OTL") st.otl += 1;
     else st.l += 1;
@@ -161,6 +244,7 @@
         homeLast5: homeSnap.last5AvgGd,
         awayXgf5: awaySnap.xgfPct5v5,
         homeXgf5: homeSnap.xgfPct5v5,
+        notes: buildNotes(g, ast, hst, proj),
         skipped: !ready
       };
       if (ready) {
@@ -174,6 +258,8 @@
       var homeWin = g.actualHome > g.actualAway;
       var amp = mpIndex[g.id + ":" + g.awayAbbrev] || {};
       var hmp = mpIndex[g.id + ":" + g.homeAbbrev] || {};
+      amp.date = g.gameDate;
+      hmp.date = g.gameDate;
       applyGame(ast, g.actualAway, g.actualHome, awayWin ? "W" : "L", amp);
       applyGame(hst, g.actualHome, g.actualAway, homeWin ? "W" : awayWin ? "L" : "OTL", hmp);
     });
@@ -192,6 +278,7 @@
     run: run,
     profileFromState: profileFromState,
     parseTeamGameCsv: parseTeamGameCsv,
-    snapshotStats: snapshotStats
+    snapshotStats: snapshotStats,
+    buildNotes: buildNotes
   };
 });

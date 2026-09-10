@@ -188,6 +188,7 @@ tr.filters th {
   background: #fff;
   padding: 0.35rem 0.4rem;
 }
+td.notes { max-width: 22rem; font-size: 0.82rem; color: #334155; }
 tr.filters input {
   width: 100%;
   min-width: 4.5rem;

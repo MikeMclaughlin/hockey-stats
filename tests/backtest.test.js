@@ -46,4 +46,14 @@ assert.strictEqual(parsed.length, 1);
 assert.strictEqual(parsed[0].sf, 30);
 assert.ok(parsed[0].xgf5 > 2);
 
+var notes = backtest.buildNotes(
+  { gameDate: "2025-11-12", awayAbbrev: "BOS", homeAbbrev: "TOR" },
+  { lastDate: "2025-11-11", dates: ["2025-11-08", "2025-11-11"], results: ["W", "W", "W"] },
+  { lastDate: "2025-11-09", dates: ["2025-11-09"], results: ["L", "L", "L"] },
+  { away: 3, home: 2 }
+);
+assert.ok(notes.indexOf("played last night") !== -1);
+assert.ok(notes.indexOf("win streak") !== -1);
+assert.ok(notes.indexOf("Rested home underdog") !== -1);
+
 console.log("backtest.test.js ok");
