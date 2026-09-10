@@ -25,7 +25,7 @@
     </div>
   </header>
   <main>
-    <p class="note" id="note">Each game is projected from that team’s prior games only (min 5 GP). xG/HDCF are not leaked from the full season — scoring rates stand in.</p>
+    <p class="note" id="note">Each row uses only games before that night. Last-5 GD is from official scores. PDO and 5v5 xGF% are running totals from MoneyPuck game logs (situation all / 5on5).</p>
     <section id="summary" class="summary"></section>
     <section class="board">
       <h2>Graded games <small id="shown" class="meta"></small></h2>
@@ -40,6 +40,12 @@
               <th data-key="actualLabel">Final</th>
               <th data-key="verdict">Result</th>
               <th data-key="totalErr" class="num">|err|</th>
+              <th data-key="awayPdo" class="num">Away PDO</th>
+              <th data-key="homePdo" class="num">Home PDO</th>
+              <th data-key="awayLast5" class="num">Away L5 GD</th>
+              <th data-key="homeLast5" class="num">Home L5 GD</th>
+              <th data-key="awayXgf5" class="num">Away 5v5 xGF%</th>
+              <th data-key="homeXgf5" class="num">Home 5v5 xGF%</th>
             </tr>
             <tr class="filters">
               <th><input data-filter="gameDate" placeholder="contains"></th>
@@ -49,6 +55,12 @@
               <th><input data-filter="actualLabel" placeholder="contains"></th>
               <th><input data-filter="verdict" placeholder="exact / miss"></th>
               <th><input data-filter="totalErr" placeholder=">=2 or 0-1"></th>
+              <th><input data-filter="awayPdo" placeholder=">=102"></th>
+              <th><input data-filter="homePdo" placeholder="<=99"></th>
+              <th><input data-filter="awayLast5" placeholder=">=0.5"></th>
+              <th><input data-filter="homeLast5" placeholder="<0"></th>
+              <th><input data-filter="awayXgf5" placeholder=">=52"></th>
+              <th><input data-filter="homeXgf5" placeholder="<=48"></th>
             </tr>
           </thead>
           <tbody></tbody>

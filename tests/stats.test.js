@@ -25,15 +25,16 @@ assert.strictEqual(l5.games, 5);
 assert.strictEqual(l5.total, 3 - 1 + 1 - 3 + 0);
 
 var csv = [
-  "team,season,name,position,situation,games_played,xGoalsFor,xGoalsAgainst,shotsOnGoalFor,shotsOnGoalAgainst,shotAttemptsFor,shotAttemptsAgainst,goalsFor,goalsAgainst,highDangerShotsFor,highDangerShotsAgainst",
-  "BOS,2025,BOS,Team Level,5on5,82,200,180,2000,1900,4000,3800,210,190,400,380",
-  "BOS,2025,BOS,Team Level,all,82,250,240,2500,2400,5000,4800,270,250,800,600"
+  "team,season,name,position,situation,games_played,xGoalsFor,xGoalsAgainst,xGoalsPercentage,shotsOnGoalFor,shotsOnGoalAgainst,shotAttemptsFor,shotAttemptsAgainst,goalsFor,goalsAgainst,highDangerShotsFor,highDangerShotsAgainst",
+  "BOS,2025,BOS,Team Level,5on5,82,200,180,0.526,2000,1900,4000,3800,210,190,400,380",
+  "BOS,2025,BOS,Team Level,all,82,250,240,0.51,2500,2400,5000,4800,270,250,800,600"
 ].join("\n");
 var mp = stats.parseMoneyPuckCsv(csv);
 assert.ok(mp.BOS);
 assert.strictEqual(mp.BOS.goalsFor, 270);
 assert.ok(mp.BOS.cfPct > 50);
 assert.strictEqual(mp.BOS.hdcfPct, 57.1);
+assert.strictEqual(mp.BOS.xgfPct5v5, 52.6);
 
 var profile = stats.buildTeamProfile({
   abbrev: "BOS",
@@ -59,5 +60,21 @@ var est = stats.estimateScore(profile, {
 });
 assert.ok(est.away >= 1 && est.home >= 1);
 assert.ok(est.label.indexOf("–") !== -1);
+
+var parsed = stats.parsePartnerOdds({
+  awayTeam: { odds: [
+    { description: "MONEY_LINE_2_WAY", value: 110, qualifier: "" },
+    { description: "OVER_UNDER", value: -120, qualifier: "U6.5" }
+  ] },
+  homeTeam: { odds: [
+    { description: "MONEY_LINE_2_WAY", value: -130, qualifier: "" },
+    { description: "OVER_UNDER", value: 100, qualifier: "O6.5" }
+  ] }
+});
+assert.strictEqual(parsed.awayMl, 110);
+assert.strictEqual(parsed.homeMl, -130);
+assert.strictEqual(parsed.total, 6.5);
+assert.strictEqual(stats.formatAmerican(-130), "-130");
+assert.strictEqual(stats.formatAmerican(110), "+110");
 
 console.log("stats.test.js ok");

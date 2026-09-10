@@ -5,11 +5,11 @@ var stats = require("../js/stats.js");
 
 var strong = {
   ptsPct: 0.72, goalDiff: 80, pdo: 102, last5AvgGd: 1.4,
-  sogShare: 54, gfMinusXg: 12, cfPct: 54, hdcfPct: 56
+  sogShare: 54, gfMinusXg: 12, cfPct: 54, hdcfPct: 56, xgfPct5v5: 55
 };
 var weak = {
   ptsPct: 0.38, goalDiff: -40, pdo: 97, last5AvgGd: -1.1,
-  sogShare: 46, gfMinusXg: -8, cfPct: 46, hdcfPct: 44
+  sogShare: 46, gfMinusXg: -8, cfPct: 46, hdcfPct: 44, xgfPct5v5: 45
 };
 
 var e1 = stats.matchupEdge(strong, weak);
@@ -22,7 +22,7 @@ assert.ok(e2.score < 0);
 
 var even = stats.matchupEdge(strong, strong);
 assert.strictEqual(even.winner, "even");
-assert.ok(even.breakdown.length === 8);
+assert.ok(even.breakdown.length === 9);
 
 var awayTeam = { name: "Boston Bruins" };
 var homeTeam = { name: "Toronto Maple Leafs" };

@@ -35,6 +35,23 @@
     );
   }
 
+  function am(n) {
+    return HockeyStats.formatAmerican ? HockeyStats.formatAmerican(n) : (n == null ? "—" : String(n));
+  }
+
+  function oddsLine(m) {
+    var o = m.odds;
+    if (!o || (o.awayMl == null && o.homeMl == null && o.total == null)) {
+      return '<p class="odds muted">Moneyline / O/U not posted yet.</p>';
+    }
+    var ml = m.away.abbrev + " " + am(o.awayMl) + " · " + m.home.abbrev + " " + am(o.homeMl);
+    var ou = o.total != null
+      ? "O/U " + o.total + " (O " + am(o.overPrice) + " / U " + am(o.underPrice) + ")"
+      : "O/U —";
+    var src = o.partner ? " · " + o.partner : "";
+    return '<p class="odds"><span>ML ' + ml + "</span><span>" + ou + src + "</span></p>";
+  }
+
   function teamPills(t) {
     return (
       '<div class="pills">' +
@@ -44,6 +61,7 @@
         pill("GF vs xGF", t.gfMinusXg, "xgDiff", function (v) { return signed(v, 1); }) +
         pill("CF%", t.cfPct, "cf", function (v) { return v == null ? "—" : v + "%"; }) +
         pill("HDCF%", t.hdcfPct, "hdcf", function (v) { return v == null ? "—" : v + "%"; }) +
+        pill("5v5 xGF%", t.xgfPct5v5, "xgf5v5", function (v) { return v == null ? "—" : v + "%"; }) +
       "</div>"
     );
   }
@@ -84,6 +102,7 @@
               teamPills(m.home) +
             "</div>" +
           "</div>" +
+          oddsLine(m) +
           '<p class="why">' + why + "</p>" +
         "</article>"
       );
@@ -104,6 +123,10 @@
     if (key === "xg") return (m.away.gfMinusXg || 0) - (m.home.gfMinusXg || 0);
     if (key === "cf") return (m.away.cfPct || 0) - (m.home.cfPct || 0);
     if (key === "hdcf") return (m.away.hdcfPct || 0) - (m.home.hdcfPct || 0);
+    if (key === "xgf5") return (m.away.xgfPct5v5 || 0) - (m.home.xgfPct5v5 || 0);
+    if (key === "mlAway") return (m.odds && m.odds.awayMl) || 0;
+    if (key === "mlHome") return (m.odds && m.odds.homeMl) || 0;
+    if (key === "ou") return (m.odds && m.odds.total) || 0;
     if (key === "proj") {
       var p = m.projected || {};
       return (p.home || 0) - (p.away || 0);
@@ -143,7 +166,11 @@
           "<td class='num'>" + signed((m.away.gfMinusXg || 0) - (m.home.gfMinusXg || 0), 1) + "</td>" +
           "<td class='num'>" + signed((m.away.cfPct || 0) - (m.home.cfPct || 0), 1) + "</td>" +
           "<td class='num'>" + signed((m.away.hdcfPct || 0) - (m.home.hdcfPct || 0), 1) + "</td>" +
+          "<td class='num'>" + signed((m.away.xgfPct5v5 || 0) - (m.home.xgfPct5v5 || 0), 1) + "</td>" +
           "<td class='num'>" + ((m.projected && m.projected.label) || "—") + "</td>" +
+          "<td class='num'>" + am(m.odds && m.odds.awayMl) + "</td>" +
+          "<td class='num'>" + am(m.odds && m.odds.homeMl) + "</td>" +
+          "<td class='num'>" + ((m.odds && m.odds.total != null) ? m.odds.total : "—") + "</td>" +
         "</tr>"
       );
     }).join("");

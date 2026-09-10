@@ -123,7 +123,8 @@
     sogShare: 1.0,
     xgDiff: 1.3,
     cf: 1.2,
-    hdcf: 1.15
+    hdcf: 1.15,
+    xgf5v5: 1.2
   };
 
   function cmpNum(a, b) {
@@ -168,6 +169,7 @@
     total += add("xgDiff", away.gfMinusXg, home.gfMinusXg, true);
     total += add("cf", away.cfPct, home.cfPct, true);
     total += add("hdcf", away.hdcfPct, home.hdcfPct, true);
+    total += add("xgf5v5", away.xgfPct5v5, home.xgfPct5v5, true);
 
     var winner = "even";
     if (total > 0.04) winner = "away";
@@ -190,7 +192,8 @@
     sogShare: "shots-on-goal share",
     xgDiff: "goals versus expected goals",
     cf: "Corsi for percentage",
-    hdcf: "high-danger chances for percentage"
+    hdcf: "high-danger chances for percentage",
+    xgf5v5: "5-on-5 expected goals for percentage"
   };
 
   /**
@@ -223,7 +226,7 @@
     if (value == null || !isFinite(value)) return null;
     var baseline = 0;
     if (kind === "pdo") baseline = 100;
-    else if (kind === "sogShare" || kind === "cf" || kind === "hdcf") baseline = 50;
+    else if (kind === "sogShare" || kind === "cf" || kind === "hdcf" || kind === "xgf5v5") baseline = 50;
     if (value > baseline) return "pos";
     if (value < baseline) return "neg";
     return "even";
@@ -239,9 +242,19 @@
     for (var i = 1; i < lines.length; i++) {
       var cols = lines[i].split(",");
       var situation = cols[idx.situation];
-      if (situation !== "all") continue;
       var team = cols[idx.name] || cols[idx.team];
       if (!team) continue;
+      if (situation === "5on5") {
+        if (!byTeam[team]) byTeam[team] = { team: team };
+        var xp = Number(cols[idx.xGoalsPercentage]);
+        var xgf5 = Number(cols[idx.xGoalsFor]) || 0;
+        var xga5 = Number(cols[idx.xGoalsAgainst]) || 0;
+        byTeam[team].xgfPct5v5 = isFinite(xp) && xp > 0 && xp < 1.5
+          ? round(xp * 100, 1)
+          : sogShare(xgf5, xga5);
+        continue;
+      }
+      if (situation !== "all") continue;
       var gp = Number(cols[idx.games_played]) || 0;
       var xgf = Number(cols[idx.xGoalsFor]) || 0;
       var xga = Number(cols[idx.xGoalsAgainst]) || 0;
@@ -253,20 +266,18 @@
       var sa = Number(cols[idx.shotsOnGoalAgainst]) || 0;
       var hdf = Number(cols[idx.highDangerShotsFor]) || 0;
       var hda = Number(cols[idx.highDangerShotsAgainst]) || 0;
-      byTeam[team] = {
-        team: team,
-        games: gp,
-        xGoalsFor: xgf,
-        xGoalsAgainst: xga,
-        goalsFor: gf,
-        goalsAgainst: ga,
-        cfPct: sogShare(cf, ca),
-        sogShare: sogShare(sf, sa),
-        hdcfPct: sogShare(hdf, hda),
-        pdo: pdoFromShots(gf, ga, sf, sa),
-        gfMinusXg: round(gf - xgf, 2),
-        gaMinusXga: round(ga - xga, 2)
-      };
+      if (!byTeam[team]) byTeam[team] = { team: team };
+      byTeam[team].games = gp;
+      byTeam[team].xGoalsFor = xgf;
+      byTeam[team].xGoalsAgainst = xga;
+      byTeam[team].goalsFor = gf;
+      byTeam[team].goalsAgainst = ga;
+      byTeam[team].cfPct = sogShare(cf, ca);
+      byTeam[team].sogShare = sogShare(sf, sa);
+      byTeam[team].hdcfPct = sogShare(hdf, hda);
+      byTeam[team].pdo = pdoFromShots(gf, ga, sf, sa);
+      byTeam[team].gfMinusXg = round(gf - xgf, 2);
+      byTeam[team].gaMinusXga = round(ga - xga, 2);
     }
     return byTeam;
   }
@@ -312,7 +323,48 @@
       gfMinusXg: mp.gfMinusXg != null ? mp.gfMinusXg : null,
       cfPct: mp.cfPct != null ? mp.cfPct : null,
       hdcfPct: mp.hdcfPct != null ? mp.hdcfPct : null,
+      xgfPct5v5: mp.xgfPct5v5 != null ? mp.xgfPct5v5 : null,
       gamesPlayed: gp
+    };
+  }
+
+  function formatAmerican(n) {
+    if (n == null || !isFinite(n)) return "—";
+    var v = Math.round(n);
+    return (v > 0 ? "+" : "") + v;
+  }
+
+  function parsePartnerOdds(game) {
+    function pick(list, desc, qualContains) {
+      list = list || [];
+      for (var i = 0; i < list.length; i++) {
+        if (list[i].description !== desc) continue;
+        if (qualContains && String(list[i].qualifier || "").indexOf(qualContains) === -1) continue;
+        if (!qualContains && desc.indexOf("OVER") === -1 && list[i].qualifier) continue;
+        return list[i];
+      }
+      for (var j = 0; j < list.length; j++) {
+        if (list[j].description === desc && !qualContains) return list[j];
+      }
+      return null;
+    }
+    var away = (game && game.awayTeam && game.awayTeam.odds) || [];
+    var home = (game && game.homeTeam && game.homeTeam.odds) || [];
+    var awayMl = pick(away, "MONEY_LINE_2_WAY");
+    var homeMl = pick(home, "MONEY_LINE_2_WAY");
+    var over = pick(home, "OVER_UNDER", "O") || pick(away, "OVER_UNDER", "O");
+    var under = pick(away, "OVER_UNDER", "U") || pick(home, "OVER_UNDER", "U");
+    var total = null;
+    var overQ = over && over.qualifier;
+    var underQ = under && under.qualifier;
+    var m = String(overQ || underQ || "").match(/[OU]?\s*([0-9.]+)/);
+    if (m) total = Number(m[1]);
+    return {
+      awayMl: awayMl ? awayMl.value : null,
+      homeMl: homeMl ? homeMl.value : null,
+      total: total,
+      overPrice: over ? over.value : null,
+      underPrice: under ? under.value : null
     };
   }
 
@@ -376,6 +428,8 @@
     parseMoneyPuckCsv: parseMoneyPuckCsv,
     buildTeamProfile: buildTeamProfile,
     estimateScore: estimateScore,
+    parsePartnerOdds: parsePartnerOdds,
+    formatAmerican: formatAmerican,
     explainEdge: explainEdge,
     pillSign: pillSign,
     METRIC_LABELS: METRIC_LABELS,

@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-10T16:18:18.078Z",
+  "generatedAt": "2026-09-10T18:36:46.530Z",
   "currentDate": "2026-09-29",
   "prevDate": "2026-09-26",
   "nextDate": "2026-09-30",
@@ -36,6 +36,7 @@
         "gfMinusXg": -19.21,
         "cfPct": 52.6,
         "hdcfPct": 48.1,
+        "xgfPct5v5": 49,
         "gamesPlayed": 82
       },
       "home": {
@@ -60,13 +61,14 @@
         "gfMinusXg": -9.64,
         "cfPct": 59.3,
         "hdcfPct": 55.6,
+        "xgfPct5v5": 56,
         "gamesPlayed": 82
       },
       "edge": {
         "winner": "home",
-        "score": -1.823,
+        "score": -1.903,
         "awayScore": 0,
-        "homeScore": 1.823,
+        "homeScore": 1.903,
         "breakdown": [
           {
             "key": "ptsPct",
@@ -123,18 +125,33 @@
             "home": 55.6,
             "winner": "home",
             "points": -0.083
+          },
+          {
+            "key": "xgf5v5",
+            "away": 49,
+            "home": 56,
+            "winner": "home",
+            "points": -0.08
           }
         ]
       },
       "edgeTeam": "CAR",
       "edgeName": "Carolina Hurricanes",
-      "why": "Carolina Hurricanes has the edge because they lead in goal differential, goals versus expected goals, points percentage, high-danger chances for percentage, Corsi for percentage, shots-on-goal share, and PDO.",
+      "why": "Carolina Hurricanes has the edge because they lead in goal differential, goals versus expected goals, points percentage, high-danger chances for percentage, 5-on-5 expected goals for percentage, Corsi for percentage, shots-on-goal share, and PDO.",
       "projected": {
         "away": 3,
         "home": 4,
         "awayRaw": 3.22,
         "homeRaw": 3.95,
         "label": "3–4"
+      },
+      "odds": {
+        "awayMl": 110,
+        "homeMl": -130,
+        "total": 6.5,
+        "overPrice": 100,
+        "underPrice": -120,
+        "partner": "DraftKings"
       }
     },
     {
@@ -165,6 +182,7 @@
         "gfMinusXg": 10.69,
         "cfPct": 48.3,
         "hdcfPct": 47.2,
+        "xgfPct5v5": 48,
         "gamesPlayed": 82
       },
       "home": {
@@ -189,12 +207,13 @@
         "gfMinusXg": 13.59,
         "cfPct": 44.6,
         "hdcfPct": 45.7,
+        "xgfPct5v5": 46,
         "gamesPlayed": 82
       },
       "edge": {
         "winner": "away",
-        "score": 1.468,
-        "awayScore": 1.468,
+        "score": 1.494,
+        "awayScore": 1.494,
         "homeScore": 0,
         "breakdown": [
           {
@@ -252,18 +271,33 @@
             "home": 45.7,
             "winner": "away",
             "points": 0.019
+          },
+          {
+            "key": "xgf5v5",
+            "away": 48,
+            "home": 46,
+            "winner": "away",
+            "points": 0.026
           }
         ]
       },
       "edgeTeam": "MTL",
       "edgeName": "Montréal Canadiens",
-      "why": "Montréal Canadiens has the edge because they lead in goal differential, last-5 games goal differential, points percentage, Corsi for percentage, shots-on-goal share, high-danger chances for percentage, and PDO.",
+      "why": "Montréal Canadiens has the edge because they lead in goal differential, last-5 games goal differential, points percentage, Corsi for percentage, shots-on-goal share, 5-on-5 expected goals for percentage, high-danger chances for percentage, and PDO.",
       "projected": {
         "away": 3,
         "home": 3,
         "awayRaw": 3.28,
         "homeRaw": 2.9,
         "label": "3–3"
+      },
+      "odds": {
+        "awayMl": -105,
+        "homeMl": -115,
+        "total": 6.5,
+        "overPrice": 105,
+        "underPrice": -125,
+        "partner": "DraftKings"
       }
     },
     {
@@ -294,6 +328,7 @@
         "gfMinusXg": -2.2,
         "cfPct": 48.6,
         "hdcfPct": 46.9,
+        "xgfPct5v5": 48,
         "gamesPlayed": 82
       },
       "home": {
@@ -318,13 +353,14 @@
         "gfMinusXg": 20.43,
         "cfPct": 48.5,
         "hdcfPct": 46.6,
+        "xgfPct5v5": 47,
         "gamesPlayed": 82
       },
       "edge": {
         "winner": "home",
-        "score": -1.365,
+        "score": -1.353,
         "awayScore": 0,
-        "homeScore": 1.365,
+        "homeScore": 1.353,
         "breakdown": [
           {
             "key": "ptsPct",
@@ -381,6 +417,13 @@
             "home": 46.6,
             "winner": "away",
             "points": 0.004
+          },
+          {
+            "key": "xgf5v5",
+            "away": 48,
+            "home": 47,
+            "winner": "away",
+            "points": 0.013
           }
         ]
       },
@@ -393,6 +436,14 @@
         "awayRaw": 3.03,
         "homeRaw": 3.16,
         "label": "3–3"
+      },
+      "odds": {
+        "awayMl": 114,
+        "homeMl": -135,
+        "total": 5.5,
+        "overPrice": -120,
+        "underPrice": 100,
+        "partner": "DraftKings"
       }
     },
     {
@@ -423,6 +474,7 @@
         "gfMinusXg": -24.39,
         "cfPct": 47.7,
         "hdcfPct": 47,
+        "xgfPct5v5": 44,
         "gamesPlayed": 82
       },
       "home": {
@@ -447,13 +499,14 @@
         "gfMinusXg": 7.44,
         "cfPct": 50.4,
         "hdcfPct": 51.5,
+        "xgfPct5v5": 52,
         "gamesPlayed": 82
       },
       "edge": {
         "winner": "home",
-        "score": -2.612,
+        "score": -2.712,
         "awayScore": 0,
-        "homeScore": 2.612,
+        "homeScore": 2.712,
         "breakdown": [
           {
             "key": "ptsPct",
@@ -510,18 +563,33 @@
             "home": 51.5,
             "winner": "home",
             "points": -0.053
+          },
+          {
+            "key": "xgf5v5",
+            "away": 44,
+            "home": 52,
+            "winner": "home",
+            "points": -0.1
           }
         ]
       },
       "edgeTeam": "EDM",
       "edgeName": "Edmonton Oilers",
-      "why": "Edmonton Oilers has the edge because they lead in goals versus expected goals, goal differential, points percentage, shots-on-goal share, high-danger chances for percentage, Corsi for percentage, and PDO.",
+      "why": "Edmonton Oilers has the edge because they lead in goals versus expected goals, goal differential, points percentage, 5-on-5 expected goals for percentage, shots-on-goal share, high-danger chances for percentage, Corsi for percentage, and PDO.",
       "projected": {
         "away": 3,
         "home": 4,
         "awayRaw": 2.73,
         "homeRaw": 3.57,
         "label": "3–4"
+      },
+      "odds": {
+        "awayMl": 215,
+        "homeMl": -265,
+        "total": 6.5,
+        "overPrice": -110,
+        "underPrice": -110,
+        "partner": "DraftKings"
       }
     },
     {
@@ -552,6 +620,7 @@
         "gfMinusXg": -9.25,
         "cfPct": 46.1,
         "hdcfPct": 44,
+        "xgfPct5v5": 42,
         "gamesPlayed": 82
       },
       "home": {
@@ -576,13 +645,14 @@
         "gfMinusXg": -0.89,
         "cfPct": 52.4,
         "hdcfPct": 54.4,
+        "xgfPct5v5": 54,
         "gamesPlayed": 82
       },
       "edge": {
         "winner": "home",
-        "score": -2.664,
+        "score": -2.814,
         "awayScore": 0,
-        "homeScore": 2.664,
+        "homeScore": 2.814,
         "breakdown": [
           {
             "key": "ptsPct",
@@ -639,18 +709,33 @@
             "home": 54.4,
             "winner": "home",
             "points": -0.122
+          },
+          {
+            "key": "xgf5v5",
+            "away": 42,
+            "home": 54,
+            "winner": "home",
+            "points": -0.15
           }
         ]
       },
       "edgeTeam": "VGK",
       "edgeName": "Vegas Golden Knights",
-      "why": "Vegas Golden Knights has the edge because they lead in goals versus expected goals, goal differential, points percentage, last-5 games goal differential, high-danger chances for percentage, shots-on-goal share, and Corsi for percentage.",
+      "why": "Vegas Golden Knights has the edge because they lead in goals versus expected goals, goal differential, points percentage, 5-on-5 expected goals for percentage, last-5 games goal differential, high-danger chances for percentage, shots-on-goal share, and Corsi for percentage.",
       "projected": {
         "away": 2,
         "home": 3,
         "awayRaw": 2.47,
         "homeRaw": 3.32,
         "label": "2–3"
+      },
+      "odds": {
+        "awayMl": 205,
+        "homeMl": -250,
+        "total": 5.5,
+        "overPrice": -125,
+        "underPrice": 105,
+        "partner": "DraftKings"
       }
     }
   ]

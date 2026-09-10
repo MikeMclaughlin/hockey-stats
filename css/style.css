@@ -74,7 +74,7 @@ button {
   border-radius: 8px; padding: 0.45rem 0.8rem; cursor: pointer;
 }
 button:hover { filter: brightness(1.15); }
-main { max-width: 1200px; margin: 0 auto; padding: 1.25rem 1rem 3rem; }
+main { max-width: 90%; margin: 0 auto; padding: 1.25rem 1rem 3rem; }
 .note {
   background: #fff6d8; border: 1px solid #ead48a; padding: 0.7rem 0.9rem;
   border-radius: 8px; margin-bottom: 1rem;
@@ -149,6 +149,23 @@ main { max-width: 1200px; margin: 0 auto; padding: 1.25rem 1rem 3rem; }
 .pill.even {
   background: #f4f6f8;
 }
+.odds {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.4rem 1rem;
+  margin: 0.15rem 1rem 0;
+  padding: 0.55rem 0.75rem;
+  background: #111827;
+  color: #f8fafc;
+  border-radius: 10px;
+  font-variant-numeric: tabular-nums;
+  font-size: 0.9rem;
+}
+.odds.muted {
+  background: #eef2f6;
+  color: var(--muted);
+}
 .why {
   margin: 0.65rem 1rem 1rem;
   padding: 0.7rem 0.8rem;
@@ -182,7 +199,7 @@ tr.filters input {
 }
 th.sort-asc::after { content: " ▲"; font-size: 0.7em; }
 th.sort-desc::after { content: " ▼"; font-size: 0.7em; }
-td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+td.num, th.num { text-align: left; font-variant-numeric: tabular-nums; }
 .legend ul { padding-left: 1.1rem; color: var(--muted); }
 .legend li { margin: 0.35rem 0; }
 footer {

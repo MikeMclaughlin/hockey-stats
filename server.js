@@ -15,6 +15,7 @@ var CACHE_MS = 5 * 60 * 1000;
 var cache = { at: 0, body: null };
 var ESTIMATES_FILE = path.join(ROOT, "data", "estimates.json");
 var BACKTEST_FILE = path.join(ROOT, "data", "backtest-20252026.json");
+var MP_GAMES_FILE = path.join(ROOT, "data", "mp-games-2025.json");
 
 var TYPES = {
   ".html": "text/html; charset=utf-8",
@@ -142,6 +143,18 @@ function mpSeasonYear(seasonId) {
 async function buildMatchups() {
   var score = await getJson("https://api-web.nhle.com/v1/score/now");
   var standings = await getJson("https://api-web.nhle.com/v1/standings/now");
+  var oddsById = Object.create(null);
+  var oddsPartner = null;
+  try {
+    var partner = await getJson("https://api-web.nhle.com/v1/partner-game/US/now");
+    oddsPartner = partner.bettingPartner && partner.bettingPartner.name;
+    (partner.games || []).forEach(function (og) {
+      oddsById[og.gameId] = stats.parsePartnerOdds(og);
+      oddsById[og.gameId].partner = oddsPartner;
+    });
+  } catch (e) {
+    oddsById = Object.create(null);
+  }
   var seasonId = seasonIdFromScore(score);
   var statsSeason = statsSeasonFor(seasonId, score);
   var summaryUrl =
@@ -219,7 +232,8 @@ async function buildMatchups() {
       edgeTeam: winnerTeam ? winnerTeam.abbrev : "EVEN",
       edgeName: winnerTeam ? winnerTeam.name : "Even matchup",
       why: stats.explainEdge(edge, away, home),
-      projected: stats.estimateScore(away, home)
+      projected: stats.estimateScore(away, home),
+      odds: oddsById[g.id] || null
     };
   });
 
@@ -315,6 +329,25 @@ async function gradeEstimates() {
   return estimatesPayload(store);
 }
 
+async function loadMoneyPuckGames() {
+  try {
+    if (fs.existsSync(MP_GAMES_FILE)) {
+      return JSON.parse(fs.readFileSync(MP_GAMES_FILE, "utf8"));
+    }
+  } catch (e) { /* rebuild */ }
+  var teams = stats.TEAMS.map(function (t) { return t.abbrev; });
+  var all = [];
+  for (var i = 0; i < teams.length; i++) {
+    var csv = await getText(
+      "https://moneypuck.com/moneypuck/playerData/careers/gameByGame/regular/teams/" +
+        teams[i] + ".csv"
+    );
+    all = all.concat(backtest.parseTeamGameCsv(csv, "2025"));
+  }
+  try { fs.writeFileSync(MP_GAMES_FILE, JSON.stringify(all)); } catch (e) { /* ignore */ }
+  return all;
+}
+
 async function runBacktest() {
   var teams = stats.TEAMS.map(function (t) { return t.abbrev; });
   var schedules = [];
@@ -322,7 +355,8 @@ async function runBacktest() {
     schedules.push(await getJson("https://api-web.nhle.com/v1/club-schedule-season/" + teams[i] + "/20252026"));
   }
   var games = backtest.collectGames(schedules);
-  var out = backtest.run(games, { minGp: 5 });
+  var mpGames = await loadMoneyPuckGames();
+  var out = backtest.run(games, { minGp: 5, mpGames: mpGames });
   out.generatedAt = new Date().toISOString();
   out.source = "walk-forward from NHL 2025-26 regular-season finals; xG/HDCF fall back to prior scoring rates";
   out.rows = out.rows.filter(function (r) { return r.graded; });

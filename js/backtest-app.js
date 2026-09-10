@@ -2,9 +2,21 @@
   "use strict";
 
   var state = { rows: [], sortKey: "gameDate", sortDir: 1, filters: {} };
-  var NUMERIC = { totalErr: true };
+  var NUMERIC = {
+    totalErr: true, awayPdo: true, homePdo: true,
+    awayLast5: true, homeLast5: true, awayXgf5: true, homeXgf5: true
+  };
 
   function $(id) { return document.getElementById(id); }
+
+  function fmt(v, d) {
+    if (v == null || v === "") return "—";
+    return Number(v).toFixed(d);
+  }
+
+  function pct(v) {
+    return v == null ? "—" : Number(v).toFixed(1) + "%";
+  }
 
   function verdictOf(r) {
     if (HockeyArchive && HockeyArchive.verdict) return HockeyArchive.verdict(r);
@@ -36,7 +48,13 @@
       projectedLabel: r.projectedLabel,
       actualLabel: r.actualLabel,
       verdict: label(v),
-      totalErr: r.totalErr
+      totalErr: r.totalErr,
+      awayPdo: r.awayPdo,
+      homePdo: r.homePdo,
+      awayLast5: r.awayLast5,
+      homeLast5: r.homeLast5,
+      awayXgf5: r.awayXgf5,
+      homeXgf5: r.homeXgf5
     };
   }
 
@@ -57,7 +75,7 @@
       return String(av).localeCompare(String(bv)) * state.sortDir;
     });
     var empty = rows.length === 0
-      ? "<tr><td colspan='7' class='empty'>No games match the column filters.</td></tr>"
+      ? "<tr><td colspan='13' class='empty'>No games match the column filters.</td></tr>"
       : "";
     document.querySelector("#bt tbody").innerHTML = empty || rows.map(function (r) {
       var v = verdictOf(r);
@@ -69,6 +87,12 @@
         "<td class='num'>" + r.actualLabel + "</td>" +
         "<td><span class='mark " + v + "'>" + label(v) + "</span></td>" +
         "<td class='num'>" + (r.totalErr == null ? "—" : r.totalErr) + "</td>" +
+        "<td class='num'>" + fmt(r.awayPdo, 1) + "</td>" +
+        "<td class='num'>" + fmt(r.homePdo, 1) + "</td>" +
+        "<td class='num'>" + fmt(r.awayLast5, 2) + "</td>" +
+        "<td class='num'>" + fmt(r.homeLast5, 2) + "</td>" +
+        "<td class='num'>" + pct(r.awayXgf5) + "</td>" +
+        "<td class='num'>" + pct(r.homeXgf5) + "</td>" +
         "</tr>";
     }).join("");
     var shown = rows.length;

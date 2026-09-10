@@ -34,5 +34,16 @@ assert.strictEqual(out.summary.skipped, 5);
 assert.ok(out.summary.graded >= 7);
 assert.ok(out.summary.winnerPct != null);
 assert.ok(out.rows.some(function (r) { return r.graded && r.projectedLabel; }));
+assert.ok(out.rows[6].awayLast5 != null);
+
+var csv = [
+  "team,season,name,gameId,playerTeam,opposingTeam,home_or_away,gameDate,position,situation,xGoalsFor,xGoalsAgainst,shotsOnGoalFor,shotsOnGoalAgainst,goalsFor,goalsAgainst",
+  "BOS,2025,BOS,1,BOS,TOR,HOME,20251008,Team Level,all,3,2,30,28,4,2",
+  "BOS,2025,BOS,1,BOS,TOR,HOME,20251008,Team Level,5on5,2.2,1.8,22,20,2,1"
+].join("\n");
+var parsed = backtest.parseTeamGameCsv(csv, "2025");
+assert.strictEqual(parsed.length, 1);
+assert.strictEqual(parsed[0].sf, 30);
+assert.ok(parsed[0].xgf5 > 2);
 
 console.log("backtest.test.js ok");
