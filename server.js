@@ -7,12 +7,14 @@ var path = require("path");
 var { URL } = require("url");
 var stats = require("./js/stats.js");
 var archive = require("./js/archive.js");
+var backtest = require("./js/backtest.js");
 
 var ROOT = __dirname;
 var PORT = Number(process.env.PORT || 3080);
 var CACHE_MS = 5 * 60 * 1000;
 var cache = { at: 0, body: null };
 var ESTIMATES_FILE = path.join(ROOT, "data", "estimates.json");
+var BACKTEST_FILE = path.join(ROOT, "data", "backtest-20252026.json");
 
 var TYPES = {
   ".html": "text/html; charset=utf-8",
@@ -313,6 +315,20 @@ async function gradeEstimates() {
   return estimatesPayload(store);
 }
 
+async function runBacktest() {
+  var teams = stats.TEAMS.map(function (t) { return t.abbrev; });
+  var schedules = [];
+  for (var i = 0; i < teams.length; i++) {
+    schedules.push(await getJson("https://api-web.nhle.com/v1/club-schedule-season/" + teams[i] + "/20252026"));
+  }
+  var games = backtest.collectGames(schedules);
+  var out = backtest.run(games, { minGp: 5 });
+  out.generatedAt = new Date().toISOString();
+  out.source = "walk-forward from NHL 2025-26 regular-season finals; xG/HDCF fall back to prior scoring rates";
+  out.rows = out.rows.filter(function (r) { return r.graded; });
+  return out;
+}
+
 function handleApi(req, res, url) {
   var pathname = url.pathname.replace(/\/+$/, "") || "/";
   if (pathname === "/api/health") {
@@ -345,6 +361,23 @@ function handleApi(req, res, url) {
           return;
         }
         sendJson(res, 502, { error: String(err.message || err), matchups: [] });
+      });
+    return true;
+  }
+  if (pathname === "/api/backtest") {
+    try {
+      if (fs.existsSync(BACKTEST_FILE) && url.searchParams.get("refresh") !== "1") {
+        sendJson(res, 200, JSON.parse(fs.readFileSync(BACKTEST_FILE, "utf8")));
+        return true;
+      }
+    } catch (e) { /* rebuild */ }
+    runBacktest()
+      .then(function (body) {
+        try { fs.writeFileSync(BACKTEST_FILE, JSON.stringify(body, null, 2)); } catch (e) { /* ignore */ }
+        sendJson(res, 200, body);
+      })
+      .catch(function (err) {
+        sendJson(res, 502, { error: String(err.message || err) });
       });
     return true;
   }
@@ -386,4 +419,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { server, buildMatchups, PORT };
+module.exports = { server, buildMatchups, runBacktest, PORT };

@@ -161,10 +161,25 @@ main { max-width: 1200px; margin: 0 auto; padding: 1.25rem 1rem 3rem; }
 }
 .board { margin-top: 2rem; }
 .board h2, .legend h2 { font-size: 1.1rem; }
+.board h2 small { font-weight: 500; margin-left: 0.5rem; }
 .table-wrap { overflow-x: auto; background: #fff; border: 1px solid var(--line); border-radius: 12px; }
 table { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
 th, td { padding: 0.55rem 0.65rem; border-bottom: 1px solid var(--line); text-align: left; white-space: nowrap; }
 th { cursor: pointer; user-select: none; background: #f3f6fa; }
+tr.filters th {
+  cursor: default;
+  background: #fff;
+  padding: 0.35rem 0.4rem;
+}
+tr.filters input {
+  width: 100%;
+  min-width: 4.5rem;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 0.28rem 0.4rem;
+  font: inherit;
+  font-size: 0.8rem;
+}
 th.sort-asc::after { content: " ▲"; font-size: 0.7em; }
 th.sort-desc::after { content: " ▼"; font-size: 0.7em; }
 td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }

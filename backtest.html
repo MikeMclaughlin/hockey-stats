@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Hockey Stats — 2025-26 backtest</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <header class="top">
+    <div class="brand">
+      <span class="puck" aria-hidden="true"></span>
+      <div>
+        <h1>2025-26 score backtest</h1>
+        <p class="tag">Walk-forward estimates vs official finals</p>
+      </div>
+    </div>
+    <div class="toolbar">
+      <nav class="nav">
+        <a href="/">Matchups</a>
+        <a href="/review.html">Review</a>
+        <a href="/backtest.html" aria-current="page">Backtest</a>
+      </nav>
+      <span id="meta" class="meta">Loading…</span>
+    </div>
+  </header>
+  <main>
+    <p class="note" id="note">Each game is projected from that team’s prior games only (min 5 GP). xG/HDCF are not leaked from the full season — scoring rates stand in.</p>
+    <section id="summary" class="summary"></section>
+    <section class="board">
+      <h2>Graded games <small id="shown" class="meta"></small></h2>
+      <div class="table-wrap">
+        <table id="bt">
+          <thead>
+            <tr>
+              <th data-key="gameDate">Date</th>
+              <th data-key="awayAbbrev">Away</th>
+              <th data-key="homeAbbrev">Home</th>
+              <th data-key="projectedLabel">Estimate</th>
+              <th data-key="actualLabel">Final</th>
+              <th data-key="verdict">Result</th>
+              <th data-key="totalErr" class="num">|err|</th>
+            </tr>
+            <tr class="filters">
+              <th><input data-filter="gameDate" placeholder="contains"></th>
+              <th><input data-filter="awayAbbrev" placeholder="contains"></th>
+              <th><input data-filter="homeAbbrev" placeholder="contains"></th>
+              <th><input data-filter="projectedLabel" placeholder="3–4"></th>
+              <th><input data-filter="actualLabel" placeholder="contains"></th>
+              <th><input data-filter="verdict" placeholder="exact / miss"></th>
+              <th><input data-filter="totalErr" placeholder=">=2 or 0-1"></th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+  <footer>
+    <span>hockey-stats v1.1.0</span>
+    <span>NHL club-schedule-season 20252026</span>
+  </footer>
+  <script src="/js/archive.js"></script>
+  <script src="/js/table-filter.js"></script>
+  <script src="/js/backtest-app.js"></script>
+</body>
+</html>
