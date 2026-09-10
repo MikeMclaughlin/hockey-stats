@@ -52,6 +52,11 @@
     return '<p class="odds"><span>ML ' + ml + "</span><span>" + ou + src + "</span></p>";
   }
 
+  function notesLine(m) {
+    if (!m.notes) return '<p class="notes-row muted">No fatigue or streak notes.</p>';
+    return '<p class="notes-row">' + m.notes + "</p>";
+  }
+
   function teamPills(t) {
     return (
       '<div class="pills">' +
@@ -103,6 +108,7 @@
             "</div>" +
           "</div>" +
           oddsLine(m) +
+          notesLine(m) +
           '<p class="why">' + why + "</p>" +
         "</article>"
       );

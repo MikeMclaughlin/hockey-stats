@@ -166,6 +166,20 @@ main { max-width: 90%; margin: 0 auto; padding: 1.25rem 1rem 3rem; }
   background: #eef2f6;
   color: var(--muted);
 }
+.notes-row {
+  margin: 0.45rem 1rem 0;
+  padding: 0.55rem 0.75rem;
+  background: #fff8e8;
+  border: 1px solid #ead9a8;
+  border-radius: 10px;
+  color: #5a4a1a;
+  font-size: 0.88rem;
+}
+.notes-row.muted {
+  background: #f4f6f8;
+  border-color: var(--line);
+  color: var(--muted);
+}
 .why {
   margin: 0.65rem 1rem 1rem;
   padding: 0.7rem 0.8rem;

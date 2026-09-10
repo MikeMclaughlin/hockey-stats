@@ -8,6 +8,7 @@ var { URL } = require("url");
 var stats = require("./js/stats.js");
 var archive = require("./js/archive.js");
 var backtest = require("./js/backtest.js");
+var store = require("./js/store.js");
 
 var ROOT = __dirname;
 var PORT = Number(process.env.PORT || 3080);
@@ -185,6 +186,7 @@ async function buildMatchups() {
   });
 
   var last5Map = {};
+  var formMap = {};
   var abbrevs = Object.keys(needed);
   await Promise.all(
     abbrevs.map(function (ab) {
@@ -192,9 +194,11 @@ async function buildMatchups() {
       return getJson(url)
         .then(function (sched) {
           last5Map[ab] = last5FromSchedule(sched, ab);
+          formMap[ab] = backtest.scheduleForm(sched.games || [], ab, score.currentDate);
         })
         .catch(function () {
           last5Map[ab] = null;
+          formMap[ab] = { lastDate: null, dates: [], results: [] };
         });
     })
   );
@@ -220,6 +224,8 @@ async function buildMatchups() {
     var home = profile(g.homeTeam || {});
     var edge = stats.matchupEdge(away, home);
     var winnerTeam = edge.winner === "away" ? away : edge.winner === "home" ? home : null;
+    var projected = stats.estimateScore(away, home);
+    var odds = oddsById[g.id] || null;
     return {
       id: g.id,
       gameDate: g.gameDate || score.currentDate,
@@ -232,8 +238,15 @@ async function buildMatchups() {
       edgeTeam: winnerTeam ? winnerTeam.abbrev : "EVEN",
       edgeName: winnerTeam ? winnerTeam.name : "Even matchup",
       why: stats.explainEdge(edge, away, home),
-      projected: stats.estimateScore(away, home),
-      odds: oddsById[g.id] || null
+      projected: projected,
+      odds: odds,
+      notes: backtest.buildNotes(
+        { gameDate: g.gameDate, awayAbbrev: away.abbrev, homeAbbrev: home.abbrev },
+        formMap[away.abbrev] || { lastDate: null, dates: [], results: [] },
+        formMap[home.abbrev] || { lastDate: null, dates: [], results: [] },
+        projected,
+        odds
+      )
     };
   });
 
@@ -253,23 +266,20 @@ async function buildMatchups() {
   };
 }
 
-function loadEstimates() {
-  try {
-    return JSON.parse(fs.readFileSync(ESTIMATES_FILE, "utf8"));
-  } catch (e) {
-    return archive.emptyStore();
-  }
+async function loadEstimates() {
+  var data = await store.readJson(store.KEYS.estimates, null);
+  return data && data.byId ? data : archive.emptyStore();
 }
 
-function saveEstimates(store) {
-  fs.writeFileSync(ESTIMATES_FILE, JSON.stringify(store, null, 2));
+async function saveEstimates(est) {
+  await store.writeJson(store.KEYS.estimates, est);
 }
 
-function persistMatchups(body) {
-  var store = loadEstimates();
+async function persistMatchups(body) {
+  var storeEst = await loadEstimates();
   (body.matchups || []).forEach(function (m) {
     var proj = m.projected || {};
-    archive.freezeEstimate(store, {
+    archive.freezeEstimate(storeEst, {
       id: m.id,
       seasonId: body.seasonId,
       gameDate: m.gameDate,
@@ -283,20 +293,20 @@ function persistMatchups(body) {
       projectedHome: proj.home,
       gameState: m.gameState
     });
-    var row = store.byId[String(m.id)];
+    var row = storeEst.byId[String(m.id)];
     var as = m.away && m.away.score;
     var hs = m.home && m.home.score;
     if (row && archive.isFinalState(m.gameState) && as != null && hs != null) {
       archive.applyResult(row, as, hs, m.gameState);
     }
   });
-  saveEstimates(store);
-  return store;
+  await saveEstimates(storeEst);
+  return storeEst;
 }
 
-function estimatesPayload(store) {
-  store = store || loadEstimates();
-  var estimates = archive.listEstimates(store).sort(function (a, b) {
+async function estimatesPayload(est) {
+  est = est || await loadEstimates();
+  var estimates = archive.listEstimates(est).sort(function (a, b) {
     return String(a.gameDate || "").localeCompare(String(b.gameDate || "")) ||
       String(a.startTimeUTC || "").localeCompare(String(b.startTimeUTC || ""));
   });
@@ -308,8 +318,8 @@ function estimatesPayload(store) {
 }
 
 async function gradeEstimates() {
-  var store = loadEstimates();
-  var rows = archive.listEstimates(store).filter(function (r) { return !r.graded && r.gameDate; });
+  var est = await loadEstimates();
+  var rows = archive.listEstimates(est).filter(function (r) { return !r.graded && r.gameDate; });
   var dates = {};
   rows.forEach(function (r) { dates[r.gameDate] = true; });
   var today = new Date().toISOString().slice(0, 10);
@@ -317,7 +327,7 @@ async function gradeEstimates() {
   for (var i = 0; i < keys.length; i++) {
     var payload = await getJson("https://api-web.nhle.com/v1/score/" + keys[i]);
     (payload.games || []).forEach(function (g) {
-      var row = store.byId[String(g.id)];
+      var row = est.byId[String(g.id)];
       if (!row || !archive.isFinalState(g.gameState)) return;
       var as = g.awayTeam && g.awayTeam.score;
       var hs = g.homeTeam && g.homeTeam.score;
@@ -325,16 +335,13 @@ async function gradeEstimates() {
       archive.applyResult(row, as, hs, g.gameState);
     });
   }
-  saveEstimates(store);
-  return estimatesPayload(store);
+  await saveEstimates(est);
+  return estimatesPayload(est);
 }
 
 async function loadMoneyPuckGames() {
-  try {
-    if (fs.existsSync(MP_GAMES_FILE)) {
-      return JSON.parse(fs.readFileSync(MP_GAMES_FILE, "utf8"));
-    }
-  } catch (e) { /* rebuild */ }
+  var cached = await store.readJson(store.KEYS.mpGames, null);
+  if (cached) return cached;
   var teams = stats.TEAMS.map(function (t) { return t.abbrev; });
   var all = [];
   for (var i = 0; i < teams.length; i++) {
@@ -344,7 +351,7 @@ async function loadMoneyPuckGames() {
     );
     all = all.concat(backtest.parseTeamGameCsv(csv, "2025"));
   }
-  try { fs.writeFileSync(MP_GAMES_FILE, JSON.stringify(all)); } catch (e) { /* ignore */ }
+  try { await store.writeJson(store.KEYS.mpGames, all); } catch (e) { /* ignore */ }
   return all;
 }
 
@@ -366,7 +373,7 @@ async function runBacktest() {
 function handleApi(req, res, url) {
   var pathname = url.pathname.replace(/\/+$/, "") || "/";
   if (pathname === "/api/health") {
-    sendJson(res, 200, { ok: true, service: "hockey-stats", port: PORT });
+    sendJson(res, 200, { ok: true, service: "hockey-stats", port: PORT, blob: store.usesBlob() });
     return true;
   }
   if (pathname === "/api/matchups") {
@@ -377,46 +384,42 @@ function handleApi(req, res, url) {
     buildMatchups()
       .then(function (body) {
         cache = { at: Date.now(), body: body };
-        try {
-          fs.writeFileSync(path.join(ROOT, "data", "matchups.json"), JSON.stringify(body, null, 2));
-          persistMatchups(body);
-        } catch (e) { /* ignore cache write */ }
-        sendJson(res, 200, body);
+        return store.writeJson(store.KEYS.matchups, body)
+          .then(function () { return persistMatchups(body); })
+          .catch(function () { return persistMatchups(body); })
+          .then(function () { sendJson(res, 200, body); });
       })
       .catch(function (err) {
-        var fallback = null;
-        try {
-          fallback = JSON.parse(fs.readFileSync(path.join(ROOT, "data", "matchups.json"), "utf8"));
-        } catch (e) { /* none */ }
-        if (fallback) {
-          fallback.stale = true;
-          fallback.error = String(err.message || err);
-          sendJson(res, 200, fallback);
-          return;
-        }
-        sendJson(res, 502, { error: String(err.message || err), matchups: [] });
+        store.readJson(store.KEYS.matchups, null).then(function (fallback) {
+          if (fallback) {
+            fallback.stale = true;
+            fallback.error = String(err.message || err);
+            sendJson(res, 200, fallback);
+            return;
+          }
+          sendJson(res, 502, { error: String(err.message || err), matchups: [] });
+        });
       });
     return true;
   }
   if (pathname === "/api/backtest") {
-    try {
-      if (fs.existsSync(BACKTEST_FILE) && url.searchParams.get("refresh") !== "1") {
-        sendJson(res, 200, JSON.parse(fs.readFileSync(BACKTEST_FILE, "utf8")));
-        return true;
+    store.readJson(store.KEYS.backtest, null).then(function (cached) {
+      if (cached && url.searchParams.get("refresh") !== "1") {
+        sendJson(res, 200, cached);
+        return;
       }
-    } catch (e) { /* rebuild */ }
-    runBacktest()
-      .then(function (body) {
-        try { fs.writeFileSync(BACKTEST_FILE, JSON.stringify(body, null, 2)); } catch (e) { /* ignore */ }
-        sendJson(res, 200, body);
-      })
-      .catch(function (err) {
-        sendJson(res, 502, { error: String(err.message || err) });
+      return runBacktest().then(function (body) {
+        return store.writeJson(store.KEYS.backtest, body).catch(function () {}).then(function () {
+          sendJson(res, 200, body);
+        });
       });
+    }).catch(function (err) {
+      sendJson(res, 502, { error: String(err.message || err) });
+    });
     return true;
   }
   if (pathname === "/api/estimates") {
-    sendJson(res, 200, estimatesPayload());
+    estimatesPayload().then(function (body) { sendJson(res, 200, body); });
     return true;
   }
   if (pathname === "/api/estimates/grade" && (req.method === "POST" || req.method === "GET")) {

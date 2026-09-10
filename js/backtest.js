@@ -75,7 +75,35 @@
     return n;
   }
 
-  function buildNotes(g, ast, hst, proj) {
+  function scheduleForm(games, abbrev, beforeDate) {
+    var form = { lastDate: null, dates: [], results: [] };
+    (games || []).forEach(function (g) {
+      if (!g || g.gameType !== 2) return;
+      var st = String(g.gameState || "").toUpperCase();
+      if (st !== "OFF" && st !== "FINAL" && st.indexOf("FINAL") !== 0) return;
+      var date = g.gameDate;
+      if (beforeDate && date >= beforeDate) return;
+      var away = g.awayTeam || {};
+      var home = g.homeTeam || {};
+      var isAway = away.abbrev === abbrev;
+      var isHome = home.abbrev === abbrev;
+      if (!isAway && !isHome) return;
+      var as = Number(away.score);
+      var hs = Number(home.score);
+      if (!isFinite(as) || !isFinite(hs)) return;
+      var gf = isHome ? hs : as;
+      var ga = isHome ? as : hs;
+      var kind = gf > ga ? "W" : (isHome && gf < ga ? "L" : gf < ga ? "L" : "OTL");
+      if (gf < ga) kind = "L";
+      else if (gf > ga) kind = "W";
+      form.dates.push(date);
+      form.results.push(kind);
+      form.lastDate = date;
+    });
+    return form;
+  }
+
+  function buildNotes(g, ast, hst, proj, odds) {
     var notes = [];
     var awayRest = dayDiff(ast.lastDate, g.gameDate);
     var homeRest = dayDiff(hst.lastDate, g.gameDate);
@@ -90,7 +118,7 @@
     if (awayB2B && !homeB2B && homeRest != null && homeRest >= 2) {
       notes.push("Rested home team vs tired visitor");
     }
-    if (!homeB2B && homeRest != null && homeRest >= 3) {
+    if (!homeB2B && homeRest != null && homeRest >= 3 && homeRest <= 14) {
       notes.push(g.homeAbbrev + " home after " + homeRest + " days rest");
     }
     if (gamesInWindow(ast.dates, g.gameDate, 4) >= 2) {
@@ -107,8 +135,10 @@
     if (hw >= 3) notes.push(g.homeAbbrev + " on a " + hw + "-game win streak");
     if (al >= 3) notes.push(g.awayAbbrev + " on a " + al + "-game skid");
     if (hl >= 3) notes.push(g.homeAbbrev + " on a " + hl + "-game skid");
-    var homeDog = proj && proj.away > proj.home;
-    if (homeDog && !homeB2B && (awayB2B || (homeRest != null && homeRest >= 2))) {
+    var homeDog = (odds && odds.homeMl != null)
+      ? odds.homeMl > 0
+      : (proj && proj.away > proj.home);
+    if (homeDog && !homeB2B && (awayB2B || (homeRest != null && homeRest >= 2 && homeRest <= 14))) {
       notes.push("Rested home underdog (" + g.homeAbbrev + ")");
     }
     if (proj && proj.away === proj.home && (awayB2B || homeB2B)) {
@@ -277,6 +307,7 @@
     collectGames: collectGames,
     run: run,
     profileFromState: profileFromState,
+    scheduleForm: scheduleForm,
     parseTeamGameCsv: parseTeamGameCsv,
     snapshotStats: snapshotStats,
     buildNotes: buildNotes

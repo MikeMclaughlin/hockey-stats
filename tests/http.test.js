@@ -25,6 +25,7 @@ var srv = server.listen(0, "127.0.0.1", function () {
       var j = JSON.parse(r.body);
       assert.strictEqual(j.ok, true);
       assert.strictEqual(j.service, "hockey-stats");
+      assert.strictEqual(j.blob, false);
     })
     .then(function () { return get(port, "/"); })
     .then(function (r) {
