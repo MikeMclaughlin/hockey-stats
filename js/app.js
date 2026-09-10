@@ -1,0 +1,196 @@
+(function () {
+  "use strict";
+
+  var state = { data: null, sortKey: "time", sortDir: 1 };
+
+  function $(id) { return document.getElementById(id); }
+
+  function fmtTime(iso) {
+    if (!iso) return "—";
+    try {
+      return new Date(iso).toLocaleString(undefined, {
+        weekday: "short", month: "short", day: "numeric",
+        hour: "numeric", minute: "2-digit"
+      });
+    } catch (e) {
+      return iso;
+    }
+  }
+
+  function signed(n, digits) {
+    if (n == null || !isFinite(n)) return "—";
+    var v = HockeyStats.round(n, digits == null ? 1 : digits);
+    return (v > 0 ? "+" : "") + v;
+  }
+
+  function pill(label, value, kind, fmt) {
+    fmt = fmt || function (v) { return v == null ? "—" : String(v); };
+    var sign = HockeyStats.pillSign(value, kind);
+    var cls = "pill" + (sign ? " " + sign : "");
+    return (
+      '<div class="' + cls + '">' +
+        '<span class="lab">' + label + "</span>" +
+        '<span class="val">' + fmt(value) + "</span>" +
+      "</div>"
+    );
+  }
+
+  function teamPills(t) {
+    return (
+      '<div class="pills">' +
+        pill("PDO", t.pdo, "pdo") +
+        pill("L5 avg GD", t.last5AvgGd, "last5", function (v) { return signed(v, 2); }) +
+        pill("SOG share", t.sogShare, "sogShare", function (v) { return v == null ? "—" : v + "%"; }) +
+        pill("GF vs xGF", t.gfMinusXg, "xgDiff", function (v) { return signed(v, 1); }) +
+        pill("CF%", t.cfPct, "cf", function (v) { return v == null ? "—" : v + "%"; }) +
+        pill("HDCF%", t.hdcfPct, "hdcf", function (v) { return v == null ? "—" : v + "%"; }) +
+      "</div>"
+    );
+  }
+
+  function renderCards(matchups) {
+    var root = $("cards");
+    if (!matchups.length) {
+      root.innerHTML = '<div class="empty">No games on the current NHL scoreboard. The board will pick up the next published slate.</div>';
+      return;
+    }
+    root.innerHTML = matchups.map(function (m) {
+      var e = m.edge || {};
+      var why = m.why || HockeyStats.explainEdge(e, m.away, m.home);
+      var proj = m.projected || HockeyStats.estimateScore(m.away, m.home);
+      return (
+        '<article class="card">' +
+          '<div class="card-head">' +
+            "<span>" + fmtTime(m.startTimeUTC) + (m.venue ? " · " + m.venue : "") + "</span>" +
+            '<span class="proj">Est. ' + m.away.abbrev + " " + proj.away + " – " + proj.home + " " + m.home.abbrev + "</span>" +
+            '<span class="badge ' + (e.winner === "even" ? "even" : "") + '">' +
+              (e.winner === "even" ? "Even matchup" : "Edge: " + m.edgeName) +
+            "</span>" +
+          "</div>" +
+          '<div class="sides">' +
+            '<div class="col">' +
+              '<div class="team away">' +
+                (m.away.logo ? '<img src="' + m.away.logo + '" alt="">' : "") +
+                "<div><h3>" + m.away.name + "</h3><div>" + m.away.record + "</div></div>" +
+              "</div>" +
+              teamPills(m.away) +
+            "</div>" +
+            '<div class="vs">@</div>' +
+            '<div class="col">' +
+              '<div class="team home">' +
+                (m.home.logo ? '<img src="' + m.home.logo + '" alt="">' : "") +
+                "<div><h3>" + m.home.name + "</h3><div>" + m.home.record + "</div></div>" +
+              "</div>" +
+              teamPills(m.home) +
+            "</div>" +
+          "</div>" +
+          '<p class="why">' + why + "</p>" +
+        "</article>"
+      );
+    }).join("");
+  }
+
+  function rowValue(m, key) {
+    if (key === "time") return m.startTimeUTC || "";
+    if (key === "away") return m.away.abbrev;
+    if (key === "home") return m.home.abbrev;
+    if (key === "edge") return m.edge ? m.edge.score : 0;
+    if (key === "awayRecord") return m.away.ptsPct || 0;
+    if (key === "homeRecord") return m.home.ptsPct || 0;
+    if (key === "gd") return (m.away.goalDiff || 0) - (m.home.goalDiff || 0);
+    if (key === "pdo") return (m.away.pdo || 0) - (m.home.pdo || 0);
+    if (key === "l5") return (m.away.last5AvgGd || 0) - (m.home.last5AvgGd || 0);
+    if (key === "sog") return (m.away.sogShare || 0) - (m.home.sogShare || 0);
+    if (key === "xg") return (m.away.gfMinusXg || 0) - (m.home.gfMinusXg || 0);
+    if (key === "cf") return (m.away.cfPct || 0) - (m.home.cfPct || 0);
+    if (key === "hdcf") return (m.away.hdcfPct || 0) - (m.home.hdcfPct || 0);
+    if (key === "proj") {
+      var p = m.projected || {};
+      return (p.home || 0) - (p.away || 0);
+    }
+    return "";
+  }
+
+  function sortedRows() {
+    var rows = (state.data && state.data.matchups) || [];
+    var key = state.sortKey;
+    var dir = state.sortDir;
+    return rows.slice().sort(function (a, b) {
+      var av = rowValue(a, key);
+      var bv = rowValue(b, key);
+      if (typeof av === "string") return av.localeCompare(bv) * dir;
+      if (av === bv) return 0;
+      return av > bv ? dir : -dir;
+    });
+  }
+
+  function renderTable() {
+    var tbody = document.querySelector("#board tbody");
+    var rows = sortedRows();
+    tbody.innerHTML = rows.map(function (m) {
+      return (
+        "<tr>" +
+          "<td>" + fmtTime(m.startTimeUTC) + "</td>" +
+          "<td>" + m.away.abbrev + " " + m.away.record + "</td>" +
+          "<td>" + m.home.abbrev + " " + m.home.record + "</td>" +
+          "<td class='num'>" + m.edgeTeam + "</td>" +
+          "<td>" + m.away.record + "</td>" +
+          "<td>" + m.home.record + "</td>" +
+          "<td class='num'>" + signed((m.away.goalDiff || 0) - (m.home.goalDiff || 0), 0) + "</td>" +
+          "<td class='num'>" + signed((m.away.pdo || 0) - (m.home.pdo || 0), 1) + "</td>" +
+          "<td class='num'>" + signed((m.away.last5AvgGd || 0) - (m.home.last5AvgGd || 0), 2) + "</td>" +
+          "<td class='num'>" + signed((m.away.sogShare || 0) - (m.home.sogShare || 0), 1) + "</td>" +
+          "<td class='num'>" + signed((m.away.gfMinusXg || 0) - (m.home.gfMinusXg || 0), 1) + "</td>" +
+          "<td class='num'>" + signed((m.away.cfPct || 0) - (m.home.cfPct || 0), 1) + "</td>" +
+          "<td class='num'>" + signed((m.away.hdcfPct || 0) - (m.home.hdcfPct || 0), 1) + "</td>" +
+          "<td class='num'>" + ((m.projected && m.projected.label) || "—") + "</td>" +
+        "</tr>"
+      );
+    }).join("");
+    document.querySelectorAll("#board th").forEach(function (th) {
+      th.classList.remove("sort-asc", "sort-desc");
+      if (th.getAttribute("data-key") === state.sortKey) {
+        th.classList.add(state.sortDir === 1 ? "sort-asc" : "sort-desc");
+      }
+    });
+  }
+
+  function render(data) {
+    state.data = data;
+    $("meta").textContent =
+      (data.currentDate || "") +
+      " · " + (data.matchupCount || 0) + " games";
+    var note = $("note");
+    if (data.note) {
+      note.textContent = data.note;
+      note.classList.remove("hidden");
+    } else {
+      note.classList.add("hidden");
+    }
+    renderCards(data.matchups || []);
+    renderTable();
+  }
+
+  function load(refresh) {
+    $("meta").textContent = "Loading…";
+    fetch("/api/matchups" + (refresh ? "?refresh=1" : ""))
+      .then(function (r) { return r.json(); })
+      .then(render)
+      .catch(function (err) {
+        $("meta").textContent = "Could not load matchups";
+        $("cards").innerHTML = '<div class="empty">' + String(err) + "</div>";
+      });
+  }
+
+  document.querySelectorAll("#board th").forEach(function (th) {
+    th.addEventListener("click", function () {
+      var key = th.getAttribute("data-key");
+      if (state.sortKey === key) state.sortDir *= -1;
+      else { state.sortKey = key; state.sortDir = 1; }
+      renderTable();
+    });
+  });
+
+  $("refresh").addEventListener("click", function () { load(true); });
+  load(false);
+})();

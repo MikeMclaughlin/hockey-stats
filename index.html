@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Hockey Stats — Matchups</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <header class="top">
+    <div class="brand">
+      <span class="puck" aria-hidden="true"></span>
+      <div>
+        <h1>Hockey Stats</h1>
+        <p class="tag">Current NHL matchups · possession, finishing, and luck</p>
+      </div>
+    </div>
+    <div class="toolbar">
+      <span id="meta" class="meta">Loading…</span>
+      <button type="button" id="refresh">Refresh</button>
+    </div>
+  </header>
+
+  <main>
+    <p id="note" class="note hidden"></p>
+    <div id="cards" class="cards"></div>
+    <section class="board">
+      <h2>Matchup board</h2>
+      <div class="table-wrap">
+        <table id="board">
+          <thead>
+            <tr>
+              <th data-key="time">Time</th>
+              <th data-key="away">Away</th>
+              <th data-key="home">Home</th>
+              <th data-key="edge" class="num">Edge</th>
+              <th data-key="awayRecord">Away W–L–OTL</th>
+              <th data-key="homeRecord">Home W–L–OTL</th>
+              <th data-key="gd" class="num">GD Δ</th>
+              <th data-key="pdo" class="num">PDO Δ</th>
+              <th data-key="l5" class="num">L5 GD Δ</th>
+              <th data-key="sog" class="num">SOG% Δ</th>
+              <th data-key="xg" class="num">GF−xG Δ</th>
+              <th data-key="cf" class="num">CF% Δ</th>
+              <th data-key="hdcf" class="num">HDCF% Δ</th>
+              <th data-key="proj" class="num">Est.</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+    <section class="legend">
+      <h2>How the edge is scored</h2>
+      <ul>
+        <li><strong>Season record</strong> — regulation/OT wins–losses–OT losses. Compared on points percentage.</li>
+        <li><strong>PDO</strong> — shooting % + save % from shots on goal. ~100 is league-normal; much higher is finishing/save luck.</li>
+        <li><strong>Avg GD last 5</strong> — (GF − GA) / games in each club’s last five completed regular-season games.</li>
+        <li><strong>SOG share</strong> — shots on goal for / (SF + SA).</li>
+        <li><strong>Expected vs actual</strong> — MoneyPuck xGoals vs actual goals (GF − xGF). Positive means outscoring the shot quality.</li>
+        <li><strong>CF%</strong> — Corsi for percentage: shot attempts for / (CF + CA), all situations.</li>
+        <li><strong>HDCF%</strong> — high-danger chances for / (HDCF + HDCA).</li>
+        <li><strong>Estimated score</strong> — projected goals from season scoring rate, xG rate, last-5 form, HDCF tilt, and a small home-ice bump.</li>
+      </ul>
+    </section>
+  </main>
+  <footer>
+    <span>hockey-stats v1.0.0</span>
+    <span>NHL.com schedule + standings · MoneyPuck team summary</span>
+  </footer>
+  <script src="/js/stats.js"></script>
+  <script src="/js/app.js"></script>
+</body>
+</html>

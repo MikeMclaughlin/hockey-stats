@@ -1,0 +1,11 @@
+{
+  "name": "hockey-stats",
+  "version": "1.0.0",
+  "private": true,
+  "description": "SPA for current NHL matchups with record, GD, PDO, last-5 GD, SOG share, xG vs GF, CF%",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node tests/stats.test.js && node tests/edge.test.js && node tests/http.test.js"
+  }
+}
