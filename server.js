@@ -454,7 +454,7 @@ function handleApi(req, res, url) {
   return false;
 }
 
-var server = http.createServer(function (req, res) {
+function handler(req, res) {
   var url = new URL(req.url, "http://127.0.0.1");
   if (handleApi(req, res, url)) return;
   var file = safeFile(url.pathname);
@@ -469,7 +469,9 @@ var server = http.createServer(function (req, res) {
     }
     serveFile(res, file);
   });
-});
+}
+
+var server = http.createServer(handler);
 
 if (require.main === module) {
   server.listen(PORT, "0.0.0.0", function () {
@@ -477,4 +479,8 @@ if (require.main === module) {
   });
 }
 
-module.exports = { server, buildMatchups, runBacktest, PORT };
+handler.server = server;
+handler.buildMatchups = buildMatchups;
+handler.runBacktest = runBacktest;
+handler.PORT = PORT;
+module.exports = handler;
