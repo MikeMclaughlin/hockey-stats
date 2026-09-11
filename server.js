@@ -455,8 +455,33 @@ function handleApi(req, res, url) {
   return false;
 }
 
+function requestUrl(req) {
+  var raw = req.url || "/";
+  var headers = req.headers || {};
+  var hint = headers["x-invoke-path"] || headers["x-vercel-original-path"] ||
+    headers["x-forwarded-uri"] || headers["x-invoke-query"] || "";
+  var pathPart = raw.split("?")[0];
+  if (pathPart === "/server.js" || pathPart === "/" || pathPart.indexOf("[[") !== -1) {
+    if (hint && String(hint).indexOf("/api/") === 0) raw = hint + (raw.indexOf("?") >= 0 ? raw.slice(raw.indexOf("?")) : "");
+  }
+  try { return new URL(raw, "http://127.0.0.1"); } catch (e) {
+    return new URL("/" + String(raw).replace(/^\//, ""), "http://127.0.0.1");
+  }
+}
+
+function routeKey(pathname) {
+  var p = String(pathname || "").replace(/\/+$/, "") || "/";
+  if (/\/health$/.test(p) || p === "/health") return "/api/health";
+  if (/\/matchups$/.test(p) || p === "/matchups") return "/api/matchups";
+  if (/\/backtest$/.test(p) || p === "/backtest") return "/api/backtest";
+  if (/\/estimates\/grade$/.test(p)) return "/api/estimates/grade";
+  if (/\/estimates$/.test(p) || p === "/estimates") return "/api/estimates";
+  return p;
+}
+
 function handler(req, res) {
-  var url = new URL(req.url, "http://127.0.0.1");
+  var url = requestUrl(req);
+  url.pathname = routeKey(url.pathname);
   if (handleApi(req, res, url)) return;
   var file = safeFile(url.pathname);
   if (!file) {
