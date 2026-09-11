@@ -1,9 +1,11 @@
 {
-  "rewrites": [{ "source": "/(.*)", "destination": "/server.js" }],
+  "rewrites": [
+    { "source": "/api/:path*", "destination": "/server.js" }
+  ],
   "functions": {
     "server.js": {
       "maxDuration": 60,
-      "includeFiles": "data/**"
+      "includeFiles": "{data,js,css}/**"
     }
   }
 }
