@@ -21,7 +21,7 @@ assert.strictEqual(e2.winner, "home");
 assert.ok(e2.score < 0);
 
 var even = stats.matchupEdge(strong, strong);
-assert.strictEqual(even.winner, "even");
+assert.strictEqual(even.winner, "home");
 assert.ok(even.breakdown.length === 9);
 
 var awayTeam = { name: "Boston Bruins" };
@@ -30,7 +30,7 @@ var whyAway = stats.explainEdge(e1, awayTeam, homeTeam);
 assert.ok(whyAway.indexOf("Boston Bruins") !== -1);
 assert.ok(whyAway.indexOf("lead") !== -1);
 var whyEven = stats.explainEdge(even, awayTeam, homeTeam);
-assert.ok(whyEven.indexOf("No clear edge") !== -1);
+assert.ok(whyEven.indexOf("Toronto Maple Leafs") !== -1);
 
 assert.strictEqual(stats.pillSign(12, "gd"), "pos");
 assert.strictEqual(stats.pillSign(-8, "gd"), "neg");

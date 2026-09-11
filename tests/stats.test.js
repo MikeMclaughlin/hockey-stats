@@ -60,6 +60,19 @@ var est = stats.estimateScore(profile, {
 });
 assert.ok(est.away >= 1 && est.home >= 1);
 assert.ok(est.label.indexOf("–") !== -1);
+assert.notStrictEqual(est.away, est.home);
+
+var twin = {
+  gamesPlayed: 82, goalsFor: 246, goalsAgainst: 246, xGoalsFor: 246,
+  last5AvgGd: 0, hdcfPct: 50, xgfPct5v5: 50
+};
+var tied = stats.estimateScore(twin, twin);
+assert.ok(tied.home === tied.away + 1);
+
+var xAway = Object.assign({}, twin, { xgfPct5v5: 58 });
+var xHome = Object.assign({}, twin, { xgfPct5v5: 44 });
+var xEst = stats.estimateScore(xAway, xHome);
+assert.ok(xEst.away > xEst.home);
 
 var parsed = stats.parsePartnerOdds({
   awayTeam: { odds: [

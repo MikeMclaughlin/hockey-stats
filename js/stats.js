@@ -86,6 +86,35 @@
     return round((sh + sv) * 100, 1);
   }
 
+  function savePct(ga, sa) {
+    if (!sa) return null;
+    return round(100 * (sa - (ga || 0)) / sa, 1);
+  }
+
+  function last5SavePct(log) {
+    var last = (log || []).slice(-5);
+    var sa = 0;
+    var ga = 0;
+    last.forEach(function (g) {
+      sa += Number(g.sa) || 0;
+      ga += Number(g.ga) || 0;
+    });
+    return savePct(ga, sa);
+  }
+
+  function last5SavePctFromMp(mpGames, abbrev, beforeDate) {
+    var cut = beforeDate ? String(beforeDate).replace(/-/g, "").slice(0, 8) : null;
+    var rows = (mpGames || []).filter(function (g) {
+      if (!g || g.team !== abbrev || !g.sa) return false;
+      if (!cut) return true;
+      var d = String(g.gameDate || "").replace(/-/g, "").slice(0, 8);
+      return d && d < cut;
+    }).sort(function (a, b) {
+      return String(a.gameDate).localeCompare(String(b.gameDate));
+    });
+    return last5SavePct(rows.slice(-5));
+  }
+
   function sogShare(sf, sa) {
     var tot = (sf || 0) + (sa || 0);
     if (!tot) return null;
@@ -118,13 +147,13 @@
   var EDGE_WEIGHTS = {
     ptsPct: 1.2,
     gd: 1.0,
-    pdo: 0.6,
-    last5: 1.1,
+    pdo: 0.35,
+    last5: 0.4,
     sogShare: 1.0,
     xgDiff: 1.3,
     cf: 1.2,
     hdcf: 1.15,
-    xgf5v5: 1.2
+    xgf5v5: 1.85
   };
 
   function cmpNum(a, b) {
@@ -170,10 +199,12 @@
     total += add("cf", away.cfPct, home.cfPct, true);
     total += add("hdcf", away.hdcfPct, home.hdcfPct, true);
     total += add("xgf5v5", away.xgfPct5v5, home.xgfPct5v5, true);
+    total -= 0.12;
 
     var winner = "even";
-    if (total > 0.04) winner = "away";
-    else if (total < -0.04) winner = "home";
+    if (total > 0.05) winner = "away";
+    else if (total < -0.02) winner = "home";
+    else winner = "home";
 
     return {
       winner: winner,
@@ -226,6 +257,7 @@
     if (value == null || !isFinite(value)) return null;
     var baseline = 0;
     if (kind === "pdo") baseline = 100;
+    else if (kind === "sv" || kind === "last5Sv") baseline = 90;
     else if (kind === "sogShare" || kind === "cf" || kind === "hdcf" || kind === "xgf5v5") baseline = 50;
     if (value > baseline) return "pos";
     if (value < baseline) return "neg";
@@ -315,6 +347,7 @@
       goalsAgainst: ga,
       pdo: pdo,
       last5AvgGd: last5 ? last5.avg : null,
+      last5SvPct: opts.last5SvPct != null ? opts.last5SvPct : null,
       last5Games: last5 ? last5.games : 0,
       last5Total: last5 ? last5.total : null,
       sogShare: share,
@@ -375,8 +408,9 @@
   }
 
   /**
-   * Projected regulation score from scoring rates, xG, last-5 form,
-   * high-danger share, and a small home-ice bump.
+   * Projected score from GF/GA rates and xG, with 5v5 xGF% tilt,
+   * a small last-5 term, and home ice. Ties are broken toward home
+   * (NHL games in the 2025-26 backtest never finished even).
    */
   function estimateScore(away, home) {
     away = away || {};
@@ -389,22 +423,31 @@
     var homeGa = rate(home.goalsAgainst, hgp, 3);
     var awayXg = rate(away.xGoalsFor, agp, awayGf);
     var homeXg = rate(home.xGoalsFor, hgp, homeGf);
-    var awayOff = 0.42 * awayGf + 0.33 * awayXg + 0.25 * homeGa;
-    var homeOff = 0.42 * homeGf + 0.33 * homeXg + 0.25 * awayGa;
-    if (away.last5AvgGd != null) awayOff += 0.12 * away.last5AvgGd;
-    if (home.last5AvgGd != null) homeOff += 0.12 * home.last5AvgGd;
+    var awayOff = 0.40 * awayGf + 0.35 * awayXg + 0.25 * homeGa;
+    var homeOff = 0.40 * homeGf + 0.35 * homeXg + 0.25 * awayGa;
+    if (away.last5AvgGd != null) awayOff += 0.04 * away.last5AvgGd;
+    if (home.last5AvgGd != null) homeOff += 0.04 * home.last5AvgGd;
     if (away.hdcfPct != null && home.hdcfPct != null) {
-      var tilt = (away.hdcfPct - home.hdcfPct) / 100;
-      awayOff += tilt * 0.45;
-      homeOff -= tilt * 0.45;
+      var hdTilt = (away.hdcfPct - home.hdcfPct) / 100;
+      awayOff += hdTilt * 0.35;
+      homeOff -= hdTilt * 0.35;
     }
-    homeOff += 0.18;
-    awayOff = Math.max(1.15, awayOff);
-    homeOff = Math.max(1.15, homeOff);
+    if (away.xgfPct5v5 != null && home.xgfPct5v5 != null) {
+      var xTilt = (away.xgfPct5v5 - home.xgfPct5v5) / 100;
+      awayOff += xTilt * 1.35;
+      homeOff -= xTilt * 1.35;
+    }
+    homeOff += 0.32;
+    awayOff = Math.max(1.2, awayOff);
+    homeOff = Math.max(1.2, homeOff);
     var a = Math.round(awayOff);
     var h = Math.round(homeOff);
     if (a < 1) a = 1;
     if (h < 1) h = 1;
+    if (a === h) {
+      if (homeOff >= awayOff) h += 1;
+      else a += 1;
+    }
     return {
       away: a,
       home: h,
@@ -422,6 +465,9 @@
     recordString: recordString,
     pointsPct: pointsPct,
     pdoFromShots: pdoFromShots,
+    savePct: savePct,
+    last5SavePct: last5SavePct,
+    last5SavePctFromMp: last5SavePctFromMp,
     sogShare: sogShare,
     last5GoalDiff: last5GoalDiff,
     matchupEdge: matchupEdge,

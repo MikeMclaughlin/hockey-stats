@@ -60,17 +60,28 @@ function serveFile(res, file) {
   });
 }
 
-function httpsGet(urlStr, cb) {
-  https.get(urlStr, { headers: { "User-Agent": "hockey-stats/1.0", Accept: "*/*" } }, function (up) {
+function sleep(ms) {
+  return new Promise(function (resolve) { setTimeout(resolve, ms); });
+}
+
+function httpsGet(urlStr, cb, attempt) {
+  attempt = attempt || 1;
+  https.get(urlStr, { headers: { "User-Agent": "hockey-stats/1.1", Accept: "*/*" } }, function (up) {
     if (up.statusCode >= 300 && up.statusCode < 400 && up.headers.location) {
       up.resume();
-      httpsGet(up.headers.location, cb);
+      httpsGet(up.headers.location, cb, attempt);
       return;
     }
     var chunks = [];
     up.on("data", function (c) { chunks.push(c); });
     up.on("end", function () {
       var buf = Buffer.concat(chunks);
+      if (up.statusCode === 429 && attempt < 5) {
+        var wait = Number(up.headers["retry-after"]);
+        if (!isFinite(wait) || wait < 1) wait = Math.min(60, 3 * attempt);
+        setTimeout(function () { httpsGet(urlStr, cb, attempt + 1); }, wait * 1000);
+        return;
+      }
       if (up.statusCode !== 200) {
         cb(new Error("HTTP " + up.statusCode + " " + urlStr));
         return;
@@ -185,6 +196,7 @@ async function buildMatchups() {
     if (g.homeTeam && g.homeTeam.abbrev) needed[g.homeTeam.abbrev] = true;
   });
 
+  var mpGamesCache = await store.readJson(store.KEYS.mpGames, []);
   var last5Map = {};
   var formMap = {};
   var abbrevs = Object.keys(needed);
@@ -213,7 +225,8 @@ async function buildMatchups() {
       stand: standMap[ab] || {},
       summary: sumMap[ab] || {},
       moneypuck: mp[ab] || {},
-      last5: last5Map[ab]
+      last5: last5Map[ab],
+      last5SvPct: stats.last5SavePctFromMp(mpGamesCache, ab, score.currentDate)
     });
     p.score = teamObj.score;
     return p;
@@ -341,17 +354,24 @@ async function gradeEstimates() {
 
 async function loadMoneyPuckGames() {
   var cached = await store.readJson(store.KEYS.mpGames, null);
-  if (cached) return cached;
+  if (Array.isArray(cached) && cached.length) return cached;
   var teams = stats.TEAMS.map(function (t) { return t.abbrev; });
   var all = [];
   for (var i = 0; i < teams.length; i++) {
-    var csv = await getText(
-      "https://moneypuck.com/moneypuck/playerData/careers/gameByGame/regular/teams/" +
-        teams[i] + ".csv"
-    );
-    all = all.concat(backtest.parseTeamGameCsv(csv, "2025"));
+    try {
+      var csv = await getText(
+        "https://moneypuck.com/moneypuck/playerData/careers/gameByGame/regular/teams/" +
+          teams[i] + ".csv"
+      );
+      all = all.concat(backtest.parseTeamGameCsv(csv, "2025"));
+    } catch (e) {
+      if (String(e.message || e).indexOf("429") !== -1) break;
+    }
+    await sleep(800);
   }
-  try { await store.writeJson(store.KEYS.mpGames, all); } catch (e) { /* ignore */ }
+  if (all.length) {
+    try { await store.writeJson(store.KEYS.mpGames, all); } catch (e) { /* ignore */ }
+  }
   return all;
 }
 
@@ -362,7 +382,8 @@ async function runBacktest() {
     schedules.push(await getJson("https://api-web.nhle.com/v1/club-schedule-season/" + teams[i] + "/20252026"));
   }
   var games = backtest.collectGames(schedules);
-  var mpGames = await loadMoneyPuckGames();
+  var mpGames = [];
+  try { mpGames = await loadMoneyPuckGames(); } catch (e) { mpGames = []; }
   var out = backtest.run(games, { minGp: 5, mpGames: mpGames });
   out.generatedAt = new Date().toISOString();
   out.source = "walk-forward from NHL 2025-26 regular-season finals; xG/HDCF fall back to prior scoring rates";

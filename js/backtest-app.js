@@ -4,14 +4,16 @@
   var state = { rows: [], sortKey: "gameDate", sortDir: 1, filters: {} };
   var NUMERIC = {
     totalErr: true, awayPdo: true, homePdo: true,
-    awayLast5: true, homeLast5: true, awayXgf5: true, homeXgf5: true
+    awayLast5: true, homeLast5: true, awayLast5Sv: true, homeLast5Sv: true,
+    awayXgf5: true, homeXgf5: true
   };
 
   function $(id) { return document.getElementById(id); }
 
   function fmt(v, d) {
     if (v == null || v === "") return "—";
-    return Number(v).toFixed(d);
+    var t = Number(v).toFixed(d);
+    return Number(v) < 0 ? '<span class="num-neg">' + t + "</span>" : t;
   }
 
   function pct(v) {
@@ -53,6 +55,8 @@
       homePdo: r.homePdo,
       awayLast5: r.awayLast5,
       homeLast5: r.homeLast5,
+      awayLast5Sv: r.awayLast5Sv,
+      homeLast5Sv: r.homeLast5Sv,
       awayXgf5: r.awayXgf5,
       homeXgf5: r.homeXgf5,
       notes: r.notes || ""
@@ -98,7 +102,7 @@
       return String(av).localeCompare(String(bv)) * state.sortDir;
     });
     var empty = rows.length === 0
-      ? "<tr><td colspan='13' class='empty'>No games match the column filters.</td></tr>"
+      ? "<tr><td colspan='15' class='empty'>No games match the column filters.</td></tr>"
       : "";
     document.querySelector("#bt tbody").innerHTML = empty || rows.map(function (r) {
       var v = verdictOf(r);
@@ -113,6 +117,8 @@
         "<td class='num'>" + fmt(r.homePdo, 1) + "</td>" +
         "<td class='num'>" + fmt(r.awayLast5, 2) + "</td>" +
         "<td class='num'>" + fmt(r.homeLast5, 2) + "</td>" +
+        "<td class='num'>" + pct(r.awayLast5Sv) + "</td>" +
+        "<td class='num'>" + pct(r.homeLast5Sv) + "</td>" +
         "<td class='num'>" + pct(r.awayXgf5) + "</td>" +
         "<td class='num'>" + pct(r.homeXgf5) + "</td>" +
         "<td class='notes'>" + (r.notes || "—") + "</td>" +

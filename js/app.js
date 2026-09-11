@@ -20,7 +20,8 @@
   function signed(n, digits) {
     if (n == null || !isFinite(n)) return "—";
     var v = HockeyStats.round(n, digits == null ? 1 : digits);
-    return (v > 0 ? "+" : "") + v;
+    var t = (v > 0 ? "+" : "") + v;
+    return v < 0 ? '<span class="num-neg">' + t + "</span>" : t;
   }
 
   function pill(label, value, kind, fmt) {
@@ -36,7 +37,8 @@
   }
 
   function am(n) {
-    return HockeyStats.formatAmerican ? HockeyStats.formatAmerican(n) : (n == null ? "—" : String(n));
+    var t = HockeyStats.formatAmerican ? HockeyStats.formatAmerican(n) : (n == null ? "—" : String(n));
+    return (typeof n === "number" && n < 0) ? '<span class="num-neg">' + t + "</span>" : t;
   }
 
   function oddsLine(m) {
@@ -62,6 +64,7 @@
       '<div class="pills">' +
         pill("PDO", t.pdo, "pdo") +
         pill("L5 avg GD", t.last5AvgGd, "last5", function (v) { return signed(v, 2); }) +
+        pill("L5 SV%", t.last5SvPct, "last5Sv", function (v) { return v == null ? "—" : v + "%"; }) +
         pill("SOG share", t.sogShare, "sogShare", function (v) { return v == null ? "—" : v + "%"; }) +
         pill("GF vs xGF", t.gfMinusXg, "xgDiff", function (v) { return signed(v, 1); }) +
         pill("CF%", t.cfPct, "cf", function (v) { return v == null ? "—" : v + "%"; }) +

@@ -138,6 +138,7 @@ main { max-width: 90%; margin: 0 auto; padding: 1.25rem 1rem 3rem; }
   color: var(--muted);
 }
 .pill .val { font-weight: 650; }
+.pill.neg .val, .num-neg { color: #c62828; }
 .pill.pos {
   background: #e6f6ea;
   border-color: #b7e0c2;

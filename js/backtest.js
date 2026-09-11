@@ -35,7 +35,7 @@
   function emptyTeam() {
     return {
       gp: 0, gf: 0, ga: 0, sf: 0, sa: 0,
-      xgf5: 0, xga5: 0, gds: [], results: [], dates: [],
+      xgf5: 0, xga5: 0, gds: [], svLog: [], results: [], dates: [],
       lastDate: null, w: 0, l: 0, otl: 0
     };
   }
@@ -157,7 +157,8 @@
     return {
       last5AvgGd: last5Avg(st),
       pdo: (st.sf > 0 && st.sa > 0) ? stats.pdoFromShots(st.gf, st.ga, st.sf, st.sa) : null,
-      xgfPct5v5: (st.xgf5 + st.xga5) > 0 ? stats.sogShare(st.xgf5, st.xga5) : null
+      xgfPct5v5: (st.xgf5 + st.xga5) > 0 ? stats.sogShare(st.xgf5, st.xga5) : null,
+      last5SvPct: stats.last5SavePct(st.svLog)
     };
   }
 
@@ -186,6 +187,7 @@
     if (extra.sa) st.sa += extra.sa;
     if (extra.xgf5) st.xgf5 += extra.xgf5;
     if (extra.xga5) st.xga5 += extra.xga5;
+    if (extra.sa) st.svLog.push({ sa: extra.sa, ga: extra.ga != null ? extra.ga : ga });
     st.gds.push(gf - ga);
     st.results.push(winKind);
     if (extra.date) {
@@ -274,6 +276,8 @@
         homeLast5: homeSnap.last5AvgGd,
         awayXgf5: awaySnap.xgfPct5v5,
         homeXgf5: homeSnap.xgfPct5v5,
+        awayLast5Sv: awaySnap.last5SvPct,
+        homeLast5Sv: homeSnap.last5SvPct,
         notes: buildNotes(g, ast, hst, proj),
         skipped: !ready
       };
