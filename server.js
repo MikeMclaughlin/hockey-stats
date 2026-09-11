@@ -392,8 +392,29 @@ async function runBacktest() {
   return out;
 }
 
+function detectRoute(req, url) {
+  var headers = req.headers || {};
+  var parts = [
+    req.url,
+    url && url.pathname,
+    url && url.href,
+    headers["x-invoke-path"],
+    headers["x-vercel-original-path"],
+    headers["x-forwarded-uri"],
+    headers["x-invoke-query"],
+    headers["x-matched-path"]
+  ];
+  var blob = parts.filter(Boolean).join(" ").toLowerCase();
+  if (blob.indexOf("grade") !== -1) return "/api/estimates/grade";
+  if (blob.indexOf("health") !== -1) return "/api/health";
+  if (blob.indexOf("matchup") !== -1) return "/api/matchups";
+  if (blob.indexOf("backtest") !== -1) return "/api/backtest";
+  if (blob.indexOf("estimate") !== -1) return "/api/estimates";
+  return (url && url.pathname ? url.pathname.replace(/\/+$/, "") : "") || "/";
+}
+
 function handleApi(req, res, url) {
-  var pathname = url.pathname.replace(/\/+$/, "") || "/";
+  var pathname = detectRoute(req, url);
   if (pathname === "/api/health") {
     sendJson(res, 200, { ok: true, service: "hockey-stats", port: PORT, blob: store.usesBlob() });
     return true;
@@ -483,6 +504,19 @@ function handler(req, res) {
   var url = requestUrl(req);
   url.pathname = routeKey(url.pathname);
   if (handleApi(req, res, url)) return;
+  var headers = req.headers || {};
+  var looksApi = /api/i.test(String(req.url || "") + url.pathname + (headers["x-invoke-path"] || ""));
+  if (looksApi) {
+    sendJson(res, 200, {
+      ok: false,
+      error: "unmatched-api",
+      url: req.url,
+      pathname: url.pathname,
+      invoke: headers["x-invoke-path"] || null,
+      forwarded: headers["x-forwarded-uri"] || null
+    });
+    return;
+  }
   var file = safeFile(url.pathname);
   if (!file) {
     send(res, 403, "Forbidden");
