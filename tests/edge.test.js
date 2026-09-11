@@ -1,7 +1,7 @@
 "use strict";
 
 var assert = require("assert");
-var stats = require("../js/stats.js");
+var stats = require("../public/js/stats.js");
 
 var strong = {
   ptsPct: 0.72, goalDiff: 80, pdo: 102, last5AvgGd: 1.4,

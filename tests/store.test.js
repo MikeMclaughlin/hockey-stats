@@ -5,7 +5,7 @@ var path = require("path");
 var fs = require("fs");
 
 delete process.env.BLOB_READ_WRITE_TOKEN;
-var store = require("../js/store.js");
+var store = require("../public/js/store.js");
 
 assert.strictEqual(store.usesBlob(), false);
 assert.strictEqual(store.KEYS.estimates, "estimates.json");

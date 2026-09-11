@@ -5,10 +5,10 @@ var https = require("https");
 var fs = require("fs");
 var path = require("path");
 var { URL } = require("url");
-var stats = require("./js/stats.js");
-var archive = require("./js/archive.js");
-var backtest = require("./js/backtest.js");
-var store = require("./js/store.js");
+var stats = require("./public/js/stats.js");
+var archive = require("./public/js/archive.js");
+var backtest = require("./public/js/backtest.js");
+var store = require("./public/js/store.js");
 
 var ROOT = __dirname;
 var PORT = Number(process.env.PORT || 3080);
@@ -45,8 +45,9 @@ function sendJson(res, status, obj) {
 function safeFile(urlPath) {
   var rel = decodeURIComponent(urlPath.split("?")[0]);
   if (rel === "/") rel = "/index.html";
-  var file = path.normalize(path.join(ROOT, rel));
-  if (file !== ROOT && !file.startsWith(ROOT + path.sep)) return null;
+  var pub = path.normalize(path.join(ROOT, "public"));
+  var file = path.normalize(path.join(pub, rel));
+  if (file !== pub && !file.startsWith(pub + path.sep)) return null;
   return file;
 }
 

@@ -1,7 +1,7 @@
 "use strict";
 
 var assert = require("assert");
-var stats = require("../js/stats.js");
+var stats = require("../public/js/stats.js");
 
 assert.strictEqual(stats.recordString(53, 22, 7), "53–22–7");
 assert.ok(Math.abs(stats.pointsPct(53, 22, 7) - (53 * 2 + 7) / (82 * 2)) < 1e-9);
