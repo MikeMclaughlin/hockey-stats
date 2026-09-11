@@ -1,0 +1,757 @@
+{
+  "generatedAt": "2026-09-11T15:34:14.755Z",
+  "currentDate": "2026-09-29",
+  "prevDate": "2026-09-26",
+  "nextDate": "2026-09-30",
+  "seasonId": 20262027,
+  "statsSeason": 20252026,
+  "note": "2026-27 has not started — stats are 2025-26 regular season.",
+  "matchupCount": 5,
+  "matchups": [
+    {
+      "id": 2026020001,
+      "gameDate": "2026-09-29",
+      "startTimeUTC": "2026-09-29T21:00:00Z",
+      "venue": "Lenovo Center",
+      "gameState": "FUT",
+      "away": {
+        "abbrev": "FLA",
+        "name": "Florida Panthers",
+        "logo": "https://assets.nhle.com/logos/nhl/svg/FLA_light.svg",
+        "record": "40–38–4",
+        "wins": 40,
+        "losses": 38,
+        "otLosses": 4,
+        "ptsPct": 0.5122,
+        "goalDiff": -25,
+        "goalsFor": 251,
+        "goalsAgainst": 276,
+        "pdo": 98.2,
+        "last5AvgGd": 1.4,
+        "last5SvPct": null,
+        "last5Games": 5,
+        "last5Total": 7,
+        "sogShare": 51.1,
+        "xGoalsFor": 265.2,
+        "xGoalsAgainst": 265.2,
+        "gfMinusXg": -19.21,
+        "cfPct": 52.6,
+        "hdcfPct": 48.1,
+        "xgfPct5v5": 49,
+        "gamesPlayed": 82
+      },
+      "home": {
+        "abbrev": "CAR",
+        "name": "Carolina Hurricanes",
+        "logo": "https://assets.nhle.com/logos/nhl/svg/CAR_light.svg",
+        "record": "53–22–7",
+        "wins": 53,
+        "losses": 22,
+        "otLosses": 7,
+        "ptsPct": 0.689,
+        "goalDiff": 56,
+        "goalsFor": 296,
+        "goalsAgainst": 240,
+        "pdo": 99,
+        "last5AvgGd": 1.4,
+        "last5SvPct": null,
+        "last5Games": 5,
+        "last5Total": 7,
+        "sogShare": 57.3,
+        "xGoalsFor": 300.6,
+        "xGoalsAgainst": 235.2,
+        "gfMinusXg": -9.64,
+        "cfPct": 59.3,
+        "hdcfPct": 55.6,
+        "xgfPct5v5": 56,
+        "gamesPlayed": 82
+      },
+      "edge": {
+        "winner": "home",
+        "score": -2.065,
+        "awayScore": 0,
+        "homeScore": 2.065,
+        "breakdown": [
+          {
+            "key": "ptsPct",
+            "away": 0.5122,
+            "home": 0.689,
+            "winner": "home",
+            "points": -0.177
+          },
+          {
+            "key": "gd",
+            "away": -25,
+            "home": 56,
+            "winner": "home",
+            "points": -1
+          },
+          {
+            "key": "pdo",
+            "away": 98.2,
+            "home": 99,
+            "winner": "home",
+            "points": -0.001
+          },
+          {
+            "key": "last5",
+            "away": 1.4,
+            "home": 1.4,
+            "winner": "even",
+            "points": 0
+          },
+          {
+            "key": "sogShare",
+            "away": 51.1,
+            "home": 57.3,
+            "winner": "home",
+            "points": -0.057
+          },
+          {
+            "key": "xgDiff",
+            "away": -19.21,
+            "home": -9.64,
+            "winner": "home",
+            "points": -0.431
+          },
+          {
+            "key": "cf",
+            "away": 52.6,
+            "home": 59.3,
+            "winner": "home",
+            "points": -0.072
+          },
+          {
+            "key": "hdcf",
+            "away": 48.1,
+            "home": 55.6,
+            "winner": "home",
+            "points": -0.083
+          },
+          {
+            "key": "xgf5v5",
+            "away": 49,
+            "home": 56,
+            "winner": "home",
+            "points": -0.123
+          }
+        ]
+      },
+      "edgeTeam": "CAR",
+      "edgeName": "Carolina Hurricanes",
+      "why": "Carolina Hurricanes has the edge because they lead in goal differential, goals versus expected goals, points percentage, 5-on-5 expected goals for percentage, high-danger chances for percentage, Corsi for percentage, shots-on-goal share, and PDO.",
+      "projected": {
+        "away": 3,
+        "home": 4,
+        "awayRaw": 3.02,
+        "homeRaw": 4.07,
+        "label": "3–4"
+      },
+      "odds": {
+        "awayMl": 110,
+        "homeMl": -130,
+        "total": 6.5,
+        "overPrice": 100,
+        "underPrice": -120,
+        "partner": "DraftKings"
+      },
+      "notes": "FLA on a 3-game win streak"
+    },
+    {
+      "id": 2026020002,
+      "gameDate": "2026-09-29",
+      "startTimeUTC": "2026-09-29T23:00:00Z",
+      "venue": "Scotiabank Arena",
+      "gameState": "FUT",
+      "away": {
+        "abbrev": "MTL",
+        "name": "Montréal Canadiens",
+        "logo": "https://assets.nhle.com/logos/nhl/svg/MTL_light.svg",
+        "record": "48–24–10",
+        "wins": 48,
+        "losses": 24,
+        "otLosses": 10,
+        "ptsPct": 0.6463,
+        "goalDiff": 27,
+        "goalsFor": 283,
+        "goalsAgainst": 256,
+        "pdo": 101.9,
+        "last5AvgGd": -1.4,
+        "last5SvPct": null,
+        "last5Games": 5,
+        "last5Total": -7,
+        "sogShare": 48.6,
+        "xGoalsFor": 268.3,
+        "xGoalsAgainst": 273.4,
+        "gfMinusXg": 10.69,
+        "cfPct": 48.3,
+        "hdcfPct": 47.2,
+        "xgfPct5v5": 48,
+        "gamesPlayed": 82
+      },
+      "home": {
+        "abbrev": "TOR",
+        "name": "Toronto Maple Leafs",
+        "logo": "https://assets.nhle.com/logos/nhl/svg/TOR_light.svg",
+        "record": "32–36–14",
+        "wins": 32,
+        "losses": 36,
+        "otLosses": 14,
+        "ptsPct": 0.4756,
+        "goalDiff": -46,
+        "goalsFor": 253,
+        "goalsAgainst": 299,
+        "pdo": 100.6,
+        "last5AvgGd": -2.6,
+        "last5SvPct": null,
+        "last5Games": 5,
+        "last5Total": -13,
+        "sogShare": 44.8,
+        "xGoalsFor": 238.4,
+        "xGoalsAgainst": 285.5,
+        "gfMinusXg": 13.59,
+        "cfPct": 44.6,
+        "hdcfPct": 45.7,
+        "xgfPct5v5": 46,
+        "gamesPlayed": 82
+      },
+      "edge": {
+        "winner": "away",
+        "score": 1.176,
+        "awayScore": 1.176,
+        "homeScore": 0,
+        "breakdown": [
+          {
+            "key": "ptsPct",
+            "away": 0.6463,
+            "home": 0.4756,
+            "winner": "away",
+            "points": 0.183
+          },
+          {
+            "key": "gd",
+            "away": 27,
+            "home": -46,
+            "winner": "away",
+            "points": 1
+          },
+          {
+            "key": "pdo",
+            "away": 101.9,
+            "home": 100.6,
+            "winner": "away",
+            "points": 0.002
+          },
+          {
+            "key": "last5",
+            "away": -1.4,
+            "home": -2.6,
+            "winner": "away",
+            "points": 0.12
+          },
+          {
+            "key": "sogShare",
+            "away": 48.6,
+            "home": 44.8,
+            "winner": "away",
+            "points": 0.041
+          },
+          {
+            "key": "xgDiff",
+            "away": 10.69,
+            "home": 13.59,
+            "winner": "home",
+            "points": -0.155
+          },
+          {
+            "key": "cf",
+            "away": 48.3,
+            "home": 44.6,
+            "winner": "away",
+            "points": 0.048
+          },
+          {
+            "key": "hdcf",
+            "away": 47.2,
+            "home": 45.7,
+            "winner": "away",
+            "points": 0.019
+          },
+          {
+            "key": "xgf5v5",
+            "away": 48,
+            "home": 46,
+            "winner": "away",
+            "points": 0.039
+          }
+        ]
+      },
+      "edgeTeam": "MTL",
+      "edgeName": "Montréal Canadiens",
+      "why": "Montréal Canadiens has the edge because they lead in goal differential, points percentage, last-5 games goal differential, Corsi for percentage, shots-on-goal share, 5-on-5 expected goals for percentage, high-danger chances for percentage, and PDO.",
+      "projected": {
+        "away": 4,
+        "home": 3,
+        "awayRaw": 3.41,
+        "homeRaw": 3.22,
+        "label": "4–3"
+      },
+      "odds": {
+        "awayMl": -105,
+        "homeMl": -115,
+        "total": 6.5,
+        "overPrice": 105,
+        "underPrice": -125,
+        "partner": "DraftKings"
+      },
+      "notes": "TOR on a 7-game skid"
+    },
+    {
+      "id": 2026020003,
+      "gameDate": "2026-09-29",
+      "startTimeUTC": "2026-09-30T00:00:00Z",
+      "venue": "TD Garden",
+      "gameState": "FUT",
+      "away": {
+        "abbrev": "NYR",
+        "name": "New York Rangers",
+        "logo": "https://assets.nhle.com/logos/nhl/svg/NYR_light.svg",
+        "record": "34–39–9",
+        "wins": 34,
+        "losses": 39,
+        "otLosses": 9,
+        "ptsPct": 0.4695,
+        "goalDiff": -12,
+        "goalsFor": 238,
+        "goalsAgainst": 250,
+        "pdo": 100.8,
+        "last5AvgGd": 0.8,
+        "last5SvPct": null,
+        "last5Games": 5,
+        "last5Total": 4,
+        "sogShare": 46.6,
+        "xGoalsFor": 237.2,
+        "xGoalsAgainst": 268.4,
+        "gfMinusXg": -2.2,
+        "cfPct": 48.6,
+        "hdcfPct": 46.9,
+        "xgfPct5v5": 48,
+        "gamesPlayed": 82
+      },
+      "home": {
+        "abbrev": "BOS",
+        "name": "Boston Bruins",
+        "logo": "https://assets.nhle.com/logos/nhl/svg/BOS_light.svg",
+        "record": "45–27–10",
+        "wins": 45,
+        "losses": 27,
+        "otLosses": 10,
+        "ptsPct": 0.6098,
+        "goalDiff": 22,
+        "goalsFor": 272,
+        "goalsAgainst": 250,
+        "pdo": 102,
+        "last5AvgGd": -1.4,
+        "last5SvPct": null,
+        "last5Games": 5,
+        "last5Total": -7,
+        "sogShare": 47.6,
+        "xGoalsFor": 247.6,
+        "xGoalsAgainst": 277.6,
+        "gfMinusXg": 20.43,
+        "cfPct": 48.5,
+        "hdcfPct": 46.6,
+        "xgfPct5v5": 47,
+        "gamesPlayed": 82
+      },
+      "edge": {
+        "winner": "home",
+        "score": -2.164,
+        "awayScore": 0,
+        "homeScore": 2.164,
+        "breakdown": [
+          {
+            "key": "ptsPct",
+            "away": 0.4695,
+            "home": 0.6098,
+            "winner": "home",
+            "points": -0.156
+          },
+          {
+            "key": "gd",
+            "away": -12,
+            "home": 22,
+            "winner": "home",
+            "points": -1
+          },
+          {
+            "key": "pdo",
+            "away": 100.8,
+            "home": 102,
+            "winner": "home",
+            "points": -0.002
+          },
+          {
+            "key": "last5",
+            "away": 0.8,
+            "home": -1.4,
+            "winner": "away",
+            "points": 0.4
+          },
+          {
+            "key": "sogShare",
+            "away": 46.6,
+            "home": 47.6,
+            "winner": "home",
+            "points": -0.011
+          },
+          {
+            "key": "xgDiff",
+            "away": -2.2,
+            "home": 20.43,
+            "winner": "home",
+            "points": -1.3
+          },
+          {
+            "key": "cf",
+            "away": 48.6,
+            "home": 48.5,
+            "winner": "away",
+            "points": 0.001
+          },
+          {
+            "key": "hdcf",
+            "away": 46.9,
+            "home": 46.6,
+            "winner": "away",
+            "points": 0.004
+          },
+          {
+            "key": "xgf5v5",
+            "away": 48,
+            "home": 47,
+            "winner": "away",
+            "points": 0.019
+          }
+        ]
+      },
+      "edgeTeam": "BOS",
+      "edgeName": "Boston Bruins",
+      "why": "Boston Bruins has the edge because they lead in goals versus expected goals, goal differential, points percentage, shots-on-goal share, and PDO.",
+      "projected": {
+        "away": 3,
+        "home": 4,
+        "awayRaw": 2.98,
+        "homeRaw": 3.4,
+        "label": "3–4"
+      },
+      "odds": {
+        "awayMl": 114,
+        "homeMl": -135,
+        "total": 5.5,
+        "overPrice": -120,
+        "underPrice": 100,
+        "partner": "DraftKings"
+      },
+      "notes": ""
+    },
+    {
+      "id": 2026020004,
+      "gameDate": "2026-09-29",
+      "startTimeUTC": "2026-09-30T02:00:00Z",
+      "venue": "Rogers Place",
+      "gameState": "FUT",
+      "away": {
+        "abbrev": "VAN",
+        "name": "Vancouver Canucks",
+        "logo": "https://assets.nhle.com/logos/nhl/svg/VAN_light.svg",
+        "record": "25–49–8",
+        "wins": 25,
+        "losses": 49,
+        "otLosses": 8,
+        "ptsPct": 0.3537,
+        "goalDiff": -100,
+        "goalsFor": 216,
+        "goalsAgainst": 316,
+        "pdo": 97,
+        "last5AvgGd": -1,
+        "last5SvPct": null,
+        "last5Games": 5,
+        "last5Total": -5,
+        "sogShare": 46.5,
+        "xGoalsFor": 234.4,
+        "xGoalsAgainst": 285.7,
+        "gfMinusXg": -24.39,
+        "cfPct": 47.7,
+        "hdcfPct": 47,
+        "xgfPct5v5": 44,
+        "gamesPlayed": 82
+      },
+      "home": {
+        "abbrev": "EDM",
+        "name": "Edmonton Oilers",
+        "logo": "https://assets.nhle.com/logos/nhl/svg/EDM_light.svg",
+        "record": "41–30–11",
+        "wins": 41,
+        "losses": 30,
+        "otLosses": 11,
+        "ptsPct": 0.5671,
+        "goalDiff": 13,
+        "goalsFor": 282,
+        "goalsAgainst": 269,
+        "pdo": 99.5,
+        "last5AvgGd": -1.2,
+        "last5SvPct": null,
+        "last5Games": 5,
+        "last5Total": -6,
+        "sogShare": 52.7,
+        "xGoalsFor": 274.6,
+        "xGoalsAgainst": 257.3,
+        "gfMinusXg": 7.44,
+        "cfPct": 50.4,
+        "hdcfPct": 51.5,
+        "xgfPct5v5": 52,
+        "gamesPlayed": 82
+      },
+      "edge": {
+        "winner": "home",
+        "score": -2.946,
+        "awayScore": 0,
+        "homeScore": 2.946,
+        "breakdown": [
+          {
+            "key": "ptsPct",
+            "away": 0.3537,
+            "home": 0.5671,
+            "winner": "home",
+            "points": -0.256
+          },
+          {
+            "key": "gd",
+            "away": -100,
+            "home": 13,
+            "winner": "home",
+            "points": -1
+          },
+          {
+            "key": "pdo",
+            "away": 97,
+            "home": 99.5,
+            "winner": "home",
+            "points": -0.004
+          },
+          {
+            "key": "last5",
+            "away": -1,
+            "home": -1.2,
+            "winner": "away",
+            "points": 0.036
+          },
+          {
+            "key": "sogShare",
+            "away": 46.5,
+            "home": 52.7,
+            "winner": "home",
+            "points": -0.063
+          },
+          {
+            "key": "xgDiff",
+            "away": -24.39,
+            "home": 7.44,
+            "winner": "home",
+            "points": -1.3
+          },
+          {
+            "key": "cf",
+            "away": 47.7,
+            "home": 50.4,
+            "winner": "home",
+            "points": -0.033
+          },
+          {
+            "key": "hdcf",
+            "away": 47,
+            "home": 51.5,
+            "winner": "home",
+            "points": -0.053
+          },
+          {
+            "key": "xgf5v5",
+            "away": 44,
+            "home": 52,
+            "winner": "home",
+            "points": -0.154
+          }
+        ]
+      },
+      "edgeTeam": "EDM",
+      "edgeName": "Edmonton Oilers",
+      "why": "Edmonton Oilers has the edge because they lead in goals versus expected goals, goal differential, points percentage, 5-on-5 expected goals for percentage, shots-on-goal share, high-danger chances for percentage, Corsi for percentage, and PDO.",
+      "projected": {
+        "away": 3,
+        "home": 4,
+        "awayRaw": 2.71,
+        "homeRaw": 3.91,
+        "label": "3–4"
+      },
+      "odds": {
+        "awayMl": 215,
+        "homeMl": -265,
+        "total": 6.5,
+        "overPrice": -110,
+        "underPrice": -110,
+        "partner": "DraftKings"
+      },
+      "notes": ""
+    },
+    {
+      "id": 2026020005,
+      "gameDate": "2026-09-29",
+      "startTimeUTC": "2026-09-30T02:30:00Z",
+      "venue": "T-Mobile Arena",
+      "gameState": "FUT",
+      "away": {
+        "abbrev": "CHI",
+        "name": "Chicago Blackhawks",
+        "logo": "https://assets.nhle.com/logos/nhl/svg/CHI_light.svg",
+        "record": "29–39–14",
+        "wins": 29,
+        "losses": 39,
+        "otLosses": 14,
+        "ptsPct": 0.439,
+        "goalDiff": -62,
+        "goalsFor": 213,
+        "goalsAgainst": 275,
+        "pdo": 99.4,
+        "last5AvgGd": -1.8,
+        "last5SvPct": null,
+        "last5Games": 5,
+        "last5Total": -9,
+        "sogShare": 45.1,
+        "xGoalsFor": 219.3,
+        "xGoalsAgainst": 277.5,
+        "gfMinusXg": -9.25,
+        "cfPct": 46.1,
+        "hdcfPct": 44,
+        "xgfPct5v5": 42,
+        "gamesPlayed": 82
+      },
+      "home": {
+        "abbrev": "VGK",
+        "name": "Vegas Golden Knights",
+        "logo": "https://assets.nhle.com/logos/nhl/svg/VGK_light.svg",
+        "record": "39–26–17",
+        "wins": 39,
+        "losses": 26,
+        "otLosses": 17,
+        "ptsPct": 0.5793,
+        "goalDiff": 15,
+        "goalsFor": 265,
+        "goalsAgainst": 250,
+        "pdo": 99,
+        "last5AvgGd": -1.4,
+        "last5SvPct": null,
+        "last5Games": 5,
+        "last5Total": -7,
+        "sogShare": 54.3,
+        "xGoalsFor": 264.9,
+        "xGoalsAgainst": 225.5,
+        "gfMinusXg": -0.89,
+        "cfPct": 52.4,
+        "hdcfPct": 54.4,
+        "xgfPct5v5": 54,
+        "gamesPlayed": 82
+      },
+      "edge": {
+        "winner": "home",
+        "score": -2.929,
+        "awayScore": 0,
+        "homeScore": 2.929,
+        "breakdown": [
+          {
+            "key": "ptsPct",
+            "away": 0.439,
+            "home": 0.5793,
+            "winner": "home",
+            "points": -0.165
+          },
+          {
+            "key": "gd",
+            "away": -62,
+            "home": 15,
+            "winner": "home",
+            "points": -1
+          },
+          {
+            "key": "pdo",
+            "away": 99.4,
+            "home": 99,
+            "winner": "away",
+            "points": 0.001
+          },
+          {
+            "key": "last5",
+            "away": -1.8,
+            "home": -1.4,
+            "winner": "home",
+            "points": -0.05
+          },
+          {
+            "key": "sogShare",
+            "away": 45.1,
+            "home": 54.3,
+            "winner": "home",
+            "points": -0.093
+          },
+          {
+            "key": "xgDiff",
+            "away": -9.25,
+            "home": -0.89,
+            "winner": "home",
+            "points": -1.072
+          },
+          {
+            "key": "cf",
+            "away": 46.1,
+            "home": 52.4,
+            "winner": "home",
+            "points": -0.077
+          },
+          {
+            "key": "hdcf",
+            "away": 44,
+            "home": 54.4,
+            "winner": "home",
+            "points": -0.122
+          },
+          {
+            "key": "xgf5v5",
+            "away": 42,
+            "home": 54,
+            "winner": "home",
+            "points": -0.231
+          }
+        ]
+      },
+      "edgeTeam": "VGK",
+      "edgeName": "Vegas Golden Knights",
+      "why": "Vegas Golden Knights has the edge because they lead in goals versus expected goals, goal differential, 5-on-5 expected goals for percentage, points percentage, high-danger chances for percentage, shots-on-goal share, Corsi for percentage, and last-5 games goal differential.",
+      "projected": {
+        "away": 2,
+        "home": 4,
+        "awayRaw": 2.47,
+        "homeRaw": 3.72,
+        "label": "2–4"
+      },
+      "odds": {
+        "awayMl": 205,
+        "homeMl": -250,
+        "total": 5.5,
+        "overPrice": -125,
+        "underPrice": 105,
+        "partner": "DraftKings"
+      },
+      "notes": "VGK on a 3-game win streak"
+    }
+  ]
+}
