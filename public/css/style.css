@@ -189,9 +189,10 @@ button:hover {
   filter: brightness(1.15);
 }
 main {
-  max-width: 90%;
+  max-width: 99%;
   margin: 0 auto;
   padding: 1.25rem 1rem 3rem;
+  align-items: center;
 }
 .note {
   background: #fff6d8;
@@ -218,6 +219,7 @@ main {
   max-width: 32rem;
   width: 100%;
   flex: 0 1 32rem;
+  padding-bottom:14px;
 }
 .card-head {
   display: flex;
@@ -238,7 +240,6 @@ main {
   flex-wrap: wrap;
 }
 .card-head .odds,
-.card-head .notes-row,
 .card-head .why {
   margin: 0;
 }

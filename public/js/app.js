@@ -117,7 +117,6 @@
               "</span>" +
             "</div>" +
             oddsLine(m) +
-            notesLine(m) +
             '<p class="why">' + why + "</p>" +
           "</div>" +
           '<div class="sides">' +
@@ -143,6 +142,7 @@
               teamPills(m.home) +
             "</div>" +
           "</div>" +
+          notesLine(m) +
         "</article>"
       );
     }).join("");
