@@ -24,7 +24,7 @@
       if (used.length >= 5) return;
       var st = String(g.gameState || "").toUpperCase();
       if (st !== "OFF" && st !== "FINAL" && st.indexOf("FINAL") !== 0) return;
-      if (g.gameType && g.gameType !== 2) return;
+      if (g.gameType && g.gameType !== 2 && g.gameType !== 1) return;
       var away = g.awayTeam || {};
       var home = g.homeTeam || {};
       var isAway = away.abbrev === abbrev;

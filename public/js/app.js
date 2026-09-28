@@ -24,12 +24,24 @@
     return v < 0 ? '<span class="num-neg">' + t + "</span>" : t;
   }
 
+  var PILL_TITLES = {
+    pdo: "Shooting percentage plus Save Percentage from Shots on Goal. 100 is league-normal; much higher is finishing or save luck.",
+    last5: "Average goal differential (GF minus GA) in this team’s last five completed games.",
+    last5Sv: "Save percentage over the last five games: (shots against minus goals against) / shots against.",
+    sogShare: "Shots on goal for divided by Shots For plus Shots Against. Above 50% means they take more shots than they allow.",
+    xgDiff: "Actual goals for minus expected goals for. Positive means they have outscored their shot quality.",
+    cf: "Corsi for percentage. Shot Attempts For divided by shot attempts for plus against (all situations).",
+    hdcf: "High-danger chances for divided by high-danger chances for plus against.",
+    xgf5v5: "5-on-5 expected goals for divided by expected goals for plus against. Best process stat for who should win."
+  };
+
   function pill(label, value, kind, fmt) {
     fmt = fmt || function (v) { return v == null ? "—" : String(v); };
     var sign = HockeyStats.pillSign(value, kind);
     var cls = "pill" + (sign ? " " + sign : "");
+    var title = PILL_TITLES[kind] || label;
     return (
-      '<div class="' + cls + '">' +
+      '<div class="' + cls + '" title="' + title.replace(/"/g, "&quot;") + '">' +
         '<span class="lab">' + label + "</span>" +
         '<span class="val">' + fmt(value) + "</span>" +
       "</div>"
@@ -44,7 +56,7 @@
   function oddsLine(m) {
     var o = m.odds;
     if (!o || (o.awayMl == null && o.homeMl == null && o.total == null)) {
-      return '<p class="odds muted">Moneyline / O/U not posted yet.</p>';
+      return '<p class="odds muted">Moneyline and over/under not posted yet.</p>';
     }
     var aw = HockeyStats.impliedWinPct ? HockeyStats.impliedWinPct(o.awayMl) : null;
     var hw = HockeyStats.impliedWinPct ? HockeyStats.impliedWinPct(o.homeMl) : null;
@@ -56,7 +68,7 @@
       ? "O/U " + o.total + " (O " + am(o.overPrice) + " / U " + am(o.underPrice) + ")"
       : "O/U —";
     var src = o.partner ? " · " + o.partner : "";
-    return '<p class="odds"><span>ML ' + ml + "</span><span>" + ou + src + "</span></p>";
+    return '<p class="odds"><span>Moneyline ' + ml + "</span><span>" + ou.replace("O/U", "Over/under") + src + "</span></p>";
   }
 
   function notesLine(m) {
@@ -67,14 +79,14 @@
   function teamPills(t) {
     return (
       '<div class="pills">' +
-        pill("PDO", t.pdo, "pdo") +
-        pill("L5 avg GD", t.last5AvgGd, "last5", function (v) { return signed(v, 2); }) +
-        pill("L5 SV%", t.last5SvPct, "last5Sv", function (v) { return v == null ? "—" : v + "%"; }) +
-        pill("SOG share", t.sogShare, "sogShare", function (v) { return v == null ? "—" : v + "%"; }) +
-        pill("GF vs xGF", t.gfMinusXg, "xgDiff", function (v) { return signed(v, 1); }) +
-        pill("CF%", t.cfPct, "cf", function (v) { return v == null ? "—" : v + "%"; }) +
-        pill("HDCF%", t.hdcfPct, "hdcf", function (v) { return v == null ? "—" : v + "%"; }) +
-        pill("5v5 xGF%", t.xgfPct5v5, "xgf5v5", function (v) { return v == null ? "—" : v + "%"; }) +
+        pill("Shooting plus save percentage", t.pdo, "pdo") +
+        pill("Average goal differential last five games", t.last5AvgGd, "last5", function (v) { return signed(v, 2); }) +
+        pill("Save percentage last five games", t.last5SvPct, "last5Sv", function (v) { return v == null ? "—" : v + "%"; }) +
+        pill("Shots-on-goal share", t.sogShare, "sogShare", function (v) { return v == null ? "—" : v + "%"; }) +
+        pill("Actual goals versus expected goals", t.gfMinusXg, "xgDiff", function (v) { return signed(v, 1); }) +
+        pill("Shot-attempt share", t.cfPct, "cf", function (v) { return v == null ? "—" : v + "%"; }) +
+        pill("High-danger chance share", t.hdcfPct, "hdcf", function (v) { return v == null ? "—" : v + "%"; }) +
+        pill("Even-strength expected-goals share", t.xgfPct5v5, "xgf5v5", function (v) { return v == null ? "—" : v + "%"; }) +
       "</div>"
     );
   }

@@ -417,7 +417,7 @@ async function buildTeamStats() {
     var form = { games: 0, w: 0, l: 0, ot: 0, gfGp: null, gaGp: null };
     try {
       var sched = await getJson(
-        "https://api-web.nhle.com/v1/club-schedule-season/" + t.abbrev + "/" + statsSeason
+        "https://api-web.nhle.com/v1/club-schedule-season/" + t.abbrev + "/" + seasonId
       );
       form = teamStats.last5Form(sched.games || [], t.abbrev);
     } catch (e) { /* keep empty form */ }
