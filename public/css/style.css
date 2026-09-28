@@ -138,9 +138,9 @@ main { max-width: 90%; margin: 0 auto; padding: 1.25rem 1rem 3rem; }
 .card {
   background: var(--card); border: 1px solid var(--line);
   border-radius: 14px; box-shadow: var(--shadow); overflow: hidden;
-  max-width: 36rem;
+  max-width: 32rem;
   width: 100%;
-  flex: 0 1 36rem;
+  flex: 0 1 32rem;
 }
 .card-head {
   display: flex;
