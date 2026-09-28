@@ -85,6 +85,8 @@ var parsed = stats.parsePartnerOdds({
   ] }
 });
 assert.strictEqual(parsed.awayMl, 110);
+assert.strictEqual(stats.impliedWinPct(-150), 60);
+assert.strictEqual(stats.impliedWinPct(150), 40);
 assert.strictEqual(parsed.homeMl, -130);
 assert.strictEqual(parsed.total, 6.5);
 assert.strictEqual(stats.formatAmerican(-130), "-130");

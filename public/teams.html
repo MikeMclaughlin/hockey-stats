@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Hockey Stats — Team Stats</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <header class="top">
+    <div class="brand">
+      <img class="nhl-logo" src="/img/nhl.svg" alt="NHL">
+      <div>
+        <h1>Team Stats</h1>
+        <p class="tag">Season record, shot volume, and last-five form</p>
+      </div>
+    </div>
+    <div class="toolbar">
+      <nav class="nav">
+        <a href="/">Matchups</a>
+        <a href="/teams.html" aria-current="page">Team Stats</a>
+        <a href="/streaks.html">Player Streaks</a>
+        <a href="/review.html">Review</a>
+        <a href="/backtest.html">Backtest</a>
+      </nav>
+      <span id="meta" class="meta">Loading…</span>
+    </div>
+  </header>
+  <main>
+    <section class="board">
+      <div class="table-wrap">
+        <table id="teams">
+          <thead>
+            <tr>
+              <th data-key="abbrev">Team</th>
+              <th data-key="wins" class="num">W</th>
+              <th data-key="losses" class="num">L</th>
+              <th data-key="otl" class="num">OTL</th>
+              <th data-key="sogGp" class="num">SOG/GP</th>
+              <th data-key="sogaGp" class="num">SOGA/GP</th>
+              <th data-key="l5w" class="num">L5 W</th>
+              <th data-key="l5l" class="num">L5 L</th>
+              <th data-key="l5ot" class="num">L5 OT</th>
+              <th data-key="l5gfGp" class="num">L5 GF/GP</th>
+              <th data-key="l5gaGp" class="num">L5 GA/GP</th>
+            </tr>
+            <tr class="filters">
+              <th><input data-filter="abbrev" placeholder="TOR"></th>
+              <th><input data-filter="wins" placeholder=">=10"></th>
+              <th><input data-filter="losses" placeholder=""></th>
+              <th><input data-filter="otl" placeholder=""></th>
+              <th><input data-filter="sogGp" placeholder=">=30"></th>
+              <th><input data-filter="sogaGp" placeholder=""></th>
+              <th><input data-filter="l5w" placeholder=">=3"></th>
+              <th><input data-filter="l5l" placeholder=""></th>
+              <th><input data-filter="l5ot" placeholder=""></th>
+              <th><input data-filter="l5gfGp" placeholder=""></th>
+              <th><input data-filter="l5gaGp" placeholder=""></th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+  <footer>
+    <span>hockey-stats v1.2.0</span>
+    <span>NHL standings + club schedule · team summary shots</span>
+  </footer>
+  <script src="/js/table-filter.js"></script>
+  <script src="/js/teams-app.js"></script>
+</body>
+</html>

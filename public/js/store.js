@@ -18,8 +18,11 @@
     estimates: "estimates.json",
     backtest: "backtest-20252026.json",
     mpGames: "mp-games-2025.json",
-    matchups: "matchups.json"
+    matchups: "matchups.json",
+    playerGames: "player-games.json"
   };
+
+  var lastWrite = { at: null, name: null, error: null };
 
   function loadEnvLocal() {
     var file = path.join(ROOT, ".env.local");
@@ -115,12 +118,18 @@
   }
 
   async function writeJson(name, body) {
-    if (usesBlob()) {
-      await writeBlob(name, body);
-      try { writeLocal(name, body); } catch (e) { /* mirror optional */ }
-      return;
+    try {
+      if (usesBlob()) {
+        await writeBlob(name, body);
+        try { writeLocal(name, body); } catch (e) { /* mirror optional */ }
+      } else {
+        writeLocal(name, body);
+      }
+      lastWrite = { at: new Date().toISOString(), name: name, error: null };
+    } catch (e) {
+      lastWrite = { at: new Date().toISOString(), name: name, error: String(e.message || e) };
+      throw e;
     }
-    writeLocal(name, body);
   }
 
   return {
@@ -130,6 +139,7 @@
     usesBlob: usesBlob,
     readJson: readJson,
     writeJson: writeJson,
+    lastWrite: function () { return lastWrite; },
     readLocal: readLocal,
     writeLocal: writeLocal
   };

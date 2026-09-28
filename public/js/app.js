@@ -46,7 +46,12 @@
     if (!o || (o.awayMl == null && o.homeMl == null && o.total == null)) {
       return '<p class="odds muted">Moneyline / O/U not posted yet.</p>';
     }
-    var ml = m.away.abbrev + " " + am(o.awayMl) + " · " + m.home.abbrev + " " + am(o.homeMl);
+    var aw = HockeyStats.impliedWinPct ? HockeyStats.impliedWinPct(o.awayMl) : null;
+    var hw = HockeyStats.impliedWinPct ? HockeyStats.impliedWinPct(o.homeMl) : null;
+    var ml = m.away.abbrev + " " + am(o.awayMl) +
+      (aw != null ? " (" + aw + "%)" : "") +
+      " · " + m.home.abbrev + " " + am(o.homeMl) +
+      (hw != null ? " (" + hw + "%)" : "");
     var ou = o.total != null
       ? "O/U " + o.total + " (O " + am(o.overPrice) + " / U " + am(o.underPrice) + ")"
       : "O/U —";
@@ -55,7 +60,7 @@
   }
 
   function notesLine(m) {
-    if (!m.notes) return '<p class="notes-row muted">No fatigue or streak notes.</p>';
+    if (!m.notes) return "";
     return '<p class="notes-row">' + m.notes + "</p>";
   }
 

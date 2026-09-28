@@ -43,6 +43,24 @@ var srv = server.listen(0, "127.0.0.1", function () {
       assert.strictEqual(r.status, 200);
       assert.ok(r.body.indexOf("Estimate review") !== -1);
     })
+    .then(function () { return get(port, "/streaks.html"); })
+    .then(function (r) {
+      assert.strictEqual(r.status, 200);
+      assert.ok(r.body.indexOf("Player Streaks") !== -1);
+      assert.ok(r.body.charAt(0) !== "{");
+    })
+    .then(function () { return get(port, "/teams.html"); })
+    .then(function (r) {
+      assert.strictEqual(r.status, 200);
+      assert.ok(r.body.indexOf("Team Stats") !== -1);
+    })
+    .then(function () { return get(port, "/backtest.html"); })
+    .then(function (r) {
+      assert.strictEqual(r.status, 200);
+      assert.ok(r.body.indexOf("<!DOCTYPE html>") !== -1);
+      assert.ok(r.body.indexOf("Backtest") !== -1);
+      assert.ok(r.body.charAt(0) !== "{");
+    })
     .then(function () { return get(port, "/api/estimates"); })
     .then(function (r) {
       assert.strictEqual(r.status, 200);

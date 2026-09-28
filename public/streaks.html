@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Hockey Stats — Player Streaks</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <header class="top">
+    <div class="brand">
+      <img class="nhl-logo" src="/img/nhl.svg" alt="NHL">
+      <div>
+        <h1>Player Streaks</h1>
+        <p class="tag">Minimum per game over the last N completed games</p>
+      </div>
+    </div>
+    <div class="toolbar">
+      <nav class="nav">
+        <a href="/">Matchups</a>
+        <a href="/teams.html">Team Stats</a>
+        <a href="/streaks.html" aria-current="page">Player Streaks</a>
+        <a href="/review.html">Review</a>
+        <a href="/backtest.html">Backtest</a>
+      </nav>
+      <span id="meta" class="meta">Loading…</span>
+    </div>
+  </header>
+  <main>
+    <form id="controls" class="controls">
+      <label>Streak length
+        <input id="length" type="number" min="1" max="15" value="5">
+      </label>
+      <label>Min goals
+        <input id="minGoals" type="number" min="0" max="10" value="1">
+      </label>
+      <label>Min assists
+        <input id="minAssists" type="number" min="0" max="10" value="1">
+      </label>
+      <label>Min points
+        <input id="minPoints" type="number" min="0" max="10" value="1">
+      </label>
+      <label>Min attempts
+        <input id="minAttempts" type="number" min="0" max="20" value="3">
+      </label>
+      <label>Min SOG
+        <input id="minSog" type="number" min="0" max="20" value="3">
+      </label>
+      <button type="submit">Apply</button>
+    </form>
+    <p id="note" class="note"></p>
+    <div id="panels"></div>
+  </main>
+  <footer>
+    <span>hockey-stats v1.2.0</span>
+    <span>NHL boxscores · cached game logs</span>
+  </footer>
+  <script src="/js/table-filter.js"></script>
+  <script src="/js/streaks.js"></script>
+  <script src="/js/streaks-app.js"></script>
+</body>
+</html>

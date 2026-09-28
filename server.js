@@ -9,6 +9,8 @@ var stats = require("./public/js/stats.js");
 var archive = require("./public/js/archive.js");
 var backtest = require("./public/js/backtest.js");
 var store = require("./public/js/store.js");
+var streaks = require("./public/js/streaks.js");
+var teamStats = require("./public/js/teamStats.js");
 
 var ROOT = __dirname;
 var PORT = Number(process.env.PORT || 3080);
@@ -392,31 +394,137 @@ async function runBacktest() {
   return out;
 }
 
+function shiftDate(iso, days) {
+  var d = new Date(String(iso).slice(0, 10) + "T12:00:00Z");
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+async function buildTeamStats() {
+  var score = await getJson("https://api-web.nhle.com/v1/score/now");
+  var standings = await getJson("https://api-web.nhle.com/v1/standings/now");
+  var seasonId = seasonIdFromScore(score);
+  var statsSeason = statsSeasonFor(seasonId, score);
+  var summary = await getJson(
+    "https://api.nhle.com/stats/rest/en/team/summary?cayenneExp=seasonId=" +
+      statsSeason + "%20and%20gameTypeId=2"
+  );
+  var standMap = indexStandings(standings);
+  var sumMap = indexSummary(summary);
+  var rows = [];
+  for (var i = 0; i < stats.TEAMS.length; i++) {
+    var t = stats.TEAMS[i];
+    var form = { games: 0, w: 0, l: 0, ot: 0, gfGp: null, gaGp: null };
+    try {
+      var sched = await getJson(
+        "https://api-web.nhle.com/v1/club-schedule-season/" + t.abbrev + "/" + statsSeason
+      );
+      form = teamStats.last5Form(sched.games || [], t.abbrev);
+    } catch (e) { /* keep empty form */ }
+    rows.push(teamStats.row(t, standMap[t.abbrev], sumMap[t.abbrev], form));
+  }
+  rows.sort(function (a, b) { return (b.wins || 0) - (a.wins || 0); });
+  return {
+    generatedAt: new Date().toISOString(),
+    seasonId: statsSeason,
+    teams: rows
+  };
+}
+
+async function buildPlayerStreaks(query) {
+  query = query || {};
+  var length = Math.max(1, Math.min(15, Number(query.get && query.get("length")) || 5));
+  var opts = {
+    length: length,
+    minGoals: query.get && query.get("minGoals"),
+    minAssists: query.get && query.get("minAssists"),
+    minPoints: query.get && query.get("minPoints"),
+    minAttempts: query.get && query.get("minAttempts"),
+    minSog: query.get && query.get("minSog")
+  };
+  var cache = await store.readJson(store.KEYS.playerGames, { rows: [], games: {} });
+  if (!cache.games) cache.games = {};
+  if (!cache.rows) cache.rows = [];
+  var score = await getJson("https://api-web.nhle.com/v1/score/now");
+  var today = score.currentDate || new Date().toISOString().slice(0, 10);
+  var ids = [];
+  var seen = {};
+  for (var d = 0; d < 14; d++) {
+    var day = shiftDate(today, -d);
+    try {
+      var board = d === 0 ? score : await getJson("https://api-web.nhle.com/v1/score/" + day);
+      (board.games || []).forEach(function (g) {
+        var st = String(g.gameState || "").toUpperCase();
+        if (st !== "OFF" && st !== "FINAL" && st.indexOf("FINAL") !== 0) return;
+        if (!g.id || seen[g.id]) return;
+        seen[g.id] = true;
+        ids.push({ id: g.id, date: g.gameDate || day });
+      });
+    } catch (e) { /* skip day */ }
+  }
+  var fetched = 0;
+  var cap = process.env.VERCEL ? 12 : 40;
+  for (var i = 0; i < ids.length; i++) {
+    if (cache.games[String(ids[i].id)]) continue;
+    if (fetched >= cap) break;
+    try {
+      var box = await getJson("https://api-web.nhle.com/v1/gamecenter/" + ids[i].id + "/boxscore");
+      var parsed = streaks.parseBoxscore(box);
+      cache.games[String(ids[i].id)] = true;
+      cache.rows = cache.rows.concat(parsed);
+      fetched += 1;
+    } catch (e) { /* skip game */ }
+  }
+  if (fetched) {
+    try { await store.writeJson(store.KEYS.playerGames, cache); } catch (e) { /* ignore */ }
+  }
+  var built = streaks.buildTables(cache.rows, opts);
+  built.generatedAt = new Date().toISOString();
+  built.gameCount = Object.keys(cache.games).length;
+  built.playerRowCount = cache.rows.length;
+  built.fetchedThisCall = fetched;
+  return built;
+}
+
 function detectRoute(req, url) {
+  var p = (url && url.pathname ? url.pathname : "/").split("?")[0].replace(/\/+$/, "") || "/";
+  if (/\.(html|css|js|json|svg|png|ico|map)$/i.test(p)) return p;
   var headers = req.headers || {};
   var parts = [
     req.url,
-    url && url.pathname,
-    url && url.href,
+    p,
     headers["x-invoke-path"],
     headers["x-vercel-original-path"],
     headers["x-forwarded-uri"],
-    headers["x-invoke-query"],
     headers["x-matched-path"]
   ];
   var blob = parts.filter(Boolean).join(" ").toLowerCase();
+  if (/\.(html|css|js|json|svg|png|ico)(\s|$|\?)/i.test(blob) && blob.indexOf("/api/") === -1) return p;
+  var fromApi = blob.indexOf("/api/") !== -1 || /(^|\s)api\//.test(blob);
+  if (!fromApi) return p;
   if (blob.indexOf("grade") !== -1) return "/api/estimates/grade";
   if (blob.indexOf("health") !== -1) return "/api/health";
   if (blob.indexOf("matchup") !== -1) return "/api/matchups";
   if (blob.indexOf("backtest") !== -1) return "/api/backtest";
+  if (blob.indexOf("streak") !== -1) return "/api/streaks";
+  if (blob.indexOf("/teams") !== -1 || blob.indexOf("api/teams") !== -1) return "/api/teams";
   if (blob.indexOf("estimate") !== -1) return "/api/estimates";
-  return (url && url.pathname ? url.pathname.replace(/\/+$/, "") : "") || "/";
+  return p;
 }
 
 function handleApi(req, res, url) {
   var pathname = detectRoute(req, url);
   if (pathname === "/api/health") {
-    sendJson(res, 200, { ok: true, service: "hockey-stats", port: PORT, blob: store.usesBlob() });
+    var lw = store.lastWrite ? store.lastWrite() : {};
+    sendJson(res, 200, {
+      ok: true,
+      service: "hockey-stats",
+      port: PORT,
+      blob: store.usesBlob(),
+      blobWriteAt: lw.at || null,
+      blobWriteName: lw.name || null,
+      blobWriteError: lw.error || null
+    });
     return true;
   }
   if (pathname === "/api/matchups") {
@@ -445,9 +553,26 @@ function handleApi(req, res, url) {
       });
     return true;
   }
+  if (pathname === "/api/teams") {
+    buildTeamStats()
+      .then(function (body) { sendJson(res, 200, body); })
+      .catch(function (err) {
+        sendJson(res, 502, { error: String(err.message || err), teams: [] });
+      });
+    return true;
+  }
+  if (pathname === "/api/streaks") {
+    buildPlayerStreaks(url.searchParams)
+      .then(function (body) { sendJson(res, 200, body); })
+      .catch(function (err) {
+        sendJson(res, 502, { error: String(err.message || err), tables: {} });
+      });
+    return true;
+  }
   if (pathname === "/api/backtest") {
     store.readJson(store.KEYS.backtest, null).then(function (cached) {
-      if (cached && url.searchParams.get("refresh") !== "1") {
+      var allowRefresh = url.searchParams.get("refresh") === "1" && !process.env.VERCEL;
+      if (cached && !allowRefresh) {
         sendJson(res, 200, cached);
         return;
       }
@@ -492,11 +617,14 @@ function requestUrl(req) {
 
 function routeKey(pathname) {
   var p = String(pathname || "").replace(/\/+$/, "") || "/";
-  if (/\/health$/.test(p) || p === "/health") return "/api/health";
-  if (/\/matchups$/.test(p) || p === "/matchups") return "/api/matchups";
-  if (/\/backtest$/.test(p) || p === "/backtest") return "/api/backtest";
-  if (/\/estimates\/grade$/.test(p)) return "/api/estimates/grade";
-  if (/\/estimates$/.test(p) || p === "/estimates") return "/api/estimates";
+  if (/\.(html|css|js|json|svg|png|ico)$/i.test(p)) return p;
+  if (p === "/health" || p === "/api/health") return "/api/health";
+  if (p === "/matchups" || p === "/api/matchups") return "/api/matchups";
+  if (p === "/backtest" || p === "/api/backtest") return "/api/backtest";
+  if (p === "/streaks" || p === "/api/streaks") return "/api/streaks";
+  if (p === "/teams" || p === "/api/teams") return "/api/teams";
+  if (p === "/api/estimates/grade") return "/api/estimates/grade";
+  if (p === "/estimates" || p === "/api/estimates") return "/api/estimates";
   return p;
 }
 

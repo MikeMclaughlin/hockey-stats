@@ -367,6 +367,12 @@
     return (v > 0 ? "+" : "") + v;
   }
 
+  function impliedWinPct(ml) {
+    if (ml == null || !isFinite(ml) || ml === 0) return null;
+    var p = ml > 0 ? 100 / (ml + 100) : (-ml) / ((-ml) + 100);
+    return round(p * 100, 1);
+  }
+
   function parsePartnerOdds(game) {
     function pick(list, desc, qualContains) {
       list = list || [];
@@ -476,6 +482,7 @@
     estimateScore: estimateScore,
     parsePartnerOdds: parsePartnerOdds,
     formatAmerican: formatAmerican,
+    impliedWinPct: impliedWinPct,
     explainEdge: explainEdge,
     pillSign: pillSign,
     METRIC_LABELS: METRIC_LABELS,
