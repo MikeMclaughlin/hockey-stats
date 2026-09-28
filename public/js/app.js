@@ -25,14 +25,15 @@
   }
 
   var PILL_TITLES = {
-    pdo: "Shooting percentage plus Save Percentage from Shots on Goal. 100 is league-normal; much higher is finishing or save luck.",
-    last5: "Average goal differential (GF minus GA) in this team’s last five completed games.",
-    last5Sv: "Save percentage over the last five games: (shots against minus goals against) / shots against.",
-    sogShare: "Shots on goal for divided by Shots For plus Shots Against. Above 50% means they take more shots than they allow.",
-    xgDiff: "Actual goals for minus expected goals for. Positive means they have outscored their shot quality.",
-    cf: "Corsi for percentage. Shot Attempts For divided by shot attempts for plus against (all situations).",
-    hdcf: "High-danger chances for divided by high-danger chances for plus against.",
-    xgf5v5: "5-on-5 expected goals for divided by expected goals for plus against. Best process stat for who should win."
+    pdo: "PDO — shooting percentage plus save percentage from shots on goal. 100 is league-normal; much higher is finishing or save luck.",
+    last5: "L5 avg GD — average goal differential (GF minus GA) in this team’s last five completed games.",
+    last5Sv: "L5 SV% — save percentage over the last five games: (shots against minus goals against) / shots against.",
+    sogShare: "SOG share — shots on goal for divided by shots for plus shots against. Above 50% means they take more shots than they allow.",
+    xgDiff: "GF vs xGF — actual goals for minus expected goals for. Positive means they have outscored their shot quality.",
+    cf: "CF% — Corsi for percentage. Shot attempts for divided by shot attempts for plus against (all situations).",
+    hdcf: "HDCF% — high-danger chances for divided by high-danger chances for plus against.",
+    xgf5v5: "Even-strength expected-goals share — 5-on-5 expected goals for divided by expected goals for plus against.",
+    stXg: "Special-teams expected-goal differential — power-play expected goals minus shorthanded expected goals against."
   };
 
   function pill(label, value, kind, fmt) {
@@ -68,7 +69,9 @@
       ? "O/U " + o.total + " (O " + am(o.overPrice) + " / U " + am(o.underPrice) + ")"
       : "O/U —";
     var src = o.partner ? " · " + o.partner : "";
-    return '<p class="odds"><span>Moneyline ' + ml + "</span><span>" + ou.replace("O/U", "Over/under") + src + "</span></p>";
+    var hold = HockeyStats.twoWayHold ? HockeyStats.twoWayHold(o.awayMl, o.homeMl) : null;
+    var vig = hold != null ? "<span>Hold " + hold + "%</span>" : "";
+    return '<p class="odds"><span>Moneyline ' + ml + "</span><span>" + ou.replace("O/U", "Over/under") + src + "</span>" + vig + "</p>";
   }
 
   function notesLine(m) {
@@ -87,6 +90,7 @@
         pill("Shot-attempt share", t.cfPct, "cf", function (v) { return v == null ? "—" : v + "%"; }) +
         pill("High-danger chance share", t.hdcfPct, "hdcf", function (v) { return v == null ? "—" : v + "%"; }) +
         pill("Even-strength expected-goals share", t.xgfPct5v5, "xgf5v5", function (v) { return v == null ? "—" : v + "%"; }) +
+        pill("Special-teams expected goals", t.stXg, "stXg", function (v) { return signed(v, 1); }) +
       "</div>"
     );
   }
@@ -102,9 +106,10 @@
       var why = m.why || HockeyStats.explainEdge(e, m.away, m.home);
       var proj = m.projected || HockeyStats.estimateScore(m.away, m.home);
       return (
-        '<article class="card">' +
+        '<article class="card" id="game-' + m.id + '">' +
           '<div class="card-head">' +
-            "<span>" + fmtTime(m.startTimeUTC) + (m.venue ? " · " + m.venue : "") + "</span>" +
+            "<span>" + fmtTime(m.startTimeUTC) + (m.venue ? " · " + m.venue : "") +
+              (m.gameTypeLabel ? " · " + m.gameTypeLabel : "") + "</span>" +
             '<span class="proj">Est. ' + m.away.abbrev + " " + proj.away + " – " + proj.home + " " + m.home.abbrev + "</span>" +
             '<span class="badge ' + (e.winner === "even" ? "even" : "") + '">' +
               (e.winner === "even" ? "Even matchup" : "Edge: " + m.edgeName) +
@@ -178,7 +183,7 @@
     var rows = sortedRows();
     tbody.innerHTML = rows.map(function (m) {
       return (
-        "<tr>" +
+        "<tr data-game='" + m.id + "'>" +
           "<td>" + fmtTime(m.startTimeUTC) + "</td>" +
           "<td>" + m.away.abbrev + " " + m.away.record + "</td>" +
           "<td>" + m.home.abbrev + " " + m.home.record + "</td>" +
@@ -222,6 +227,13 @@
     }
     renderCards(data.matchups || []);
     renderTable();
+    document.querySelectorAll("#board tbody tr[data-game]").forEach(function (tr) {
+      tr.style.cursor = "pointer";
+      tr.addEventListener("click", function () {
+        var el = document.getElementById("game-" + tr.getAttribute("data-game"));
+        if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+    });
   }
 
   function load(refresh) {
@@ -240,9 +252,18 @@
       var key = th.getAttribute("data-key");
       if (state.sortKey === key) state.sortDir *= -1;
       else { state.sortKey = key; state.sortDir = 1; }
+      var q = new URLSearchParams(location.search);
+      q.set("sort", state.sortKey);
+      q.set("dir", String(state.sortDir));
+      history.replaceState(null, "", "/?" + q.toString());
       renderTable();
     });
   });
+  (function bootQuery() {
+    var q = new URLSearchParams(location.search);
+    if (q.get("sort")) state.sortKey = q.get("sort");
+    if (q.get("dir")) state.sortDir = Number(q.get("dir")) || 1;
+  })();
 
   $("refresh").addEventListener("click", function () { load(true); });
   load(false);

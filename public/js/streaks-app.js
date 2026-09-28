@@ -11,6 +11,8 @@
     p.set("minPoints", $("minPoints").value || "1");
     p.set("minAttempts", $("minAttempts").value || "3");
     p.set("minSog", $("minSog").value || "3");
+    p.set("minGoalieSv", ($("minGoalieSv") && $("minGoalieSv").value) || "90");
+    if ($("activeOnly") && $("activeOnly").checked) p.set("activeOnly", "1");
     return p.toString();
   }
 
@@ -26,17 +28,18 @@
     var body = rows.length
       ? rows.map(function (r) {
           return "<tr>" +
-            "<td>" + r.name + "</td>" +
+            "<td><a href='" + (r.nhlUrl || "#") + "' target='_blank' rel='noopener'>" + r.name + "</a></td>" +
+            "<td>" + (r.sweater ? "#" + r.sweater + " " : "") + (r.position || "") + "</td>" +
             "<td>" + r.team + "</td>" +
             "<td class='num'>" + r.length + "</td>" +
             "<td class='num'>" + r.min + "</td>" +
             "<td class='num'>" + r.total + "</td>" +
             "<td class='num'>" + r.avg + "</td>" +
             "<td>" + (r.from || "") + " → " + (r.to || "") + "</td>" +
-            "<td>" + r.line + "</td>" +
+            "<td>" + r.line + (r.incomplete ? " (incomplete)" : "") + "</td>" +
             "</tr>";
         }).join("")
-      : "<tr><td colspan='8' class='empty'>No players meet this streak.</td></tr>";
+      : "<tr><td colspan='9' class='empty'>No players meet this streak.</td></tr>";
     return (
       "<details class='panel' open>" +
         "<summary>" + block.label + " <span class='muted'>min " + block.min +
@@ -44,7 +47,7 @@
         "<div class='table-wrap'>" +
           "<table>" +
             "<thead><tr>" +
-              "<th>Player</th><th>Team</th><th class='num'>N</th><th class='num'>Min</th>" +
+              "<th>Player</th><th>Pos</th><th>Team</th><th class='num'>N</th><th class='num'>Min</th>" +
               "<th class='num'>Total</th><th class='num'>Avg</th><th>Span</th><th>Line</th>" +
             "</tr></thead>" +
             "<tbody>" + body + "</tbody>" +
@@ -55,16 +58,16 @@
   }
 
   function render(data) {
-    var order = ["goals", "assists", "points", "attempts", "sog"];
+    var order = ["goals", "assists", "points", "attempts", "sog", "goalieSv"];
     var html = order.map(function (k) {
       return data.tables && data.tables[k] ? tableHtml(data.tables[k]) : "";
     }).join("");
     $("panels").innerHTML = html || "<p class='empty'>No streak data yet.</p>";
     $("meta").textContent = (data.playerRowCount || 0) + " player-games · " +
       (data.gameCount || 0) + " boxscores";
-    $("note").textContent = data.fetchedThisCall
-      ? "Fetched " + data.fetchedThisCall + " new boxscores this load. Refresh to pull more."
-      : "Using cached boxscores. Change filters and Apply.";
+    $("note").textContent = "Boxscores through cache" +
+      (data.fetchedThisCall ? " · fetched " + data.fetchedThisCall + " new this load" : " · using cache") +
+      " · " + (data.playerRowCount || 0) + " player-games.";
   }
 
   function load() {

@@ -140,6 +140,25 @@
     readJson: readJson,
     writeJson: writeJson,
     lastWrite: function () { return lastWrite; },
+    listStored: async function () {
+      if (!usesBlob()) {
+        try {
+          return fs.readdirSync(DATA).filter(function (n) { return /\.json$/i.test(n); }).map(function (n) {
+            var st = fs.statSync(path.join(DATA, n));
+            return { name: n, uploadedAt: st.mtime.toISOString(), source: "local" };
+          });
+        } catch (e) { return []; }
+      }
+      try {
+        var api = blobApi();
+        var listed = await api.list({ prefix: PREFIX, token: blobToken(), limit: 50 });
+        return ((listed && listed.blobs) || []).map(function (b) {
+          return { name: b.pathname, uploadedAt: b.uploadedAt || null, source: "blob" };
+        });
+      } catch (e) {
+        return [{ name: "error", error: String(e.message || e), source: "blob" }];
+      }
+    },
     readLocal: readLocal,
     writeLocal: writeLocal
   };

@@ -23,6 +23,7 @@
         <a href="/review.html">Review</a>
         <a href="/backtest.html">Backtest</a>
       </nav>
+      <label>Split <select id="split"><option value="all">All</option><option value="home">Home</option><option value="away">Away</option></select></label>
       <span id="meta" class="meta">Loading…</span>
     </div>
   </header>
@@ -36,6 +37,8 @@
               <th data-key="wins" class="num">W</th>
               <th data-key="losses" class="num">L</th>
               <th data-key="otl" class="num">OTL</th>
+              <th data-key="ptsPct" class="num">Points percentage</th>
+              <th data-key="goalDiff" class="num">Goal differential</th>
               <th data-key="sogGp" class="num">SOG/GP</th>
               <th data-key="sogaGp" class="num">SOGA/GP</th>
               <th data-key="l5w" class="num">L5 W</th>
@@ -49,6 +52,8 @@
               <th><input data-filter="wins" placeholder=">=10"></th>
               <th><input data-filter="losses" placeholder=""></th>
               <th><input data-filter="otl" placeholder=""></th>
+              <th><input data-filter="ptsPct" placeholder=""></th>
+              <th><input data-filter="goalDiff" placeholder=""></th>
               <th><input data-filter="sogGp" placeholder=">=30"></th>
               <th><input data-filter="sogaGp" placeholder=""></th>
               <th><input data-filter="l5w" placeholder=">=3"></th>

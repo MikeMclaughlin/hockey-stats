@@ -161,6 +161,21 @@
         return;
       }
       state.rows = d.rows || [];
+      if ($("stamp")) {
+        $("stamp").textContent = d.generatedAt
+          ? "Cached snapshot " + d.generatedAt + ". "
+          : "Cached snapshot. ";
+      }
+      var q = new URLSearchParams(location.search);
+      document.querySelectorAll("#bt [data-filter]").forEach(function (input) {
+        var k = input.getAttribute("data-filter");
+        if (q.get(k)) {
+          input.value = q.get(k);
+          state.filters[k] = q.get(k);
+        }
+      });
+      if (q.get("sort")) state.sortKey = q.get("sort");
+      if (q.get("dir")) state.sortDir = Number(q.get("dir")) || 1;
       render();
     })
     .catch(function (err) {
@@ -172,6 +187,10 @@
       var key = th.getAttribute("data-key");
       if (state.sortKey === key) state.sortDir *= -1;
       else { state.sortKey = key; state.sortDir = 1; }
+      var q = new URLSearchParams(location.search);
+      q.set("sort", state.sortKey);
+      q.set("dir", String(state.sortDir));
+      history.replaceState(null, "", "/backtest.html?" + q.toString());
       render();
     });
   });
@@ -179,6 +198,9 @@
   document.querySelectorAll("#bt [data-filter]").forEach(function (input) {
     input.addEventListener("input", function () {
       state.filters[input.getAttribute("data-filter")] = input.value;
+      var q = new URLSearchParams(location.search);
+      q.set(input.getAttribute("data-filter"), input.value);
+      history.replaceState(null, "", "/backtest.html?" + q.toString());
       render();
     });
     input.addEventListener("click", function (e) { e.stopPropagation(); });

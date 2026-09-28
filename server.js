@@ -229,7 +229,15 @@ async function buildMatchups() {
       summary: sumMap[ab] || {},
       moneypuck: mp[ab] || {},
       last5: last5Map[ab],
-      last5SvPct: stats.last5SavePctFromMp(mpGamesCache, ab, score.currentDate)
+      last5SvPct: stats.last5SavePctFromMp(mpGamesCache, ab, score.currentDate),
+      restDays: (function () {
+        var form = formMap[ab] || {};
+        if (!form.lastDate || !score.currentDate) return null;
+        var a = Date.parse(String(form.lastDate).slice(0, 10) + "T00:00:00Z");
+        var b = Date.parse(String(score.currentDate).slice(0, 10) + "T00:00:00Z");
+        if (!isFinite(a) || !isFinite(b)) return null;
+        return Math.round((b - a) / 86400000);
+      })()
     });
     p.score = teamObj.score;
     return p;
@@ -248,6 +256,8 @@ async function buildMatchups() {
       startTimeUTC: g.startTimeUTC,
       venue: g.venue && g.venue.default,
       gameState: g.gameState,
+      gameType: g.gameType,
+      gameTypeLabel: stats.gameLabel(g.gameType),
       away: away,
       home: home,
       edge: edge,
@@ -310,6 +320,12 @@ async function persistMatchups(body) {
       gameState: m.gameState
     });
     var row = storeEst.byId[String(m.id)];
+    if (row) {
+      row.liveAway = proj.away;
+      row.liveHome = proj.home;
+      row.liveLabel = proj.away + "–" + proj.home;
+      row.liveMatchesLock = row.projectedAway === proj.away && row.projectedHome === proj.home;
+    }
     var as = m.away && m.away.score;
     var hs = m.home && m.home.score;
     if (row && archive.isFinalState(m.gameState) && as != null && hs != null) {
@@ -411,22 +427,43 @@ async function buildTeamStats() {
   );
   var standMap = indexStandings(standings);
   var sumMap = indexSummary(summary);
+  var types = [1, 2];
+  try {
+    var probe = await getJson("https://api-web.nhle.com/v1/club-schedule-season/TOR/" + seasonId);
+    if ((probe.games || []).some(function (g) {
+      var st = String(g.gameState || "").toUpperCase();
+      return g.gameType === 2 && (st === "OFF" || st === "FINAL" || st.indexOf("FINAL") === 0);
+    })) types = [2];
+  } catch (e) { /* keep preseason+regular */ }
   var rows = [];
+  var latest = "";
   for (var i = 0; i < stats.TEAMS.length; i++) {
     var t = stats.TEAMS[i];
-    var form = { games: 0, w: 0, l: 0, ot: 0, gfGp: null, gaGp: null };
+    var form = { games: 0, w: 0, l: 0, ot: 0, gfGp: null, gaGp: null, list: [] };
+    var homeForm = form;
+    var awayForm = form;
     try {
       var sched = await getJson(
         "https://api-web.nhle.com/v1/club-schedule-season/" + t.abbrev + "/" + seasonId
       );
-      form = teamStats.last5Form(sched.games || [], t.abbrev);
+      form = teamStats.last5Form(sched.games || [], t.abbrev, { types: types });
+      homeForm = teamStats.last5Form(sched.games || [], t.abbrev, { types: types, venue: "home" });
+      awayForm = teamStats.last5Form(sched.games || [], t.abbrev, { types: types, venue: "away" });
     } catch (e) { /* keep empty form */ }
-    rows.push(teamStats.row(t, standMap[t.abbrev], sumMap[t.abbrev], form));
+    var row = teamStats.row(t, standMap[t.abbrev], sumMap[t.abbrev], form);
+    row.homeSplit = teamStats.row(t, standMap[t.abbrev], sumMap[t.abbrev], homeForm);
+    row.awaySplit = teamStats.row(t, standMap[t.abbrev], sumMap[t.abbrev], awayForm);
+    (form.list || []).forEach(function (g) {
+      if (g.date && g.date > latest) latest = g.date;
+    });
+    rows.push(row);
   }
   rows.sort(function (a, b) { return (b.wins || 0) - (a.wins || 0); });
   return {
     generatedAt: new Date().toISOString(),
     seasonId: statsSeason,
+    formTypes: types,
+    throughDate: latest || null,
     teams: rows
   };
 }
@@ -440,7 +477,10 @@ async function buildPlayerStreaks(query) {
     minAssists: query.get && query.get("minAssists"),
     minPoints: query.get && query.get("minPoints"),
     minAttempts: query.get && query.get("minAttempts"),
-    minSog: query.get && query.get("minSog")
+    minSog: query.get && query.get("minSog"),
+    minGoalieSv: query.get && query.get("minGoalieSv"),
+    activeOnly: query.get && query.get("activeOnly") === "1",
+    preferRegular: query.get && query.get("preferRegular") === "1"
   };
   var cache = await store.readJson(store.KEYS.playerGames, { rows: [], games: {} });
   if (!cache.games) cache.games = {};
@@ -503,6 +543,7 @@ function detectRoute(req, url) {
   var fromApi = blob.indexOf("/api/") !== -1 || /(^|\s)api\//.test(blob);
   if (!fromApi) return p;
   if (blob.indexOf("grade") !== -1) return "/api/estimates/grade";
+  if (blob.indexOf("seed") !== -1) return "/api/seed";
   if (blob.indexOf("health") !== -1) return "/api/health";
   if (blob.indexOf("matchup") !== -1) return "/api/matchups";
   if (blob.indexOf("backtest") !== -1) return "/api/backtest";
@@ -514,16 +555,32 @@ function detectRoute(req, url) {
 
 function handleApi(req, res, url) {
   var pathname = detectRoute(req, url);
+  if (pathname === "/api/seed" && (req.method === "POST" || req.method === "GET")) {
+    var names = [store.KEYS.estimates, store.KEYS.backtest, store.KEYS.mpGames, store.KEYS.playerGames, store.KEYS.matchups];
+    Promise.all(names.map(function (n) {
+      var local = store.readLocal(n, null);
+      if (local == null) return Promise.resolve({ name: n, skipped: true });
+      return store.writeJson(n, local).then(function () { return { name: n, ok: true }; });
+    })).then(function (result) {
+      sendJson(res, 200, { ok: true, blob: store.usesBlob(), result: result, lastWrite: store.lastWrite() });
+    }).catch(function (err) {
+      sendJson(res, 502, { ok: false, error: String(err.message || err) });
+    });
+    return true;
+  }
   if (pathname === "/api/health") {
     var lw = store.lastWrite ? store.lastWrite() : {};
-    sendJson(res, 200, {
-      ok: true,
-      service: "hockey-stats",
-      port: PORT,
-      blob: store.usesBlob(),
-      blobWriteAt: lw.at || null,
-      blobWriteName: lw.name || null,
-      blobWriteError: lw.error || null
+    store.listStored().then(function (files) {
+      sendJson(res, 200, {
+        ok: true,
+        service: "hockey-stats",
+        port: PORT,
+        blob: store.usesBlob(),
+        blobWriteAt: lw.at || null,
+        blobWriteName: lw.name || null,
+        blobWriteError: lw.error || null,
+        files: files
+      });
     });
     return true;
   }
@@ -619,6 +676,7 @@ function routeKey(pathname) {
   var p = String(pathname || "").replace(/\/+$/, "") || "/";
   if (/\.(html|css|js|json|svg|png|ico)$/i.test(p)) return p;
   if (p === "/health" || p === "/api/health") return "/api/health";
+  if (p === "/seed" || p === "/api/seed") return "/api/seed";
   if (p === "/matchups" || p === "/api/matchups") return "/api/matchups";
   if (p === "/backtest" || p === "/api/backtest") return "/api/backtest";
   if (p === "/streaks" || p === "/api/streaks") return "/api/streaks";

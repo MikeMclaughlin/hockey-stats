@@ -50,7 +50,7 @@
     var tbody = document.querySelector("#review tbody");
     var rows = sorted();
     if (!rows.length) {
-      tbody.innerHTML = '<tr><td colspan="7" class="empty">No locked estimates yet. Open Matchups so today’s slate is saved.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="8" class="empty">No locked estimates yet. Open Matchups so today’s slate is saved.</td></tr>';
       return;
     }
     tbody.innerHTML = rows.map(function (r) {
@@ -61,6 +61,7 @@
           "<td>" + (r.awayAbbrev || "") + "</td>" +
           "<td>" + (r.homeAbbrev || "") + "</td>" +
           "<td class='num'>" + (r.projectedLabel || "—") + "</td>" +
+          "<td class='num'>" + (r.liveLabel || "—") + (r.liveMatchesLock ? " =" : "") + "</td>" +
           "<td class='num'>" + (r.actualLabel || "—") + "</td>" +
           "<td><span class='mark " + v + "'>" + verdictLabel(v) + "</span></td>" +
           "<td>" + (!r.graded ? "—" : r.winnerCorrect ? "Yes" : "No") + "</td>" +

@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-28T20:47:53.037Z",
+  "generatedAt": "2026-09-28T21:38:58.036Z",
   "currentDate": "2026-09-29",
   "prevDate": "2026-09-26",
   "nextDate": "2026-09-30",
@@ -14,6 +14,8 @@
       "startTimeUTC": "2026-09-29T21:00:00Z",
       "venue": "Lenovo Center",
       "gameState": "FUT",
+      "gameType": 2,
+      "gameTypeLabel": "Regular season",
       "away": {
         "abbrev": "FLA",
         "name": "Florida Panthers",
@@ -38,7 +40,10 @@
         "cfPct": 52.6,
         "hdcfPct": 48.1,
         "xgfPct5v5": 49,
-        "gamesPlayed": 82
+        "stXg": 14.06,
+        "gamesPlayed": 82,
+        "restDays": 167,
+        "b2b": false
       },
       "home": {
         "abbrev": "CAR",
@@ -64,13 +69,16 @@
         "cfPct": 59.3,
         "hdcfPct": 55.6,
         "xgfPct5v5": 56,
-        "gamesPlayed": 82
+        "stXg": 4.77,
+        "gamesPlayed": 82,
+        "restDays": 168,
+        "b2b": false
       },
       "edge": {
         "winner": "home",
-        "score": -0.888,
+        "score": -0.667,
         "awayScore": 0,
-        "homeScore": 0.888,
+        "homeScore": 0.667,
         "breakdown": [
           {
             "key": "ptsPct",
@@ -134,17 +142,31 @@
             "home": 56,
             "winner": "home",
             "points": -0.123
+          },
+          {
+            "key": "stXg",
+            "away": 14.06,
+            "home": 4.77,
+            "winner": "away",
+            "points": 0.222
+          },
+          {
+            "key": "rest",
+            "away": 167,
+            "home": 168,
+            "winner": "home",
+            "points": -0.001
           }
         ]
       },
       "edgeTeam": "CAR",
       "edgeName": "Carolina Hurricanes",
-      "why": "Carolina Hurricanes has the edge because they lead in goals versus expected goals, 5-on-5 expected goals for percentage, high-danger chances for percentage, Corsi for percentage, shots-on-goal share, and PDO.",
+      "why": "Carolina Hurricanes is the pick: even-strength expected-goals share 56% to 49%; home ice.",
       "projected": {
         "away": 1,
         "home": 2,
         "awayRaw": 1.2,
-        "homeRaw": 1.78,
+        "homeRaw": 1.66,
         "label": "1–2"
       },
       "odds": {
@@ -163,6 +185,8 @@
       "startTimeUTC": "2026-09-29T23:00:00Z",
       "venue": "Scotiabank Arena",
       "gameState": "FUT",
+      "gameType": 2,
+      "gameTypeLabel": "Regular season",
       "away": {
         "abbrev": "MTL",
         "name": "Montréal Canadiens",
@@ -187,7 +211,10 @@
         "cfPct": 48.3,
         "hdcfPct": 47.2,
         "xgfPct5v5": 48,
-        "gamesPlayed": 82
+        "stXg": -2.09,
+        "gamesPlayed": 82,
+        "restDays": 168,
+        "b2b": false
       },
       "home": {
         "abbrev": "TOR",
@@ -213,13 +240,16 @@
         "cfPct": 44.6,
         "hdcfPct": 45.7,
         "xgfPct5v5": 46,
-        "gamesPlayed": 82
+        "stXg": -11.51,
+        "gamesPlayed": 82,
+        "restDays": 167,
+        "b2b": false
       },
       "edge": {
-        "winner": "home",
-        "score": -0.007,
-        "awayScore": 0,
-        "homeScore": 0.007,
+        "winner": "away",
+        "score": 0.306,
+        "awayScore": 0.306,
+        "homeScore": 0,
         "breakdown": [
           {
             "key": "ptsPct",
@@ -283,18 +313,32 @@
             "home": 46,
             "winner": "away",
             "points": 0.039
+          },
+          {
+            "key": "stXg",
+            "away": -2.09,
+            "home": -11.51,
+            "winner": "away",
+            "points": 0.312
+          },
+          {
+            "key": "rest",
+            "away": 168,
+            "home": 167,
+            "winner": "away",
+            "points": 0.001
           }
         ]
       },
-      "edgeTeam": "TOR",
-      "edgeName": "Toronto Maple Leafs",
-      "why": "Toronto Maple Leafs has the edge because they lead in goals versus expected goals.",
+      "edgeTeam": "MTL",
+      "edgeName": "Montréal Canadiens",
+      "why": "Montréal Canadiens is the pick: even-strength expected-goals share 48% to 46%; home ice.",
       "projected": {
-        "away": 1,
-        "home": 2,
-        "awayRaw": 1.2,
+        "away": 2,
+        "home": 1,
+        "awayRaw": 1.24,
         "homeRaw": 1.2,
-        "label": "1–2"
+        "label": "2–1"
       },
       "odds": {
         "awayMl": -102,
@@ -312,6 +356,8 @@
       "startTimeUTC": "2026-09-30T00:00:00Z",
       "venue": "TD Garden",
       "gameState": "FUT",
+      "gameType": 2,
+      "gameTypeLabel": "Regular season",
       "away": {
         "abbrev": "NYR",
         "name": "New York Rangers",
@@ -336,7 +382,10 @@
         "cfPct": 48.6,
         "hdcfPct": 46.9,
         "xgfPct5v5": 48,
-        "gamesPlayed": 82
+        "stXg": 0.21,
+        "gamesPlayed": 82,
+        "restDays": 167,
+        "b2b": false
       },
       "home": {
         "abbrev": "BOS",
@@ -362,13 +411,16 @@
         "cfPct": 48.5,
         "hdcfPct": 46.6,
         "xgfPct5v5": 47,
-        "gamesPlayed": 82
+        "stXg": -0.89,
+        "gamesPlayed": 82,
+        "restDays": 168,
+        "b2b": false
       },
       "edge": {
         "winner": "home",
-        "score": -1.008,
+        "score": -0.559,
         "awayScore": 0,
-        "homeScore": 1.008,
+        "homeScore": 0.559,
         "breakdown": [
           {
             "key": "ptsPct",
@@ -432,17 +484,31 @@
             "home": 47,
             "winner": "away",
             "points": 0.019
+          },
+          {
+            "key": "stXg",
+            "away": 0.21,
+            "home": -0.89,
+            "winner": "away",
+            "points": 0.45
+          },
+          {
+            "key": "rest",
+            "away": 167,
+            "home": 168,
+            "winner": "home",
+            "points": -0.001
           }
         ]
       },
       "edgeTeam": "BOS",
       "edgeName": "Boston Bruins",
-      "why": "Boston Bruins has the edge because they lead in goals versus expected goals, shots-on-goal share, and PDO.",
+      "why": "Boston Bruins is the pick: even-strength expected-goals share 47% to 48%; home ice.",
       "projected": {
         "away": 1,
         "home": 2,
         "awayRaw": 1.2,
-        "homeRaw": 1.31,
+        "homeRaw": 1.29,
         "label": "1–2"
       },
       "odds": {
@@ -461,6 +527,8 @@
       "startTimeUTC": "2026-09-30T02:00:00Z",
       "venue": "Rogers Place",
       "gameState": "FUT",
+      "gameType": 2,
+      "gameTypeLabel": "Regular season",
       "away": {
         "abbrev": "VAN",
         "name": "Vancouver Canucks",
@@ -485,7 +553,10 @@
         "cfPct": 47.7,
         "hdcfPct": 47,
         "xgfPct5v5": 44,
-        "gamesPlayed": 82
+        "stXg": 0.32,
+        "gamesPlayed": 82,
+        "restDays": 166,
+        "b2b": false
       },
       "home": {
         "abbrev": "EDM",
@@ -511,13 +582,16 @@
         "cfPct": 50.4,
         "hdcfPct": 51.5,
         "xgfPct5v5": 52,
-        "gamesPlayed": 82
+        "stXg": 1.05,
+        "gamesPlayed": 82,
+        "restDays": 166,
+        "b2b": false
       },
       "edge": {
         "winner": "home",
-        "score": -1.69,
+        "score": -1.93,
         "awayScore": 0,
-        "homeScore": 1.69,
+        "homeScore": 1.93,
         "breakdown": [
           {
             "key": "ptsPct",
@@ -581,17 +655,31 @@
             "home": 52,
             "winner": "home",
             "points": -0.154
+          },
+          {
+            "key": "stXg",
+            "away": 0.32,
+            "home": 1.05,
+            "winner": "home",
+            "points": -0.24
+          },
+          {
+            "key": "rest",
+            "away": 166,
+            "home": 166,
+            "winner": "even",
+            "points": 0
           }
         ]
       },
       "edgeTeam": "EDM",
       "edgeName": "Edmonton Oilers",
-      "why": "Edmonton Oilers has the edge because they lead in goals versus expected goals, 5-on-5 expected goals for percentage, shots-on-goal share, high-danger chances for percentage, Corsi for percentage, and PDO.",
+      "why": "Edmonton Oilers is the pick: even-strength expected-goals share 52% to 44%; home ice.",
       "projected": {
         "away": 1,
         "home": 2,
         "awayRaw": 1.2,
-        "homeRaw": 1.57,
+        "homeRaw": 1.58,
         "label": "1–2"
       },
       "odds": {
@@ -610,6 +698,8 @@
       "startTimeUTC": "2026-09-30T02:30:00Z",
       "venue": "T-Mobile Arena",
       "gameState": "FUT",
+      "gameType": 2,
+      "gameTypeLabel": "Regular season",
       "away": {
         "abbrev": "CHI",
         "name": "Chicago Blackhawks",
@@ -634,7 +724,10 @@
         "cfPct": 46.1,
         "hdcfPct": 44,
         "xgfPct5v5": 42,
-        "gamesPlayed": 82
+        "stXg": -4.66,
+        "gamesPlayed": 82,
+        "restDays": 167,
+        "b2b": false
       },
       "home": {
         "abbrev": "VGK",
@@ -660,13 +753,16 @@
         "cfPct": 52.4,
         "hdcfPct": 54.4,
         "xgfPct5v5": 54,
-        "gamesPlayed": 82
+        "stXg": 14.41,
+        "gamesPlayed": 82,
+        "restDays": 167,
+        "b2b": false
       },
       "edge": {
         "winner": "home",
-        "score": -1.763,
+        "score": -2.213,
         "awayScore": 0,
-        "homeScore": 1.763,
+        "homeScore": 2.213,
         "breakdown": [
           {
             "key": "ptsPct",
@@ -730,17 +826,31 @@
             "home": 54,
             "winner": "home",
             "points": -0.231
+          },
+          {
+            "key": "stXg",
+            "away": -4.66,
+            "home": 14.41,
+            "winner": "home",
+            "points": -0.45
+          },
+          {
+            "key": "rest",
+            "away": 167,
+            "home": 167,
+            "winner": "even",
+            "points": 0
           }
         ]
       },
       "edgeTeam": "VGK",
       "edgeName": "Vegas Golden Knights",
-      "why": "Vegas Golden Knights has the edge because they lead in goals versus expected goals, 5-on-5 expected goals for percentage, high-danger chances for percentage, shots-on-goal share, Corsi for percentage, and last-5 games goal differential.",
+      "why": "Vegas Golden Knights is the pick: even-strength expected-goals share 54% to 42%; home ice.",
       "projected": {
         "away": 1,
         "home": 2,
         "awayRaw": 1.2,
-        "homeRaw": 1.59,
+        "homeRaw": 1.83,
         "label": "1–2"
       },
       "odds": {

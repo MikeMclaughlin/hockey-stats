@@ -153,7 +153,9 @@
     xgDiff: 1.3,
     cf: 1.2,
     hdcf: 1.15,
-    xgf5v5: 1.85
+    xgf5v5: 1.85,
+    stXg: 0.45,
+    rest: 0.25
   };
 
   function cmpNum(a, b) {
@@ -199,6 +201,8 @@
     total += add("cf", away.cfPct, home.cfPct, true);
     total += add("hdcf", away.hdcfPct, home.hdcfPct, true);
     total += add("xgf5v5", away.xgfPct5v5, home.xgfPct5v5, true);
+    total += add("stXg", away.stXg, home.stXg, true);
+    total += add("rest", away.restDays, home.restDays, true);
     total -= 0.12;
 
     var winner = "even";
@@ -224,29 +228,29 @@
     xgDiff: "goals versus expected goals",
     cf: "Corsi for percentage",
     hdcf: "high-danger chances for percentage",
-    xgf5v5: "5-on-5 expected goals for percentage"
+    xgf5v5: "even-strength expected-goals share",
+    stXg: "special-teams expected goals",
+    rest: "rest days"
   };
 
   /**
    * Plain-language reason the edge team leads this matchup.
    */
   function explainEdge(edge, away, home) {
+    var pick = edge && edge.winner === "away" ? away : home;
+    var other = pick === away ? home : away;
+    var bits = [];
+    if (pick && other && pick.xgfPct5v5 != null && other.xgfPct5v5 != null) {
+      bits.push("even-strength expected-goals share " + pick.xgfPct5v5 + "% to " + other.xgfPct5v5 + "%");
+    }
+    bits.push("home ice");
+    if (other && other.b2b && pick && !pick.b2b) bits.push("the other side played last night");
+    if (pick && pick.pdo != null && pick.pdo > 102) bits.push("a high shooting-plus-save figure that may regress");
+    var name = pick && pick.name ? pick.name : "The home team";
     if (!edge || edge.winner === "even") {
-      return "No clear edge — the two sides split the comparison metrics.";
+      return name + " is the lean on home ice" + (bits[0] ? " (" + bits[0] + ")" : "") + ".";
     }
-    var name = edge.winner === "away" ? away.name : home.name;
-    var leads = (edge.breakdown || [])
-      .filter(function (b) { return b.winner === edge.winner; })
-      .sort(function (a, b) { return Math.abs(b.points) - Math.abs(a.points); })
-      .map(function (b) { return METRIC_LABELS[b.key] || b.key; });
-    if (!leads.length) {
-      return name + " has a slight overall edge after weighting every metric.";
-    }
-    var listed;
-    if (leads.length === 1) listed = leads[0];
-    else if (leads.length === 2) listed = leads[0] + " and " + leads[1];
-    else listed = leads.slice(0, -1).join(", ") + ", and " + leads[leads.length - 1];
-    return name + " has the edge because they lead in " + listed + ".";
+    return name + " is the pick: " + bits.join("; ") + ".";
   }
 
   /**
@@ -276,6 +280,22 @@
       var situation = cols[idx.situation];
       var team = cols[idx.name] || cols[idx.team];
       if (!team) continue;
+      if (situation === "5on4" || situation === "4on5") {
+        if (!byTeam[team]) byTeam[team] = { team: team };
+        var stxgf = Number(cols[idx.xGoalsFor]) || 0;
+        var stxga = Number(cols[idx.xGoalsAgainst]) || 0;
+        if (situation === "5on4") {
+          byTeam[team].ppXgf = stxgf;
+          byTeam[team].ppXga = stxga;
+        } else {
+          byTeam[team].pkXgf = stxgf;
+          byTeam[team].pkXga = stxga;
+        }
+        var pp = byTeam[team].ppXgf;
+        var pk = byTeam[team].pkXga;
+        if (pp != null && pk != null) byTeam[team].stXg = round(pp - pk, 2);
+        continue;
+      }
       if (situation === "5on5") {
         if (!byTeam[team]) byTeam[team] = { team: team };
         var xp = Number(cols[idx.xGoalsPercentage]);
@@ -357,7 +377,10 @@
       cfPct: mp.cfPct != null ? mp.cfPct : null,
       hdcfPct: mp.hdcfPct != null ? mp.hdcfPct : null,
       xgfPct5v5: mp.xgfPct5v5 != null ? mp.xgfPct5v5 : null,
-      gamesPlayed: gp
+      stXg: mp.stXg != null ? mp.stXg : null,
+      gamesPlayed: gp,
+      restDays: opts.restDays != null ? opts.restDays : null,
+      b2b: opts.restDays === 1
     };
   }
 
@@ -444,6 +467,14 @@
       homeOff -= xTilt * 1.35;
     }
     homeOff += 0.32;
+    if (away.restDays === 1) awayOff -= 0.15;
+    if (home.restDays === 1) homeOff -= 0.15;
+    if (home.restDays >= 3 && away.restDays === 1) homeOff += 0.08;
+    if (away.stXg != null && home.stXg != null) {
+      var stTilt = (away.stXg - home.stXg) / 20;
+      awayOff += stTilt * 0.25;
+      homeOff -= stTilt * 0.25;
+    }
     awayOff = Math.max(1.2, awayOff);
     homeOff = Math.max(1.2, homeOff);
     var a = Math.round(awayOff);
@@ -483,6 +514,17 @@
     parsePartnerOdds: parsePartnerOdds,
     formatAmerican: formatAmerican,
     impliedWinPct: impliedWinPct,
+    twoWayHold: function (a, h) {
+      var pa = impliedWinPct(a);
+      var ph = impliedWinPct(h);
+      if (pa == null || ph == null) return null;
+      return round(pa + ph - 100, 1);
+    },
+    gameLabel: function (gameType) {
+      if (Number(gameType) === 1) return "Preseason";
+      if (Number(gameType) === 3) return "Playoffs";
+      return "Regular season";
+    },
     explainEdge: explainEdge,
     pillSign: pillSign,
     METRIC_LABELS: METRIC_LABELS,

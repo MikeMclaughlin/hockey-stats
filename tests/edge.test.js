@@ -22,13 +22,13 @@ assert.ok(e2.score < 0);
 
 var even = stats.matchupEdge(strong, strong);
 assert.strictEqual(even.winner, "home");
-assert.ok(even.breakdown.length === 9);
+assert.ok(even.breakdown.length === 11);
 
 var awayTeam = { name: "Boston Bruins" };
 var homeTeam = { name: "Toronto Maple Leafs" };
 var whyAway = stats.explainEdge(e1, awayTeam, homeTeam);
 assert.ok(whyAway.indexOf("Boston Bruins") !== -1);
-assert.ok(whyAway.indexOf("lead") !== -1);
+assert.ok(whyAway.indexOf("pick") !== -1);
 var whyEven = stats.explainEdge(even, awayTeam, homeTeam);
 assert.ok(whyEven.indexOf("Toronto Maple Leafs") !== -1);
 
