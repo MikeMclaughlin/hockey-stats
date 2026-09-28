@@ -129,17 +129,37 @@ main { max-width: 90%; margin: 0 auto; padding: 1.25rem 1rem 3rem; }
   border-radius: 8px; margin-bottom: 1rem;
 }
 .hidden { display: none; }
-.cards { display: grid; gap: 1rem; }
+.cards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  align-items: flex-start;
+}
 .card {
   background: var(--card); border: 1px solid var(--line);
   border-radius: 14px; box-shadow: var(--shadow); overflow: hidden;
+  max-width: 36rem;
+  width: 100%;
+  flex: 0 1 36rem;
 }
 .card-head {
-  display: flex; justify-content: space-between; align-items: center;
-  gap: 0.6rem; flex-wrap: wrap;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.35rem;
   padding: 0.7rem 1rem; background: #f7fafc; border-bottom: 1px solid var(--line);
   font-size: 0.9rem; color: var(--muted);
 }
+.card-head .head-top {
+  display: flex; justify-content: space-between; align-items: center;
+  gap: 0.6rem; flex-wrap: wrap;
+}
+.card-head .odds,
+.card-head .notes-row,
+.card-head .why {
+  margin: 0;
+}
+.card-head .odds { padding: 0.4rem 0.55rem; }
 .proj {
   font-weight: 700;
   color: var(--ink);
@@ -154,10 +174,11 @@ main { max-width: 90%; margin: 0 auto; padding: 1.25rem 1rem 3rem; }
   font-size: 2.4rem;
   font-weight: 750;
   line-height: 1;
-  text-align: center;
   margin: 0.35rem 0 0.55rem;
   color: var(--edge);
 }
+.pos-count.away { text-align: right; }
+.pos-count.home { text-align: left; }
 .sides {
   display: grid; grid-template-columns: 1fr auto 1fr; gap: 0.85rem;
   padding: 1rem 1rem 0.4rem;

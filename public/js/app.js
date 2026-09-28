@@ -108,12 +108,17 @@
       return (
         '<article class="card" id="game-' + m.id + '">' +
           '<div class="card-head">' +
-            "<span>" + fmtTime(m.startTimeUTC) + (m.venue ? " · " + m.venue : "") +
-              (m.gameTypeLabel ? " · " + m.gameTypeLabel : "") + "</span>" +
-            '<span class="proj">Est. ' + m.away.abbrev + " " + proj.away + " – " + proj.home + " " + m.home.abbrev + "</span>" +
-            '<span class="badge ' + (e.winner === "even" ? "even" : "") + '">' +
-              (e.winner === "even" ? "Even matchup" : "Edge: " + m.edgeName) +
-            "</span>" +
+            '<div class="head-top">' +
+              "<span>" + fmtTime(m.startTimeUTC) + (m.venue ? " · " + m.venue : "") +
+                (m.gameTypeLabel ? " · " + m.gameTypeLabel : "") + "</span>" +
+              '<span class="proj">Est. ' + m.away.abbrev + " " + proj.away + " – " + proj.home + " " + m.home.abbrev + "</span>" +
+              '<span class="badge ' + (e.winner === "even" ? "even" : "") + '">' +
+                (e.winner === "even" ? "Even matchup" : "Edge: " + m.edgeName) +
+              "</span>" +
+            "</div>" +
+            oddsLine(m) +
+            notesLine(m) +
+            '<p class="why">' + why + "</p>" +
           "</div>" +
           '<div class="sides">' +
             '<div class="col">' +
@@ -121,7 +126,7 @@
                 (m.away.logo ? '<img src="' + m.away.logo + '" alt="">' : "") +
                 "<div><h3>" + m.away.name + "</h3><div>" + m.away.record + "</div></div>" +
               "</div>" +
-              '<div class="pos-count" title="Number of positive stat pills">' +
+              '<div class="pos-count away" title="Number of positive stat pills">' +
                 (HockeyStats.countPositivePills ? HockeyStats.countPositivePills(m.away) : "") +
               "</div>" +
               teamPills(m.away) +
@@ -132,15 +137,12 @@
                 (m.home.logo ? '<img src="' + m.home.logo + '" alt="">' : "") +
                 "<div><h3>" + m.home.name + "</h3><div>" + m.home.record + "</div></div>" +
               "</div>" +
-              '<div class="pos-count" title="Number of positive stat pills">' +
+              '<div class="pos-count home" title="Number of positive stat pills">' +
                 (HockeyStats.countPositivePills ? HockeyStats.countPositivePills(m.home) : "") +
               "</div>" +
               teamPills(m.home) +
             "</div>" +
           "</div>" +
-          oddsLine(m) +
-          notesLine(m) +
-          '<p class="why">' + why + "</p>" +
         "</article>"
       );
     }).join("");
