@@ -57,6 +57,54 @@
     return saved;
   }
 
+  function teamPills(t) {
+    t = t || {};
+    return {
+      record: t.record || null,
+      ptsPct: t.ptsPct != null ? t.ptsPct : null,
+      goalDiff: t.goalDiff != null ? t.goalDiff : null,
+      pdo: t.pdo != null ? t.pdo : null,
+      last5AvgGd: t.last5AvgGd != null ? t.last5AvgGd : null,
+      last5SvPct: t.last5SvPct != null ? t.last5SvPct : null,
+      sogShare: t.sogShare != null ? t.sogShare : null,
+      gfMinusXg: t.gfMinusXg != null ? t.gfMinusXg : null,
+      cfPct: t.cfPct != null ? t.cfPct : null,
+      hdcfPct: t.hdcfPct != null ? t.hdcfPct : null,
+      xgfPct5v5: t.xgfPct5v5 != null ? t.xgfPct5v5 : null,
+      stXg: t.stXg != null ? t.stXg : null,
+      restDays: t.restDays != null ? t.restDays : null
+    };
+  }
+
+  function freezeMatchupArchive(store, row) {
+    store = store || emptyStore();
+    store.byId = store.byId || {};
+    var id = String(row.id);
+    if (store.byId[id]) {
+      if (!store.byId[id].lockedAt) store.byId[id].lockedAt = store.byId[id].createdAt;
+      return store.byId[id];
+    }
+    store.byId[id] = {
+      id: row.id,
+      seasonId: row.seasonId || null,
+      gameDate: row.gameDate || null,
+      startTimeUTC: row.startTimeUTC || null,
+      venue: row.venue || null,
+      gameType: row.gameType || null,
+      awayAbbrev: row.awayAbbrev,
+      homeAbbrev: row.homeAbbrev,
+      estimatedAway: row.estimatedAway,
+      estimatedHome: row.estimatedHome,
+      estimatedLabel: row.estimatedAway + "–" + row.estimatedHome,
+      awayPills: row.awayPills || teamPills(row.away),
+      homePills: row.homePills || teamPills(row.home),
+      odds: row.odds || null,
+      createdAt: new Date().toISOString(),
+      lockedAt: new Date().toISOString()
+    };
+    return store.byId[id];
+  }
+
   function applyResult(row, actualAway, actualHome, gameState) {
     if (actualAway == null || actualHome == null || !isFinite(actualAway) || !isFinite(actualHome)) {
       return row;
@@ -114,6 +162,8 @@
   return {
     emptyStore: emptyStore,
     freezeEstimate: freezeEstimate,
+    freezeMatchupArchive: freezeMatchupArchive,
+    teamPills: teamPills,
     applyResult: applyResult,
     isFinalState: isFinalState,
     listEstimates: listEstimates,

@@ -333,6 +333,37 @@ async function persistMatchups(body) {
     }
   });
   await saveEstimates(storeEst);
+  var arch = await store.readJson(store.KEYS.matchupArchive, archive.emptyStore());
+  (body.matchups || []).forEach(function (m) {
+    var proj = m.projected || {};
+    var odds = m.odds || null;
+    archive.freezeMatchupArchive(arch, {
+      id: m.id,
+      seasonId: body.seasonId,
+      gameDate: m.gameDate,
+      startTimeUTC: m.startTimeUTC,
+      venue: m.venue,
+      gameType: m.gameType,
+      awayAbbrev: m.away && m.away.abbrev,
+      homeAbbrev: m.home && m.home.abbrev,
+      estimatedAway: proj.away,
+      estimatedHome: proj.home,
+      awayPills: archive.teamPills(m.away),
+      homePills: archive.teamPills(m.home),
+      odds: odds ? {
+        awayMl: odds.awayMl,
+        homeMl: odds.homeMl,
+        awayImplied: stats.impliedWinPct(odds.awayMl),
+        homeImplied: stats.impliedWinPct(odds.homeMl),
+        hold: stats.twoWayHold(odds.awayMl, odds.homeMl),
+        total: odds.total,
+        overPrice: odds.overPrice,
+        underPrice: odds.underPrice,
+        partner: odds.partner || null
+      } : null
+    });
+  });
+  try { await store.writeJson(store.KEYS.matchupArchive, arch); } catch (e) { /* ignore */ }
   return storeEst;
 }
 
@@ -556,7 +587,7 @@ function detectRoute(req, url) {
 function handleApi(req, res, url) {
   var pathname = detectRoute(req, url);
   if (pathname === "/api/seed" && (req.method === "POST" || req.method === "GET")) {
-    var names = [store.KEYS.estimates, store.KEYS.backtest, store.KEYS.mpGames, store.KEYS.playerGames, store.KEYS.matchups];
+    var names = [store.KEYS.estimates, store.KEYS.backtest, store.KEYS.mpGames, store.KEYS.playerGames, store.KEYS.matchups, store.KEYS.matchupArchive];
     Promise.all(names.map(function (n) {
       var local = store.readLocal(n, null);
       if (local == null) return Promise.resolve({ name: n, skipped: true });

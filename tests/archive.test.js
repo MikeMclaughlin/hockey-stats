@@ -68,4 +68,25 @@ assert.ok(archive.isFinalState("OFF"));
 assert.ok(archive.isFinalState("FINAL"));
 assert.ok(!archive.isFinalState("FUT"));
 
+var snaps = archive.emptyStore();
+var snap = archive.freezeMatchupArchive(snaps, {
+  id: 201,
+  estimatedAway: 2,
+  estimatedHome: 3,
+  awayAbbrev: "BOS",
+  homeAbbrev: "NYR",
+  awayPills: { pdo: 101 },
+  odds: { awayMl: 140, homeMl: -160, total: 6.5 }
+});
+assert.strictEqual(snap.estimatedLabel, "2–3");
+assert.strictEqual(snap.odds.total, 6.5);
+archive.freezeMatchupArchive(snaps, {
+  id: 201,
+  estimatedAway: 9,
+  estimatedHome: 9,
+  awayAbbrev: "BOS",
+  homeAbbrev: "NYR"
+});
+assert.strictEqual(snaps.byId["201"].estimatedAway, 2);
+
 console.log("archive.test.js ok");

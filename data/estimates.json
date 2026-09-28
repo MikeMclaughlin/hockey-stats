@@ -11,11 +11,11 @@
       "homeAbbrev": "CAR",
       "awayName": "Florida Panthers",
       "homeName": "Carolina Hurricanes",
-      "projectedAway": 3,
-      "projectedHome": 4,
-      "projectedLabel": "3–4",
-      "createdAt": "2026-09-10T15:56:46.850Z",
-      "lockedAt": "2026-09-10T15:56:46.850Z",
+      "projectedAway": 1,
+      "projectedHome": 2,
+      "projectedLabel": "1–2",
+      "createdAt": "2026-09-28T23:04:27.147Z",
+      "lockedAt": "2026-09-28T23:04:27.147Z",
       "graded": false,
       "correct": null,
       "winnerCorrect": null,
@@ -26,7 +26,7 @@
       "liveAway": 1,
       "liveHome": 2,
       "liveLabel": "1–2",
-      "liveMatchesLock": false
+      "liveMatchesLock": true
     },
     "2026020002": {
       "id": 2026020002,
@@ -38,11 +38,11 @@
       "homeAbbrev": "TOR",
       "awayName": "Montréal Canadiens",
       "homeName": "Toronto Maple Leafs",
-      "projectedAway": 3,
-      "projectedHome": 3,
-      "projectedLabel": "3–3",
-      "createdAt": "2026-09-10T15:56:46.851Z",
-      "lockedAt": "2026-09-10T15:56:46.851Z",
+      "projectedAway": 2,
+      "projectedHome": 1,
+      "projectedLabel": "2–1",
+      "createdAt": "2026-09-28T23:04:27.148Z",
+      "lockedAt": "2026-09-28T23:04:27.148Z",
       "graded": false,
       "correct": null,
       "winnerCorrect": null,
@@ -53,7 +53,7 @@
       "liveAway": 2,
       "liveHome": 1,
       "liveLabel": "2–1",
-      "liveMatchesLock": false
+      "liveMatchesLock": true
     },
     "2026020003": {
       "id": 2026020003,
@@ -65,11 +65,11 @@
       "homeAbbrev": "BOS",
       "awayName": "New York Rangers",
       "homeName": "Boston Bruins",
-      "projectedAway": 3,
-      "projectedHome": 3,
-      "projectedLabel": "3–3",
-      "createdAt": "2026-09-10T15:56:46.851Z",
-      "lockedAt": "2026-09-10T15:56:46.851Z",
+      "projectedAway": 1,
+      "projectedHome": 2,
+      "projectedLabel": "1–2",
+      "createdAt": "2026-09-28T23:04:27.148Z",
+      "lockedAt": "2026-09-28T23:04:27.148Z",
       "graded": false,
       "correct": null,
       "winnerCorrect": null,
@@ -80,7 +80,7 @@
       "liveAway": 1,
       "liveHome": 2,
       "liveLabel": "1–2",
-      "liveMatchesLock": false
+      "liveMatchesLock": true
     },
     "2026020004": {
       "id": 2026020004,
@@ -92,11 +92,11 @@
       "homeAbbrev": "EDM",
       "awayName": "Vancouver Canucks",
       "homeName": "Edmonton Oilers",
-      "projectedAway": 3,
-      "projectedHome": 4,
-      "projectedLabel": "3–4",
-      "createdAt": "2026-09-10T15:56:46.851Z",
-      "lockedAt": "2026-09-10T15:56:46.851Z",
+      "projectedAway": 1,
+      "projectedHome": 2,
+      "projectedLabel": "1–2",
+      "createdAt": "2026-09-28T23:04:27.148Z",
+      "lockedAt": "2026-09-28T23:04:27.148Z",
       "graded": false,
       "correct": null,
       "winnerCorrect": null,
@@ -107,7 +107,7 @@
       "liveAway": 1,
       "liveHome": 2,
       "liveLabel": "1–2",
-      "liveMatchesLock": false
+      "liveMatchesLock": true
     },
     "2026020005": {
       "id": 2026020005,
@@ -119,11 +119,11 @@
       "homeAbbrev": "VGK",
       "awayName": "Chicago Blackhawks",
       "homeName": "Vegas Golden Knights",
-      "projectedAway": 2,
-      "projectedHome": 3,
-      "projectedLabel": "2–3",
-      "createdAt": "2026-09-10T15:56:46.851Z",
-      "lockedAt": "2026-09-10T15:56:46.851Z",
+      "projectedAway": 1,
+      "projectedHome": 2,
+      "projectedLabel": "1–2",
+      "createdAt": "2026-09-28T23:04:27.148Z",
+      "lockedAt": "2026-09-28T23:04:27.148Z",
       "graded": false,
       "correct": null,
       "winnerCorrect": null,
@@ -134,7 +134,7 @@
       "liveAway": 1,
       "liveHome": 2,
       "liveLabel": "1–2",
-      "liveMatchesLock": false
+      "liveMatchesLock": true
     }
   }
 }

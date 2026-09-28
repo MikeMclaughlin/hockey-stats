@@ -520,6 +520,20 @@
       if (pa == null || ph == null) return null;
       return round(pa + ph - 100, 1);
     },
+    countPositivePills: function (t) {
+      t = t || {};
+      var n = 0;
+      if (pillSign(t.pdo, "pdo") === "pos") n += 1;
+      if (pillSign(t.last5AvgGd, "last5") === "pos") n += 1;
+      if (pillSign(t.last5SvPct, "last5Sv") === "pos") n += 1;
+      if (pillSign(t.sogShare, "sogShare") === "pos") n += 1;
+      if (pillSign(t.gfMinusXg, "xgDiff") === "pos") n += 1;
+      if (pillSign(t.cfPct, "cf") === "pos") n += 1;
+      if (pillSign(t.hdcfPct, "hdcf") === "pos") n += 1;
+      if (pillSign(t.xgfPct5v5, "xgf5v5") === "pos") n += 1;
+      if (pillSign(t.stXg, "stXg") === "pos") n += 1;
+      return n;
+    },
     gameLabel: function (gameType) {
       if (Number(gameType) === 1) return "Preseason";
       if (Number(gameType) === 3) return "Playoffs";

@@ -19,7 +19,8 @@
     backtest: "backtest-20252026.json",
     mpGames: "mp-games-2025.json",
     matchups: "matchups.json",
-    playerGames: "player-games.json"
+    playerGames: "player-games.json",
+    matchupArchive: "matchup-archive-20262027.json"
   };
 
   var lastWrite = { at: null, name: null, error: null };

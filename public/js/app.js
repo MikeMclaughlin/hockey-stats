@@ -121,6 +121,9 @@
                 (m.away.logo ? '<img src="' + m.away.logo + '" alt="">' : "") +
                 "<div><h3>" + m.away.name + "</h3><div>" + m.away.record + "</div></div>" +
               "</div>" +
+              '<div class="pos-count" title="Number of positive stat pills">' +
+                (HockeyStats.countPositivePills ? HockeyStats.countPositivePills(m.away) : "") +
+              "</div>" +
               teamPills(m.away) +
             "</div>" +
             '<div class="vs">@</div>' +
@@ -128,6 +131,9 @@
               '<div class="team home">' +
                 (m.home.logo ? '<img src="' + m.home.logo + '" alt="">' : "") +
                 "<div><h3>" + m.home.name + "</h3><div>" + m.home.record + "</div></div>" +
+              "</div>" +
+              '<div class="pos-count" title="Number of positive stat pills">' +
+                (HockeyStats.countPositivePills ? HockeyStats.countPositivePills(m.home) : "") +
               "</div>" +
               teamPills(m.home) +
             "</div>" +
