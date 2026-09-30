@@ -24,6 +24,12 @@
         <a href="/review.html">Review</a>
         <a href="/backtest.html">Backtest</a>
       </nav>
+      <span class="app-version" title="App version">v1.1</span>
+      <div class="date-nav">
+        <button type="button" id="prev-date">Previous day</button>
+        <button type="button" id="today-date">Today</button>
+        <button type="button" id="next-date">Next day</button>
+      </div>
       <button type="button" id="refresh">Refresh</button>
       </div>
       <p id="meta" class="meta meta-line">Loading…</p>
@@ -75,12 +81,13 @@
         <li><strong>HDCF%</strong> — high-danger chances for / (HDCF + HDCA).</li>
         <li><strong>5v5 xGF%</strong> — MoneyPuck 5-on-5 expected goals for / (xGF + xGA).</li>
         <li><strong>Estimated score</strong> — projected goals from season scoring rate, xG rate, last-5 form, HDCF tilt, and a small home-ice bump.</li>
-        <li><strong>Moneyline / O/U</strong> — NHL partner board for the US (DraftKings when posted).</li>
+        <li><strong>Moneyline / O/U</strong> — NHL partner board for the US (DraftKings when posted). A “≠ DK” mark means the model edge and the DraftKings favorite are different teams.</li>
+        <li><strong>Seasons</strong> — the scoreboard season is the slate on the board. The stats season is the year behind records and rates. They differ until the new season has a completed game.</li>
       </ul>
     </section>
   </main>
   <footer>
-    <span>hockey-stats v1.4.1</span>
+    <span>hockey-stats v1.1</span>
     <span>NHL.com schedule + standings · MoneyPuck team summary</span>
   </footer>
   <script src="/js/stats.js"></script>

@@ -79,6 +79,13 @@
     return '<p class="notes-row">' + m.notes + "</p>";
   }
 
+  function marketFlag(m) {
+    if (!m.marketDisagree) return "";
+    var partner = (m.odds && m.odds.partner) || "DraftKings";
+    return '<span class="badge warn" title="Model edge and the moneyline favorite are different sides">Edge disagrees with ' +
+      partner + " moneyline</span>";
+  }
+
   function teamPills(t) {
     return (
       '<div class="pills">' +
@@ -115,6 +122,7 @@
               '<span class="badge ' + (e.winner === "even" ? "even" : "") + '">' +
                 (e.winner === "even" ? "Even matchup" : "Edge: " + m.edgeName) +
               "</span>" +
+              marketFlag(m) +
             "</div>" +
             oddsLine(m) +
             '<p class="why">' + why + "</p>" +
@@ -195,7 +203,9 @@
           "<td>" + fmtTime(m.startTimeUTC) + "</td>" +
           "<td>" + m.away.abbrev + " " + m.away.record + "</td>" +
           "<td>" + m.home.abbrev + " " + m.home.record + "</td>" +
-          "<td class='num'>" + m.edgeTeam + "</td>" +
+          "<td class='num'>" + m.edgeTeam +
+            (m.marketDisagree ? " <span class='mark miss' title='Disagrees with the DraftKings moneyline'>≠ DK</span>" : "") +
+          "</td>" +
           "<td>" + m.away.record + "</td>" +
           "<td>" + m.home.record + "</td>" +
           "<td class='num'>" + signed((m.away.goalDiff || 0) - (m.home.goalDiff || 0), 0) + "</td>" +
@@ -223,12 +233,30 @@
 
   function render(data) {
     state.data = data;
+    var scoreLabel = data.scoreboardSeasonLabel || "";
+    var statsLabel = data.statsSeasonLabel || "";
     $("meta").textContent =
       (data.currentDate || "") +
+      (scoreLabel ? " · scoreboard " + scoreLabel : "") +
+      (statsLabel ? " · stats " + statsLabel : "") +
       " · " + (data.matchupCount || 0) + " games";
+    var prev = $("prev-date");
+    var next = $("next-date");
+    if (prev) {
+      prev.disabled = !data.prevDate;
+      prev.dataset.date = data.prevDate || "";
+    }
+    if (next) {
+      next.disabled = !data.nextDate;
+      next.dataset.date = data.nextDate || "";
+    }
     var note = $("note");
-    if (data.note) {
-      note.textContent = data.note;
+    var text = data.note || "";
+    if (data.storageError) {
+      text = (text ? text + " " : "") + "Estimates were not saved: " + data.storageError;
+    }
+    if (text) {
+      note.textContent = text;
       note.classList.remove("hidden");
     } else {
       note.classList.add("hidden");
@@ -244,9 +272,26 @@
     });
   }
 
+  function boardQuery(refresh) {
+    var q = new URLSearchParams(location.search);
+    var params = new URLSearchParams();
+    if (q.get("date")) params.set("date", q.get("date"));
+    if (refresh) params.set("refresh", "1");
+    var s = params.toString();
+    return "/api/matchups" + (s ? "?" + s : "");
+  }
+
+  function goDate(date) {
+    var q = new URLSearchParams(location.search);
+    if (date) q.set("date", date);
+    else q.delete("date");
+    var s = q.toString();
+    location.search = s ? "?" + s : "";
+  }
+
   function load(refresh) {
     $("meta").textContent = "Loading…";
-    fetch("/api/matchups" + (refresh ? "?refresh=1" : ""))
+    fetch(boardQuery(refresh))
       .then(function (r) { return r.json(); })
       .then(render)
       .catch(function (err) {
@@ -274,5 +319,11 @@
   })();
 
   $("refresh").addEventListener("click", function () { load(true); });
+  var prevBtn = $("prev-date");
+  var nextBtn = $("next-date");
+  var todayBtn = $("today-date");
+  if (prevBtn) prevBtn.addEventListener("click", function () { if (prevBtn.dataset.date) goDate(prevBtn.dataset.date); });
+  if (nextBtn) nextBtn.addEventListener("click", function () { if (nextBtn.dataset.date) goDate(nextBtn.dataset.date); });
+  if (todayBtn) todayBtn.addEventListener("click", function () { goDate(""); });
   load(false);
 })();

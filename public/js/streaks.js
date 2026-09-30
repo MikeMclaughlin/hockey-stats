@@ -159,6 +159,68 @@
     };
   }
 
+  function maxPlayerGames(rows) {
+    var counts = Object.create(null);
+    (rows || []).forEach(function (r) {
+      if (!r || r.playerId == null) return;
+      var k = String(r.playerId) + ":" + (r.role || "skater");
+      counts[k] = (counts[k] || 0) + 1;
+    });
+    var max = 0;
+    Object.keys(counts).forEach(function (k) {
+      if (counts[k] > max) max = counts[k];
+    });
+    return max;
+  }
+
+  function defaultLength(maxGames) {
+    if (maxGames >= 5) return 5;
+    if (maxGames >= 3) return 3;
+    if (maxGames >= 2) return 2;
+    if (maxGames >= 1) return 1;
+    return 5;
+  }
+
+  /**
+   * Near opening night a 5-game minimum matches nobody. Shorten unless the
+   * caller passed strict=1 with an explicit length.
+   */
+  function resolveLength(rows, requested, opts) {
+    opts = opts || {};
+    requested = Math.max(1, Math.min(15, Number(requested) || 5));
+    var maxGames = maxPlayerGames(rows);
+    var early = maxGames > 0 && maxGames < 5;
+    var softened = false;
+    var length = requested;
+    var allow = !opts.strict && opts.explicit !== true;
+    if (early && allow) {
+      length = defaultLength(maxGames);
+      softened = length !== requested;
+    }
+    return {
+      length: length,
+      requested: requested,
+      early: early,
+      softened: softened,
+      maxGames: maxGames
+    };
+  }
+
+  function emptyHint(plan) {
+    plan = plan || {};
+    if (plan.early || plan.softened || (plan.maxGames > 0 && plan.maxGames < 5)) {
+      return "No players meet this streak yet. The season is just underway — most skaters have only " +
+        (plan.maxGames || 0) + " logged game" + (plan.maxGames === 1 ? "" : "s") +
+        ". Length was eased to " + (plan.length || 1) +
+        " (the default of 5 is too long this early). Lower the per-game minimum if the table is still empty.";
+    }
+    if (!plan.maxGames) {
+      return "No boxscores are cached yet, so there is nothing to streak. Reload after a few games are final.";
+    }
+    return "No players have hit this minimum in each of the last " + (plan.length || 5) +
+      " games. Shorten the streak or lower the minimum.";
+  }
+
   function buildTables(rows, opts) {
     opts = opts || {};
     var length = Math.max(1, Number(opts.length) || 5);
@@ -207,6 +269,9 @@
     parseBoxscore: parseBoxscore,
     groupByPlayer: groupByPlayer,
     streakForPlayer: streakForPlayer,
-    buildTables: buildTables
+    buildTables: buildTables,
+    resolveLength: resolveLength,
+    emptyHint: emptyHint,
+    maxPlayerGames: maxPlayerGames
   };
 });

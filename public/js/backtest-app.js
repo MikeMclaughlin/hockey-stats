@@ -148,24 +148,59 @@
     });
   }
 
-  function loadData() {
-    return fetch("/data/backtest-20252026.json").then(readJson).catch(function () {
-      return fetch("/api/backtest").then(readJson);
+  function selectedSeason() {
+    var sel = $("season");
+    return (sel && sel.value) || "20252026";
+  }
+
+  function paintSeasons(d) {
+    var sel = $("season");
+    if (!sel || !d.seasons || !d.seasons.length) return;
+    var current = d.season || sel.value;
+    sel.innerHTML = d.seasons.map(function (s) {
+      var label = s.label || s.id;
+      if (!s.available) label += " (not built)";
+      return "<option value='" + s.id + "'" + (s.id === current ? " selected" : "") + ">" + label + "</option>";
+    }).join("");
+  }
+
+  function loadData(season) {
+    return fetch("/api/backtest?season=" + encodeURIComponent(season || "20252026")).then(readJson).catch(function () {
+      if ((season || "20252026") !== "20252026") throw new Error("Backtest API unavailable");
+      return fetch("/data/backtest-20252026.json").then(readJson);
     });
   }
 
-  loadData()
-    .then(function (d) {
-      if (d.error) {
-        $("meta").textContent = d.error;
-        return;
-      }
-      state.rows = d.rows || [];
-      if ($("stamp")) {
-        $("stamp").textContent = d.generatedAt
-          ? "Cached snapshot " + d.generatedAt + ". "
-          : "Cached snapshot. ";
-      }
+  function applyPayload(d) {
+    if (d.error && !d.rows) {
+      $("meta").textContent = d.error;
+      return;
+    }
+    paintSeasons(d);
+    state.rows = d.rows || [];
+    var label = "";
+    (d.seasons || []).forEach(function (s) {
+      if (s.id === (d.season || selectedSeason())) label = s.label || s.id;
+    });
+    if (!label && d.season) {
+      var y = String(d.season);
+      label = y.slice(0, 4) + "-" + y.slice(6);
+    }
+    if ($("title")) $("title").textContent = (label || "Season") + " score backtest";
+    if ($("season-foot")) $("season-foot").textContent = "NHL club-schedule-season " + (d.season || "");
+    if (d.unavailable) {
+      $("meta").textContent = d.message || "No cached backtest for this season.";
+      $("summary").innerHTML = "";
+      document.querySelector("#bt tbody").innerHTML =
+        "<tr><td colspan='15' class='empty'>" + (d.message || "No cached backtest for this season.") + "</td></tr>";
+      if ($("stamp")) $("stamp").textContent = "";
+      return;
+    }
+    if ($("stamp")) {
+      $("stamp").textContent = d.generatedAt
+        ? "Cached snapshot " + d.generatedAt + ". "
+        : "Cached snapshot. ";
+    }
       var q = new URLSearchParams(location.search);
       document.querySelectorAll("#bt [data-filter]").forEach(function (input) {
         var k = input.getAttribute("data-filter");
@@ -177,10 +212,28 @@
       if (q.get("sort")) state.sortKey = q.get("sort");
       if (q.get("dir")) state.sortDir = Number(q.get("dir")) || 1;
       render();
-    })
+  }
+
+  var bootSeason = new URLSearchParams(location.search).get("season") || "20252026";
+  if ($("season")) $("season").value = bootSeason;
+  loadData(bootSeason)
+    .then(applyPayload)
     .catch(function (err) {
       $("meta").textContent = String(err);
     });
+
+  if ($("season")) {
+    $("season").addEventListener("change", function () {
+      var id = $("season").value;
+      var q = new URLSearchParams(location.search);
+      q.set("season", id);
+      history.replaceState(null, "", "/backtest.html?" + q.toString());
+      $("meta").textContent = "Loading…";
+      loadData(id).then(applyPayload).catch(function (err) {
+        $("meta").textContent = String(err);
+      });
+    });
+  }
 
   document.querySelectorAll("#bt thead tr:first-child th").forEach(function (th) {
     th.addEventListener("click", function () {

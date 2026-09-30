@@ -15,7 +15,60 @@ var teamStats = require("./public/js/teamStats.js");
 var ROOT = __dirname;
 var PORT = Number(process.env.PORT || 3080);
 var CACHE_MS = 5 * 60 * 1000;
-var cache = { at: 0, body: null };
+var matchupCache = Object.create(null);
+
+function productVersion() {
+  try {
+    var parts = String(require("./package.json").version || "1.1.0").split(".");
+    return (parts[0] || "1") + "." + (parts[1] || "0");
+  } catch (e) {
+    return "1.1";
+  }
+}
+
+function formatSeason(id) {
+  var n = Number(id);
+  if (!isFinite(n) || n < 10000000) return id == null ? "" : String(id);
+  var start = Math.floor(n / 10000);
+  var end = String(n % 10000).slice(-2);
+  return start + "-" + end;
+}
+
+function seasonMeta(scoreSeason, statsSeason) {
+  var scoreLabel = formatSeason(scoreSeason);
+  var statsLabel = formatSeason(statsSeason);
+  var same = String(scoreSeason) === String(statsSeason);
+  var note = "Scoreboard season " + scoreLabel + " · stats season " + statsLabel + ".";
+  if (!same) {
+    note += " " + scoreLabel + " has not started, so records and rates are the " + statsLabel + " regular season.";
+  }
+  return {
+    scoreboardSeason: scoreSeason,
+    statsSeason: statsSeason,
+    scoreboardSeasonLabel: scoreLabel,
+    statsSeasonLabel: statsLabel,
+    note: note
+  };
+}
+
+function cleanDate(value) {
+  var s = String(value || "");
+  return /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : null;
+}
+
+function alignStand(stand, summary) {
+  var rec = teamStats.recordFromSources(stand, summary);
+  var next = Object.assign({}, stand || {});
+  next.wins = rec.wins;
+  next.losses = rec.losses;
+  next.otLosses = rec.otl;
+  if (rec.gamesPlayed != null) next.gamesPlayed = rec.gamesPlayed;
+  if (rec.goalDiff != null) next.goalDifferential = rec.goalDiff;
+  if (rec.ptsPct != null) next.pointPct = rec.ptsPct;
+  if (rec.goalsFor != null) next.goalFor = rec.goalsFor;
+  if (rec.goalsAgainst != null) next.goalAgainst = rec.goalsAgainst;
+  return next;
+}
 var ESTIMATES_FILE = path.join(ROOT, "data", "estimates.json");
 var BACKTEST_FILE = path.join(ROOT, "data", "backtest-20252026.json");
 var MP_GAMES_FILE = path.join(ROOT, "data", "mp-games-2025.json");
@@ -155,8 +208,11 @@ function mpSeasonYear(seasonId) {
   return String(Math.floor(Number(seasonId) / 10000));
 }
 
-async function buildMatchups() {
-  var score = await getJson("https://api-web.nhle.com/v1/score/now");
+async function buildMatchups(date) {
+  var day = cleanDate(date);
+  var score = await getJson(day
+    ? "https://api-web.nhle.com/v1/score/" + day
+    : "https://api-web.nhle.com/v1/score/now");
   var standings = await getJson("https://api-web.nhle.com/v1/standings/now");
   var oddsById = Object.create(null);
   var oddsPartner = null;
@@ -225,7 +281,7 @@ async function buildMatchups() {
       abbrev: ab,
       name: meta.name || (teamObj.name && teamObj.name.default) || ab,
       logo: teamObj.logo,
-      stand: standMap[ab] || {},
+      stand: alignStand(standMap[ab], sumMap[ab]),
       summary: sumMap[ab] || {},
       moneypuck: mp[ab] || {},
       last5: last5Map[ab],
@@ -250,6 +306,8 @@ async function buildMatchups() {
     var winnerTeam = edge.winner === "away" ? away : edge.winner === "home" ? home : null;
     var projected = stats.estimateScore(away, home);
     var odds = oddsById[g.id] || null;
+    var market = stats.marketSide(odds);
+    var marketDisagree = !!(market && market !== "even" && edge.winner && edge.winner !== market);
     return {
       id: g.id,
       gameDate: g.gameDate || score.currentDate,
@@ -266,6 +324,8 @@ async function buildMatchups() {
       why: stats.explainEdge(edge, away, home),
       projected: projected,
       odds: odds,
+      marketSide: market,
+      marketDisagree: marketDisagree,
       notes: backtest.buildNotes(
         { gameDate: g.gameDate, awayAbbrev: away.abbrev, homeAbbrev: home.abbrev },
         formMap[away.abbrev] || { lastDate: null, dates: [], results: [] },
@@ -276,6 +336,7 @@ async function buildMatchups() {
     };
   });
 
+  var seasons = seasonMeta(seasonId, statsSeason);
   return {
     generatedAt: new Date().toISOString(),
     currentDate: score.currentDate,
@@ -283,10 +344,10 @@ async function buildMatchups() {
     nextDate: score.nextDate,
     seasonId: seasonId,
     statsSeason: statsSeason,
-    note:
-      statsSeason !== seasonId
-        ? "2026-27 has not started — stats are 2025-26 regular season."
-        : null,
+    scoreboardSeason: seasons.scoreboardSeason,
+    scoreboardSeasonLabel: seasons.scoreboardSeasonLabel,
+    statsSeasonLabel: seasons.statsSeasonLabel,
+    note: seasons.note,
     matchupCount: matchups.length,
     matchups: matchups
   };
@@ -318,7 +379,7 @@ async function persistMatchups(body) {
       projectedAway: proj.away,
       projectedHome: proj.home,
       gameState: m.gameState
-    });
+    }, { relock: true });
     var row = storeEst.byId[String(m.id)];
     if (row) {
       row.liveAway = proj.away;
@@ -398,8 +459,19 @@ async function gradeEstimates() {
       archive.applyResult(row, as, hs, g.gameState);
     });
   }
-  await saveEstimates(est);
-  return estimatesPayload(est);
+  var persisted = true;
+  var storageError = null;
+  try {
+    await saveEstimates(est);
+  } catch (e) {
+    persisted = false;
+    storageError = String(e.message || e);
+  }
+  var graded = await estimatesPayload(est);
+  graded.persisted = persisted;
+  graded.storage = store.storageMode();
+  graded.storageError = storageError;
+  return graded;
 }
 
 async function loadMoneyPuckGames() {
@@ -425,19 +497,45 @@ async function loadMoneyPuckGames() {
   return all;
 }
 
-async function runBacktest() {
+var BACKTEST_SEASONS = ["20242025", "20252026", "20262027"];
+
+function backtestFile(season) {
+  return "backtest-" + season + ".json";
+}
+
+function listBacktestSeasons() {
+  var have = Object.create(null);
+  try {
+    fs.readdirSync(path.join(ROOT, "data")).forEach(function (name) {
+      var m = /^backtest-(\d{8})\.json$/.exec(name);
+      if (m) have[m[1]] = true;
+    });
+  } catch (e) { /* no data dir */ }
+  var ids = BACKTEST_SEASONS.slice();
+  Object.keys(have).forEach(function (id) {
+    if (ids.indexOf(id) === -1) ids.push(id);
+  });
+  ids.sort();
+  return ids.map(function (id) {
+    return { id: id, label: formatSeason(id), available: !!have[id] };
+  });
+}
+
+async function runBacktest(season) {
+  season = /^\d{8}$/.test(String(season || "")) ? String(season) : "20252026";
   var teams = stats.TEAMS.map(function (t) { return t.abbrev; });
   var schedules = [];
   for (var i = 0; i < teams.length; i++) {
-    schedules.push(await getJson("https://api-web.nhle.com/v1/club-schedule-season/" + teams[i] + "/20252026"));
+    schedules.push(await getJson("https://api-web.nhle.com/v1/club-schedule-season/" + teams[i] + "/" + season));
   }
   var games = backtest.collectGames(schedules);
   var mpGames = [];
   try { mpGames = await loadMoneyPuckGames(); } catch (e) { mpGames = []; }
-  var out = backtest.run(games, { minGp: 5, mpGames: mpGames });
+  var out = backtest.run(games, { minGp: 5, mpGames: mpGames, season: season });
   out.generatedAt = new Date().toISOString();
-  out.source = "walk-forward from NHL 2025-26 regular-season finals; xG/HDCF fall back to prior scoring rates";
+  out.source = "walk-forward from NHL " + formatSeason(season) + " regular-season finals; xG/HDCF fall back to prior scoring rates";
   out.rows = out.rows.filter(function (r) { return r.graded; });
+  out.seasons = listBacktestSeasons();
   return out;
 }
 
@@ -490,9 +588,15 @@ async function buildTeamStats() {
     rows.push(row);
   }
   rows.sort(function (a, b) { return (b.wins || 0) - (a.wins || 0); });
+  var seasons = seasonMeta(seasonId, statsSeason);
   return {
     generatedAt: new Date().toISOString(),
     seasonId: statsSeason,
+    statsSeason: statsSeason,
+    scoreboardSeason: seasonId,
+    statsSeasonLabel: seasons.statsSeasonLabel,
+    scoreboardSeasonLabel: seasons.scoreboardSeasonLabel,
+    note: seasons.note,
     formTypes: types,
     throughDate: latest || null,
     teams: rows
@@ -501,9 +605,10 @@ async function buildTeamStats() {
 
 async function buildPlayerStreaks(query) {
   query = query || {};
-  var length = Math.max(1, Math.min(15, Number(query.get && query.get("length")) || 5));
+  var explicit = !!(query.get && query.get("length"));
+  var requested = explicit ? Number(query.get("length")) : 5;
   var opts = {
-    length: length,
+    length: Math.max(1, Math.min(15, requested || 5)),
     minGoals: query.get && query.get("minGoals"),
     minAssists: query.get && query.get("minAssists"),
     minPoints: query.get && query.get("minPoints"),
@@ -549,11 +654,21 @@ async function buildPlayerStreaks(query) {
   if (fetched) {
     try { await store.writeJson(store.KEYS.playerGames, cache); } catch (e) { /* ignore */ }
   }
+  var plan = streaks.resolveLength(cache.rows, requested, {
+    explicit: explicit,
+    strict: query.get && query.get("strict") === "1"
+  });
+  opts.length = plan.length;
   var built = streaks.buildTables(cache.rows, opts);
   built.generatedAt = new Date().toISOString();
   built.gameCount = Object.keys(cache.games).length;
   built.playerRowCount = cache.rows.length;
   built.fetchedThisCall = fetched;
+  built.lengthRequested = plan.requested;
+  built.earlySeason = plan.early;
+  built.softened = plan.softened;
+  built.maxPlayerGames = plan.maxGames;
+  built.emptyHint = streaks.emptyHint(plan);
   return built;
 }
 
@@ -575,6 +690,7 @@ function detectRoute(req, url) {
   if (!fromApi) return p;
   if (blob.indexOf("grade") !== -1) return "/api/estimates/grade";
   if (blob.indexOf("seed") !== -1) return "/api/seed";
+  if (blob.indexOf("version") !== -1) return "/api/version";
   if (blob.indexOf("health") !== -1) return "/api/health";
   if (blob.indexOf("matchup") !== -1) return "/api/matchups";
   if (blob.indexOf("backtest") !== -1) return "/api/backtest";
@@ -599,38 +715,55 @@ function handleApi(req, res, url) {
     });
     return true;
   }
+  if (pathname === "/api/version") {
+    sendJson(res, 200, { version: productVersion(), service: "hockey-stats" });
+    return true;
+  }
   if (pathname === "/api/health") {
     var lw = store.lastWrite ? store.lastWrite() : {};
     store.listStored().then(function (files) {
       sendJson(res, 200, {
         ok: true,
         service: "hockey-stats",
+        version: productVersion(),
         port: PORT,
         blob: store.usesBlob(),
+        storage: store.storageMode(),
         blobWriteAt: lw.at || null,
         blobWriteName: lw.name || null,
         blobWriteError: lw.error || null,
+        hint: store.blobHint(),
         files: files
       });
     });
     return true;
   }
   if (pathname === "/api/matchups") {
-    if (cache.body && Date.now() - cache.at < CACHE_MS && url.searchParams.get("refresh") !== "1") {
-      sendJson(res, 200, cache.body);
+    var boardDate = cleanDate(url.searchParams.get("date"));
+    var cacheKey = boardDate || "now";
+    var hit = matchupCache[cacheKey];
+    if (hit && hit.body && Date.now() - hit.at < CACHE_MS && url.searchParams.get("refresh") !== "1") {
+      sendJson(res, 200, hit.body);
       return true;
     }
-    buildMatchups()
+    buildMatchups(boardDate)
       .then(function (body) {
-        cache = { at: Date.now(), body: body };
-        return store.writeJson(store.KEYS.matchups, body)
-          .then(function () { return persistMatchups(body); })
-          .catch(function () { return persistMatchups(body); })
-          .then(function () { sendJson(res, 200, body); });
+        matchupCache[cacheKey] = { at: Date.now(), body: body };
+        if (boardDate) {
+          sendJson(res, 200, body);
+          return;
+        }
+        persistMatchups(body).then(function () {
+          sendJson(res, 200, body);
+        }).catch(function (err) {
+          body.storageError = String(err.message || err);
+          body.storage = store.storageMode();
+          sendJson(res, 200, body);
+        });
       })
       .catch(function (err) {
         store.readJson(store.KEYS.matchups, null).then(function (fallback) {
-          if (fallback) {
+          if (fallback && !boardDate) {
             fallback.stale = true;
             fallback.error = String(err.message || err);
             sendJson(res, 200, fallback);
@@ -658,19 +791,38 @@ function handleApi(req, res, url) {
     return true;
   }
   if (pathname === "/api/backtest") {
-    store.readJson(store.KEYS.backtest, null).then(function (cached) {
+    var btSeason = String(url.searchParams.get("season") || "20252026");
+    if (!/^\d{8}$/.test(btSeason)) btSeason = "20252026";
+    var btName = backtestFile(btSeason);
+    var seasons = listBacktestSeasons();
+    var known = seasons.some(function (s) { return s.id === btSeason && s.available; });
+    store.readJson(btName, null).then(function (cached) {
       var allowRefresh = url.searchParams.get("refresh") === "1" && !process.env.VERCEL;
       if (cached && !allowRefresh) {
+        cached.seasons = seasons;
+        cached.season = cached.season || btSeason;
         sendJson(res, 200, cached);
         return;
       }
-      return runBacktest().then(function (body) {
-        return store.writeJson(store.KEYS.backtest, body).catch(function () {}).then(function () {
+      if (!known && !allowRefresh) {
+        sendJson(res, 200, {
+          season: btSeason,
+          seasons: seasons,
+          rows: [],
+          summary: archive.summarize([]),
+          unavailable: true,
+          message: "No cached backtest for " + formatSeason(btSeason) + " yet."
+        });
+        return;
+      }
+      return runBacktest(btSeason).then(function (body) {
+        return store.writeJson(btName, body).catch(function () {}).then(function () {
+          body.seasons = listBacktestSeasons();
           sendJson(res, 200, body);
         });
       });
     }).catch(function (err) {
-      sendJson(res, 502, { error: String(err.message || err) });
+      sendJson(res, 502, { error: String(err.message || err), seasons: seasons });
     });
     return true;
   }
@@ -707,6 +859,7 @@ function routeKey(pathname) {
   var p = String(pathname || "").replace(/\/+$/, "") || "/";
   if (/\.(html|css|js|json|svg|png|ico)$/i.test(p)) return p;
   if (p === "/health" || p === "/api/health") return "/api/health";
+  if (p === "/version" || p === "/api/version") return "/api/version";
   if (p === "/seed" || p === "/api/seed") return "/api/seed";
   if (p === "/matchups" || p === "/api/matchups") return "/api/matchups";
   if (p === "/backtest" || p === "/api/backtest") return "/api/backtest";

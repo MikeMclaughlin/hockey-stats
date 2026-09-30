@@ -396,6 +396,19 @@
     return round(p * 100, 1);
   }
 
+  /**
+   * Side the moneyline prices as the favorite. "even" when the two implied
+   * probabilities are within half a point.
+   */
+  function marketSide(odds) {
+    if (!odds || odds.awayMl == null || odds.homeMl == null) return null;
+    var away = impliedWinPct(odds.awayMl);
+    var home = impliedWinPct(odds.homeMl);
+    if (away == null || home == null) return null;
+    if (Math.abs(away - home) < 0.5) return "even";
+    return away > home ? "away" : "home";
+  }
+
   function parsePartnerOdds(game) {
     function pick(list, desc, qualContains) {
       list = list || [];
@@ -514,6 +527,7 @@
     parsePartnerOdds: parsePartnerOdds,
     formatAmerican: formatAmerican,
     impliedWinPct: impliedWinPct,
+    marketSide: marketSide,
     twoWayHold: function (a, h) {
       var pa = impliedWinPct(a);
       var ph = impliedWinPct(h);

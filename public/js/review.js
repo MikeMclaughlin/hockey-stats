@@ -36,31 +36,38 @@
     });
   }
 
-  function renderSummary(sum) {
+  function renderSummary(sum, extra) {
+    extra = extra || "";
     $("summary").innerHTML =
       '<div class="stat"><b>' + sum.total + "</b><span>locked</span></div>" +
       '<div class="stat"><b>' + sum.graded + "</b><span>graded</span></div>" +
       '<div class="stat"><b>' + sum.pending + "</b><span>pending</span></div>" +
       '<div class="stat"><b>' + (sum.exactPct == null ? "—" : sum.exactPct + "%") + "</b><span>exact</span></div>" +
       '<div class="stat"><b>' + (sum.winnerPct == null ? "—" : sum.winnerPct + "%") + "</b><span>winner</span></div>";
-    $("meta").textContent = sum.total + " estimates";
+    $("meta").textContent = sum.total + " estimates · exact " +
+      (sum.exactPct == null ? "—" : sum.exactPct + "%") + " · winner " +
+      (sum.winnerPct == null ? "—" : sum.winnerPct + "%") + extra;
   }
 
   function renderTable() {
     var tbody = document.querySelector("#review tbody");
     var rows = sorted();
     if (!rows.length) {
-      tbody.innerHTML = '<tr><td colspan="8" class="empty">No locked estimates yet. Open Matchups so today’s slate is saved.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="8" class="empty">No locked estimates yet. Open Matchups so today’s slate is saved. On Vercel that save needs BLOB_READ_WRITE_TOKEN.</td></tr>';
       return;
     }
     tbody.innerHTML = rows.map(function (r) {
       var v = HockeyArchive.verdict(r);
+      var differs = r.liveLabel && r.projectedLabel && r.liveLabel !== r.projectedLabel && !r.liveMatchesLock;
+      var lockNote = differs
+        ? (r.lockOpen ? " <span class='mark pending'>updates until puck drop</span>" : " <span class='mark miss'>locked ≠ live</span>")
+        : "";
       return (
-        "<tr>" +
+        "<tr" + (differs ? " class='differ'" : "") + ">" +
           "<td>" + (r.gameDate || "—") + "</td>" +
           "<td>" + (r.awayAbbrev || "") + "</td>" +
           "<td>" + (r.homeAbbrev || "") + "</td>" +
-          "<td class='num'>" + (r.projectedLabel || "—") + "</td>" +
+          "<td class='num'>" + (r.projectedLabel || "—") + lockNote + "</td>" +
           "<td class='num'>" + (r.liveLabel || "—") + (r.liveMatchesLock ? " =" : "") + "</td>" +
           "<td class='num'>" + (r.actualLabel || "—") + "</td>" +
           "<td><span class='mark " + v + "'>" + verdictLabel(v) + "</span></td>" +
@@ -77,13 +84,33 @@
   }
 
   function render(payload) {
+    if (payload && payload.error && !(payload.estimates && payload.estimates.length)) {
+      $("meta").textContent = payload.error;
+      var warn = $("storage-note");
+      if (warn) {
+        warn.textContent = payload.error;
+        warn.classList.remove("hidden");
+      }
+    }
     state.rows = payload.estimates || [];
-    renderSummary(payload.summary || HockeyArchive.summarize(state.rows));
+    var extra = "";
+    if (payload.storageError) extra = " · not saved (" + payload.storage + ")";
+    else if (payload.persisted === false) extra = " · not saved";
+    renderSummary(payload.summary || HockeyArchive.summarize(state.rows), extra);
+    var warn = $("storage-note");
+    if (warn) {
+      if (payload.storageError) {
+        warn.textContent = payload.storageError;
+        warn.classList.remove("hidden");
+      } else {
+        warn.classList.add("hidden");
+      }
+    }
     renderTable();
   }
 
   function load() {
-    fetch("/api/estimates")
+    fetch("/api/estimates/grade", { method: "POST" })
       .then(function (r) { return r.json(); })
       .then(render)
       .catch(function (err) {

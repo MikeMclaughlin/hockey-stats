@@ -5,7 +5,7 @@
 
   function qs() {
     var p = new URLSearchParams();
-    p.set("length", $("length").value || "5");
+    if ($("length").value) p.set("length", $("length").value);
     p.set("minGoals", $("minGoals").value || "1");
     p.set("minAssists", $("minAssists").value || "1");
     p.set("minPoints", $("minPoints").value || "1");
@@ -39,7 +39,7 @@
             "<td>" + r.line + (r.incomplete ? " (incomplete)" : "") + "</td>" +
             "</tr>";
         }).join("")
-      : "<tr><td colspan='9' class='empty'>No players meet this streak.</td></tr>";
+      : "<tr><td colspan='9' class='empty'>" + (block.emptyHint || "No players meet this streak.") + "</td></tr>";
     return (
       "<details class='panel' open>" +
         "<summary>" + block.label + " <span class='muted'>min " + block.min +
@@ -59,15 +59,31 @@
 
   function render(data) {
     var order = ["goals", "assists", "points", "attempts", "sog", "goalieSv"];
+    var hint = data.emptyHint || "No players meet this streak.";
     var html = order.map(function (k) {
-      return data.tables && data.tables[k] ? tableHtml(data.tables[k]) : "";
+      if (!data.tables || !data.tables[k]) return "";
+      data.tables[k].emptyHint = hint;
+      return tableHtml(data.tables[k]);
     }).join("");
-    $("panels").innerHTML = html || "<p class='empty'>No streak data yet.</p>";
+    var any = order.some(function (k) {
+      return data.tables && data.tables[k] && data.tables[k].rows && data.tables[k].rows.length;
+    });
+    $("panels").innerHTML = html || "<p class='empty'>" + hint + "</p>";
+    if ($("length") && data.length != null && (!$("length").value || data.softened)) {
+      $("length").value = String(data.length);
+    }
     $("meta").textContent = (data.playerRowCount || 0) + " player-games · " +
-      (data.gameCount || 0) + " boxscores";
-    $("note").textContent = "Boxscores through cache" +
+      (data.gameCount || 0) + " boxscores" +
+      (data.earlySeason ? " · early season" : "");
+    var note = "Boxscores through cache" +
       (data.fetchedThisCall ? " · fetched " + data.fetchedThisCall + " new this load" : " · using cache") +
       " · " + (data.playerRowCount || 0) + " player-games.";
+    if (data.softened) {
+      note += " Streak length softened from " + data.lengthRequested + " to " + data.length +
+        " because most players have fewer than five games.";
+    }
+    if (!any && hint) note += " " + hint;
+    $("note").textContent = note;
   }
 
   function load() {
