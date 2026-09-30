@@ -359,6 +359,35 @@ main {
 .num-neg {
   color: #c62828;
 }
+.num-pos {
+  color: #1b7a32;
+}
+.pre {
+  display: inline-block;
+  margin-left: 0.2rem;
+  padding: 0 0.28rem;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  color: var(--muted);
+  font-size: 0.65rem;
+  font-weight: 650;
+  letter-spacing: 0.03em;
+  line-height: 1.4;
+  vertical-align: 0.15em;
+}
+.b2b-rec {
+  display: block;
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+.edge-meta {
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+.edge-meta.low {
+  color: #9a3412;
+}
 .pill.pos {
   background: #e6f6ea;
   border-color: #b7e0c2;

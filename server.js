@@ -19,10 +19,10 @@ var matchupCache = Object.create(null);
 
 function productVersion() {
   try {
-    var parts = String(require("./package.json").version || "1.4.0").split(".");
-    return (parts[0] || "1") + "." + (parts[1] || "4");
+    var parts = String(require("./package.json").version || "1.5.0").split(".");
+    return (parts[0] || "1") + "." + (parts[1] || "5");
   } catch (e) {
-    return "1.4";
+    return "1.5";
   }
 }
 
@@ -130,7 +130,7 @@ function sleep(ms) {
 
 function httpsGet(urlStr, cb, attempt) {
   attempt = attempt || 1;
-  https.get(urlStr, { headers: { "User-Agent": "hockey-stats/1.4", Accept: "*/*" } }, function (up) {
+  https.get(urlStr, { headers: { "User-Agent": "hockey-stats/1.5", Accept: "*/*" } }, function (up) {
     if (up.statusCode >= 300 && up.statusCode < 400 && up.headers.location) {
       up.resume();
       httpsGet(up.headers.location, cb, attempt);
@@ -205,6 +205,87 @@ function seasonIdFromScore(score) {
 function isFinalState(state) {
   var st = String(state || "").toUpperCase();
   return st === "OFF" || st === "FINAL" || st.indexOf("FINAL") === 0;
+}
+
+function mapPool(items, limit, fn) {
+  var list = items || [];
+  if (!list.length) return Promise.resolve();
+  var i = 0;
+  var n = Math.max(1, Math.min(limit || 1, list.length));
+  function worker() {
+    if (i >= list.length) return Promise.resolve();
+    var idx = i++;
+    return Promise.resolve(fn(list[idx], idx)).then(worker, worker);
+  }
+  var jobs = [];
+  for (var w = 0; w < n; w++) jobs.push(worker());
+  return Promise.all(jobs);
+}
+
+function restDaysBetween(lastDate, currentDate) {
+  if (!lastDate || !currentDate) return null;
+  var a = Date.parse(String(lastDate).slice(0, 10) + "T00:00:00Z");
+  var b = Date.parse(String(currentDate).slice(0, 10) + "T00:00:00Z");
+  if (!isFinite(a) || !isFinite(b)) return null;
+  return Math.round((b - a) / 86400000);
+}
+
+var shotMemo = Object.create(null);
+
+function fetchGameShots(id) {
+  var key = String(id);
+  if (!shotMemo[key]) {
+    shotMemo[key] = getJson("https://api-web.nhle.com/v1/gamecenter/" + key + "/right-rail").then(function (rail) {
+      var rows = (rail && rail.teamGameStats) || [];
+      var sog = null;
+      for (var i = 0; i < rows.length; i++) {
+        if (rows[i] && rows[i].category === "sog") { sog = rows[i]; break; }
+      }
+      if (!sog) return null;
+      var away = Number(sog.awayValue);
+      var home = Number(sog.homeValue);
+      if (!isFinite(away) || !isFinite(home)) return null;
+      return { away: away, home: home };
+    }).catch(function () { return null; });
+  }
+  return shotMemo[key];
+}
+
+function loadShotMap(ids) {
+  var unique = [];
+  var seen = Object.create(null);
+  (ids || []).forEach(function (id) {
+    var key = String(id || "");
+    if (!key || seen[key]) return;
+    seen[key] = true;
+    unique.push(key);
+  });
+  var map = Object.create(null);
+  return mapPool(unique, 6, function (id) {
+    return fetchGameShots(id).then(function (shots) { map[id] = shots; });
+  }).then(function () { return map; });
+}
+
+function shotIdsForTeam(games, abbrev, opts) {
+  opts = opts || {};
+  var ids = [];
+  var rs = teamStats.finishedGames(games, abbrev, 2);
+  var pre = teamStats.finishedGames(games, abbrev, 1);
+  function pushLast(list) {
+    list.slice(-5).forEach(function (g) { if (g.id != null) ids.push(g.id); });
+  }
+  pushLast(rs.length ? rs : pre);
+  if (opts.splits) {
+    ["home", "away"].forEach(function (venue) {
+      var rsV = rs.filter(function (g) { return g.venue === venue; });
+      var preV = pre.filter(function (g) { return g.venue === venue; });
+      pushLast(rsV.length ? rsV : preV);
+    });
+  }
+  if (opts.preseasonTotals) {
+    pre.forEach(function (g) { if (g.id != null) ids.push(g.id); });
+  }
+  return ids;
 }
 
 function priorSeasonId(seasonId) {
@@ -456,6 +537,8 @@ async function buildMatchups(date) {
 
   var mp = {};
   try {
+    // MoneyPuck publishes regular-season team rows only. 2026 preseason
+    // seasonSummary returns 404, so advanced rates are not filled from it.
     var csv = await getText(
       "https://moneypuck.com/moneypuck/playerData/seasonSummary/" +
         mpSeasonYear(statsSeason) +
@@ -481,28 +564,95 @@ async function buildMatchups(date) {
     : [];
   var last5Map = {};
   var formMap = {};
+  var schedMap = {};
   var abbrevs = Object.keys(needed);
   await Promise.all(
     abbrevs.map(function (ab) {
       var url = "https://api-web.nhle.com/v1/club-schedule-season/" + ab + "/" + statsSeason;
       return getJson(url)
         .then(function (sched) {
-          var regular = (sched.games || []).filter(function (g) {
+          var games = sched.games || [];
+          schedMap[ab] = games;
+          var regular = games.filter(function (g) {
             return !g.gameType || Number(g.gameType) === 2;
           });
           last5Map[ab] = last5FromSchedule({ games: regular }, ab);
-          formMap[ab] = backtest.scheduleForm(sched.games || [], ab, score.currentDate);
+          formMap[ab] = backtest.scheduleForm(games, ab, score.currentDate);
         })
         .catch(function () {
+          schedMap[ab] = [];
           last5Map[ab] = null;
           formMap[ab] = { lastDate: null, dates: [], results: [] };
         });
     })
   );
 
+  function teamRecord(ab) {
+    return teamStats.recordFromSources(
+      sameSeasonRow(standMap[ab], statsSeason),
+      sameSeasonRow(sumMap[ab], statsSeason)
+    );
+  }
+
+  var shotIds = [];
+  abbrevs.forEach(function (ab) {
+    var rec = teamRecord(ab);
+    shotIds = shotIds.concat(shotIdsForTeam(schedMap[ab] || [], ab, {
+      preseasonTotals: !rec.gamesPlayed
+    }));
+  });
+  var shotById = await loadShotMap(shotIds);
+
+  function preseasonRest(ab) {
+    var prior = teamStats.finishedGames(schedMap[ab] || [], ab, 1).filter(function (g) {
+      return !score.currentDate || String(g.date || "").slice(0, 10) < String(score.currentDate).slice(0, 10);
+    });
+    if (!prior.length) return null;
+    return restDaysBetween(prior[prior.length - 1].date, score.currentDate);
+  }
+
+  function last5Save(ab, preseason) {
+    var fromMp = stats.last5SavePctFromMp(mpGamesCache, ab, score.currentDate);
+    if (fromMp != null && !preseason) return fromMp;
+    var games = schedMap[ab] || [];
+    var rs = teamStats.finishedGames(games, ab, 2);
+    var src = preseason ? teamStats.finishedGames(games, ab, 1) : rs;
+    var last = teamStats.attachShots(src, shotById).slice(-5);
+    return teamStats.last5SavePct(last);
+  }
+
+  function preseasonFill(ab) {
+    var games = schedMap[ab] || [];
+    var pre = teamStats.attachShots(teamStats.finishedGames(games, ab, 1), shotById);
+    var tot = teamStats.totalsFromGames(pre);
+    if (!tot.games) return null;
+    var preOnly = games.filter(function (g) { return Number(g.gameType) === 1; });
+    var last = pre.slice(-5);
+    return {
+      gamesPlayed: tot.games,
+      wins: tot.wins,
+      losses: tot.losses,
+      otl: tot.otl,
+      goalsFor: tot.gf,
+      goalsAgainst: tot.ga,
+      pdo: tot.sf != null ? teamStats.pdoFromShots(tot.gf, tot.ga, tot.sf, tot.sa) : null,
+      sogShare: tot.sf != null ? stats.sogShare(tot.sf, tot.sa) : null,
+      last5: stats.last5GoalDiff(preOnly, ab),
+      last5SvPct: teamStats.last5SavePct(last),
+      restDays: preseasonRest(ab)
+    };
+  }
+
   function profile(teamObj) {
     var ab = teamObj.abbrev;
     var meta = stats.teamByAbbrev(ab) || {};
+    var rec = teamRecord(ab);
+    var rsRest = restDaysBetween((formMap[ab] || {}).lastDate, score.currentDate);
+    var restFromPre = rsRest == null;
+    var rest = rsRest != null ? rsRest : preseasonRest(ab);
+    var fill = rec.gamesPlayed ? null : preseasonFill(ab);
+    var flags = {};
+    if (!fill && restFromPre && rest != null) flags.rest = true;
     var p = stats.buildTeamProfile({
       abbrev: ab,
       name: meta.name || (teamObj.name && teamObj.name.default) || ab,
@@ -511,15 +661,11 @@ async function buildMatchups(date) {
       summary: sameSeasonRow(sumMap[ab], statsSeason) || {},
       moneypuck: mp[ab] || {},
       last5: last5Map[ab],
-      last5SvPct: stats.last5SavePctFromMp(mpGamesCache, ab, score.currentDate),
-      restDays: (function () {
-        var form = formMap[ab] || {};
-        if (!form.lastDate || !score.currentDate) return null;
-        var a = Date.parse(String(form.lastDate).slice(0, 10) + "T00:00:00Z");
-        var b = Date.parse(String(score.currentDate).slice(0, 10) + "T00:00:00Z");
-        if (!isFinite(a) || !isFinite(b)) return null;
-        return Math.round((b - a) / 86400000);
-      })()
+      last5SvPct: rec.gamesPlayed ? last5Save(ab, false) : null,
+      restDays: fill ? null : rest,
+      restFromPreseason: !fill && restFromPre && rest != null,
+      preseasonFlags: flags,
+      preseasonFill: fill
     });
     p.score = teamObj.score;
     return p;
@@ -591,6 +737,7 @@ async function buildMatchups(date) {
     scoreboardSeasonLabel: seasons.scoreboardSeasonLabel,
     statsSeasonLabel: seasons.statsSeasonLabel,
     note: seasons.note,
+    preseasonLabel: formatSeason(statsSeason) + " preseason",
     matchupCount: matchups.length,
     matchups: matchups
   };
@@ -884,31 +1031,52 @@ async function buildTeamStats() {
       })) types = [2];
     } catch (e) { /* keep preseason+regular */ }
   }
+  var schedMap = Object.create(null);
+  await mapPool(stats.TEAMS, 6, function (t) {
+    return getJson("https://api-web.nhle.com/v1/club-schedule-season/" + t.abbrev + "/" + statsSeason)
+      .then(function (sched) { schedMap[t.abbrev] = sched.games || []; })
+      .catch(function () { schedMap[t.abbrev] = []; });
+  });
+  var shotIds = [];
+  stats.TEAMS.forEach(function (t) {
+    var rec = teamStats.recordFromSources(
+      sameSeasonRow(standMap[t.abbrev], statsSeason),
+      sameSeasonRow(sumMap[t.abbrev], statsSeason)
+    );
+    shotIds = shotIds.concat(shotIdsForTeam(schedMap[t.abbrev] || [], t.abbrev, {
+      splits: true,
+      preseasonTotals: !rec.gamesPlayed
+    }));
+  });
+  var shotById = await loadShotMap(shotIds);
   var rows = [];
   var latest = "";
-  for (var i = 0; i < stats.TEAMS.length; i++) {
-    var t = stats.TEAMS[i];
-    var form = { games: 0, w: 0, l: 0, ot: 0, gfGp: null, gaGp: null, list: [] };
-    var homeForm = form;
-    var awayForm = form;
-    try {
-      var sched = await getJson(
-        "https://api-web.nhle.com/v1/club-schedule-season/" + t.abbrev + "/" + statsSeason
-      );
-      form = teamStats.last5Form(sched.games || [], t.abbrev, { types: types });
-      homeForm = teamStats.last5Form(sched.games || [], t.abbrev, { types: types, venue: "home" });
-      awayForm = teamStats.last5Form(sched.games || [], t.abbrev, { types: types, venue: "away" });
-    } catch (e) { /* keep empty form */ }
+  stats.TEAMS.forEach(function (t) {
+    var games = schedMap[t.abbrev] || [];
+    var empty = { games: 0, w: 0, l: 0, ot: 0, gfGp: null, gaGp: null, list: [] };
+    var form = games.length ? teamStats.last5Form(games, t.abbrev, { types: types }) : empty;
+    var homeForm = games.length ? teamStats.last5Form(games, t.abbrev, { types: types, venue: "home" }) : empty;
+    var awayForm = games.length ? teamStats.last5Form(games, t.abbrev, { types: types, venue: "away" }) : empty;
+    teamStats.annotateShots(form, shotById);
+    teamStats.annotateShots(homeForm, shotById);
+    teamStats.annotateShots(awayForm, shotById);
     var standRow = sameSeasonRow(standMap[t.abbrev], statsSeason);
     var sumRow = sameSeasonRow(sumMap[t.abbrev], statsSeason);
     var row = teamStats.row(t, standRow, sumRow, form);
+    var b2b = teamStats.b2bFromGames(games, t.abbrev);
+    row.b2bWinPct = b2b.b2bWinPct;
+    row.b2bRecord = b2b.b2bRecord;
+    row.b2bGames = b2b.b2bGames;
     row.homeSplit = teamStats.row(t, standRow, sumRow, homeForm);
     row.awaySplit = teamStats.row(t, standRow, sumRow, awayForm);
-    (form.list || []).forEach(function (g) {
+    teamStats.applyPreseason(row, games, t.abbrev, shotById, null);
+    teamStats.applyPreseason(row.homeSplit, games, t.abbrev, shotById, "home");
+    teamStats.applyPreseason(row.awaySplit, games, t.abbrev, shotById, "away");
+    (row.lastFive || []).forEach(function (g) {
       if (g.date && g.date > latest) latest = g.date;
     });
     rows.push(row);
-  }
+  });
   rows.sort(function (a, b) { return (b.wins || 0) - (a.wins || 0); });
   var seasons = seasonMeta(seasonId, statsSeason, standingsSnapshot(standings, statsSeason).maxGp);
   return {
@@ -922,6 +1090,7 @@ async function buildTeamStats() {
     statsSeasonLabel: seasons.statsSeasonLabel,
     scoreboardSeasonLabel: seasons.scoreboardSeasonLabel,
     note: seasons.note,
+    preseasonLabel: formatSeason(statsSeason) + " preseason",
     formTypes: types,
     throughDate: latest || null,
     teams: rows

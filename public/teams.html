@@ -4,6 +4,11 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Hockey Stats — Team Stats</title>
+  <link rel="icon" href="/favicon.ico?v=1.5" sizes="any">
+  <link rel="icon" href="/favicon.svg?v=1.5" type="image/svg+xml">
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png?v=1.5">
+  <link rel="icon" type="image/png" sizes="192x192" href="/favicon-192x192.png?v=1.5">
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png?v=1.5">
   <link rel="stylesheet" href="/css/style.css">
 </head>
 <body>
@@ -24,7 +29,7 @@
         <a href="/review.html">Review</a>
         <a href="/backtest.html">Backtest</a>
       </nav>
-      <span class="app-version" title="App version">v1.4</span>
+      <span class="app-version" title="App version">v1.5</span>
       <label>Split <select id="split"><option value="all">All</option><option value="home">Home</option><option value="away">Away</option></select></label>
       </div>
       <p id="meta" class="meta meta-line">Loading…</p>
@@ -50,6 +55,9 @@
               <th data-key="l5ot" class="num">L5 OT</th>
               <th data-key="l5gfGp" class="num">L5 GF/GP</th>
               <th data-key="l5gaGp" class="num">L5 GA/GP</th>
+              <th data-key="pdo" class="num">PDO</th>
+              <th data-key="l5pdo" class="num">Last 5 PDO</th>
+              <th data-key="b2bWinPct" class="num">B2B win %</th>
             </tr>
             <tr class="filters">
               <th><input data-filter="abbrev" placeholder="TOR"></th>
@@ -65,6 +73,9 @@
               <th><input data-filter="l5ot" placeholder=""></th>
               <th><input data-filter="l5gfGp" placeholder=""></th>
               <th><input data-filter="l5gaGp" placeholder=""></th>
+              <th><input data-filter="pdo" placeholder=">100"></th>
+              <th><input data-filter="l5pdo" placeholder=">100"></th>
+              <th><input data-filter="b2bWinPct" placeholder=">=50"></th>
             </tr>
           </thead>
           <tbody></tbody>
@@ -73,8 +84,7 @@
     </section>
   </main>
   <footer>
-    <span>hockey-stats v1.4</span>
-    <span>NHL standings + club schedule · team summary shots</span>
+    <span>v1.5</span>
   </footer>
   <script src="/js/table-filter.js"></script>
   <script src="/js/teams-app.js"></script>
