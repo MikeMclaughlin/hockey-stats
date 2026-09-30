@@ -208,6 +208,71 @@
     };
   }
 
+  function oddsLines(odds) {
+    if (!odds) return null;
+    var awayMl = odds.awayMl != null && odds.awayMl !== "" ? Number(odds.awayMl) : null;
+    var homeMl = odds.homeMl != null && odds.homeMl !== "" ? Number(odds.homeMl) : null;
+    var total = odds.total != null && odds.total !== "" ? Number(odds.total) : null;
+    if (!isFinite(awayMl)) awayMl = null;
+    if (!isFinite(homeMl)) homeMl = null;
+    if (!isFinite(total)) total = null;
+    if (awayMl == null && homeMl == null && total == null) return null;
+    var overPrice = odds.overPrice != null ? Number(odds.overPrice) : null;
+    var underPrice = odds.underPrice != null ? Number(odds.underPrice) : null;
+    return {
+      awayMl: awayMl,
+      homeMl: homeMl,
+      total: total,
+      overPrice: isFinite(overPrice) ? overPrice : null,
+      underPrice: isFinite(underPrice) ? underPrice : null,
+      partner: odds.partner || null
+    };
+  }
+
+  /**
+   * Keep the moneyline and total until puck drop. After the game starts,
+   * the saved line is locked and later prices do not replace it.
+   * A first write is still allowed after start so a recovered line can be stored.
+   */
+  function snapshotOdds(store, row, nowIso) {
+    store = store || { version: 1, byId: {} };
+    store.byId = store.byId || {};
+    var id = String(row && row.id);
+    var existing = store.byId[id];
+    var nowMs = parseTime(nowIso);
+    if (nowMs == null) nowMs = Date.now();
+    var started = hasStarted(row, nowMs) || (existing && hasStarted(existing, nowMs));
+    if (existing && (existing.locked || started)) {
+      var changed = !existing.locked;
+      existing.locked = true;
+      if (row.gameState) existing.gameState = row.gameState;
+      if (row.startTimeUTC && !existing.startTimeUTC) existing.startTimeUTC = row.startTimeUTC;
+      return { store: store, row: existing, wrote: changed };
+    }
+    var lines = oddsLines(row && row.odds);
+    if (!lines) return { store: store, row: existing || null, wrote: false };
+    var now = nowIso || new Date().toISOString();
+    var saved = {
+      id: row.id,
+      gameDate: row.gameDate || (existing && existing.gameDate) || null,
+      startTimeUTC: row.startTimeUTC || (existing && existing.startTimeUTC) || null,
+      gameState: row.gameState || (existing && existing.gameState) || null,
+      awayAbbrev: row.awayAbbrev || (existing && existing.awayAbbrev) || null,
+      homeAbbrev: row.homeAbbrev || (existing && existing.homeAbbrev) || null,
+      awayMl: lines.awayMl,
+      homeMl: lines.homeMl,
+      total: lines.total,
+      overPrice: lines.overPrice,
+      underPrice: lines.underPrice,
+      partner: lines.partner,
+      capturedAt: (existing && existing.capturedAt) || now,
+      updatedAt: now,
+      locked: !!started
+    };
+    store.byId[id] = saved;
+    return { store: store, row: saved, wrote: true };
+  }
+
   function verdict(row) {
     if (!row || !row.graded) return "pending";
     if (row.correct) return "exact";
@@ -227,6 +292,8 @@
     verdict: verdict,
     winnerOf: winnerOf,
     hasStarted: hasStarted,
+    oddsLines: oddsLines,
+    snapshotOdds: snapshotOdds,
     shouldRelock: shouldRelock
   };
 });
