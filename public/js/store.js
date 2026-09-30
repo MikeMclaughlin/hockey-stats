@@ -20,7 +20,8 @@
     mpGames: "mp-games-2025.json",
     matchups: "matchups.json",
     playerGames: "player-games.json",
-    matchupArchive: "matchup-archive-20262027.json"
+    matchupArchive: "matchup-archive-20262027.json",
+    cronStatus: "cron-status.json"
   };
 
   var lastWrite = { at: null, name: null, error: null };

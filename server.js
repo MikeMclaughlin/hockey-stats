@@ -474,6 +474,64 @@ async function gradeEstimates() {
   return graded;
 }
 
+var CRON_SCHEDULES = ["0 4 * * *", "0 13 * * *", "0 21 * * *"];
+
+function cronSecret() {
+  return String(process.env.CRON_SECRET || "").trim();
+}
+
+function cronAuthorized(req) {
+  var secret = cronSecret();
+  var header = "";
+  if (req && req.headers) header = String(req.headers.authorization || "");
+  if (secret) return header === "Bearer " + secret;
+  return !process.env.VERCEL;
+}
+
+async function runScheduledUpdate() {
+  var started = new Date().toISOString();
+  var body = await buildMatchups(null);
+  var storageError = null;
+  try {
+    await store.writeJson(store.KEYS.matchups, body);
+    await persistMatchups(body);
+  } catch (e) {
+    storageError = String(e.message || e);
+  }
+  matchupCache.now = { at: Date.now(), body: body };
+  var graded;
+  try {
+    graded = await gradeEstimates();
+  } catch (e) {
+    graded = {
+      persisted: false,
+      storage: store.storageMode(),
+      storageError: String(e.message || e),
+      summary: archive.summarize([])
+    };
+  }
+  if (!storageError && graded.storageError) storageError = graded.storageError;
+  var status = {
+    ok: !storageError,
+    ranAt: started,
+    finishedAt: new Date().toISOString(),
+    currentDate: body.currentDate || null,
+    matchupCount: body.matchupCount || 0,
+    scoreboardSeasonLabel: body.scoreboardSeasonLabel || null,
+    statsSeasonLabel: body.statsSeasonLabel || null,
+    summary: graded.summary || null,
+    persisted: !!(graded.persisted && !storageError),
+    storage: store.storageMode(),
+    storageError: storageError
+  };
+  try {
+    await store.writeJson(store.KEYS.cronStatus, status);
+  } catch (e) {
+    status.statusWriteError = String(e.message || e);
+  }
+  return status;
+}
+
 async function loadMoneyPuckGames() {
   var cached = await store.readJson(store.KEYS.mpGames, null);
   if (Array.isArray(cached) && cached.length) return cached;
@@ -688,6 +746,7 @@ function detectRoute(req, url) {
   if (/\.(html|css|js|json|svg|png|ico)(\s|$|\?)/i.test(blob) && blob.indexOf("/api/") === -1) return p;
   var fromApi = blob.indexOf("/api/") !== -1 || /(^|\s)api\//.test(blob);
   if (!fromApi) return p;
+  if (blob.indexOf("cron") !== -1) return "/api/cron";
   if (blob.indexOf("grade") !== -1) return "/api/estimates/grade";
   if (blob.indexOf("seed") !== -1) return "/api/seed";
   if (blob.indexOf("version") !== -1) return "/api/version";
@@ -715,13 +774,37 @@ function handleApi(req, res, url) {
     });
     return true;
   }
+  if (pathname === "/api/cron" && (req.method === "GET" || req.method === "POST")) {
+    if (!cronAuthorized(req)) {
+      sendJson(res, 401, {
+        ok: false,
+        error: "unauthorized",
+        hint: "Set CRON_SECRET on the Vercel project and send Authorization: Bearer <CRON_SECRET>. Vercel Cron adds that header automatically."
+      });
+      return true;
+    }
+    runScheduledUpdate().then(function (status) {
+      sendJson(res, status.ok ? 200 : 502, status);
+    }).catch(function (err) {
+      sendJson(res, 502, { ok: false, error: String(err.message || err) });
+    });
+    return true;
+  }
   if (pathname === "/api/version") {
     sendJson(res, 200, { version: productVersion(), service: "hockey-stats" });
     return true;
   }
   if (pathname === "/api/health") {
     var lw = store.lastWrite ? store.lastWrite() : {};
-    store.listStored().then(function (files) {
+    var hint = store.blobHint();
+    if (process.env.VERCEL && !cronSecret()) {
+      var cronHint = "Add CRON_SECRET to the Vercel project so /api/cron accepts the scheduled refresh. Vercel sends it as Authorization: Bearer <CRON_SECRET>.";
+      hint = hint ? hint + " " + cronHint : cronHint;
+    }
+    Promise.all([
+      store.listStored(),
+      store.readJson(store.KEYS.cronStatus, null)
+    ]).then(function (pair) {
       sendJson(res, 200, {
         ok: true,
         service: "hockey-stats",
@@ -732,8 +815,11 @@ function handleApi(req, res, url) {
         blobWriteAt: lw.at || null,
         blobWriteName: lw.name || null,
         blobWriteError: lw.error || null,
-        hint: store.blobHint(),
-        files: files
+        hint: hint,
+        cronSecret: !!cronSecret(),
+        cronSchedulesUTC: CRON_SCHEDULES,
+        cron: pair[1],
+        files: pair[0]
       });
     });
     return true;
@@ -860,6 +946,7 @@ function routeKey(pathname) {
   if (/\.(html|css|js|json|svg|png|ico)$/i.test(p)) return p;
   if (p === "/health" || p === "/api/health") return "/api/health";
   if (p === "/version" || p === "/api/version") return "/api/version";
+  if (p === "/cron" || p === "/api/cron") return "/api/cron";
   if (p === "/seed" || p === "/api/seed") return "/api/seed";
   if (p === "/matchups" || p === "/api/matchups") return "/api/matchups";
   if (p === "/backtest" || p === "/api/backtest") return "/api/backtest";
