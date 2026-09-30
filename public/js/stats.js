@@ -172,11 +172,14 @@
    */
   function matchupEdge(away, home) {
     var breakdown = [];
+    var measured = 0;
     function add(key, aVal, hVal, higherBetter) {
       var dir = cmpNum(aVal, hVal);
       if (!higherBetter) dir = -dir;
       var mag = 0;
-      if (aVal != null && hVal != null && isFinite(aVal) && isFinite(hVal)) {
+      var has = aVal != null && hVal != null && isFinite(aVal) && isFinite(hVal);
+      if (has) {
+        measured += 1;
         var span = Math.max(Math.abs(aVal) + Math.abs(hVal), 1);
         mag = Math.abs(aVal - hVal) / span;
       }
@@ -186,7 +189,8 @@
         away: aVal,
         home: hVal,
         winner: dir > 0 ? "away" : dir < 0 ? "home" : "even",
-        points: round(pts, 3)
+        points: round(pts, 3),
+        measured: has
       });
       return pts;
     }
@@ -210,12 +214,16 @@
     else if (total < -0.02) winner = "home";
     else winner = "home";
 
+    var totalMeasures = breakdown.length;
     return {
       winner: winner,
       score: round(total, 3),
       awayScore: round(Math.max(0, total), 3),
       homeScore: round(Math.max(0, -total), 3),
-      breakdown: breakdown
+      breakdown: breakdown,
+      measured: measured,
+      totalMeasures: totalMeasures,
+      lowData: measured * 2 < totalMeasures
     };
   }
 
@@ -343,6 +351,8 @@
     var gp = stand.gamesPlayed != null ? Number(stand.gamesPlayed) : (sum.gamesPlayed != null ? Number(sum.gamesPlayed) : 0);
     if (!isFinite(gp) || gp < 0) gp = 0;
     if (!gp) {
+      var fill = opts.preseasonFill;
+      if (fill && fill.gamesPlayed > 0) return profileFromPreseason(opts, fill);
       return {
         abbrev: opts.abbrev,
         name: opts.name,
@@ -370,7 +380,8 @@
         stXg: null,
         gamesPlayed: 0,
         restDays: opts.restDays != null ? opts.restDays : null,
-        b2b: opts.restDays === 1
+        b2b: opts.restDays === 1,
+        preseason: opts.preseasonFlags || {}
       };
     }
     var w = stand.wins != null ? stand.wins : sum.wins;
@@ -412,7 +423,53 @@
       stXg: mp.stXg != null ? mp.stXg : null,
       gamesPlayed: gp,
       restDays: opts.restDays != null ? opts.restDays : null,
-      b2b: opts.restDays === 1
+      b2b: opts.restDays === 1,
+      preseason: opts.preseasonFlags || {}
+    };
+  }
+
+  function profileFromPreseason(opts, fill) {
+    var w = fill.wins || 0;
+    var l = fill.losses || 0;
+    var otl = fill.otl || 0;
+    var gf = fill.goalsFor;
+    var ga = fill.goalsAgainst;
+    var flags = {};
+    if (fill.gamesPlayed > 0) flags.record = true;
+    if (fill.pdo != null) flags.pdo = true;
+    if (fill.last5 && fill.last5.games) flags.last5 = true;
+    if (fill.last5SvPct != null) flags.last5Sv = true;
+    if (fill.sogShare != null) flags.sogShare = true;
+    if (fill.restDays != null) flags.rest = true;
+    return {
+      abbrev: opts.abbrev,
+      name: opts.name,
+      logo: opts.logo,
+      record: recordString(w, l, otl),
+      wins: w,
+      losses: l,
+      otLosses: otl,
+      ptsPct: fill.gamesPlayed ? round(pointsPct(w, l, otl), 4) : null,
+      goalDiff: gf != null && ga != null ? gf - ga : null,
+      goalsFor: gf,
+      goalsAgainst: ga,
+      pdo: fill.pdo != null ? fill.pdo : null,
+      last5AvgGd: fill.last5 ? fill.last5.avg : null,
+      last5SvPct: fill.last5SvPct != null ? fill.last5SvPct : null,
+      last5Games: fill.last5 ? fill.last5.games : 0,
+      last5Total: fill.last5 ? fill.last5.total : null,
+      sogShare: fill.sogShare != null ? fill.sogShare : null,
+      xGoalsFor: null,
+      xGoalsAgainst: null,
+      gfMinusXg: null,
+      cfPct: null,
+      hdcfPct: null,
+      xgfPct5v5: null,
+      stXg: null,
+      gamesPlayed: fill.gamesPlayed || 0,
+      restDays: fill.restDays != null ? fill.restDays : null,
+      b2b: fill.restDays === 1,
+      preseason: flags
     };
   }
 

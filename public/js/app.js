@@ -36,14 +36,21 @@
     stXg: "Special-teams expected-goal differential — power-play expected goals minus shorthanded expected goals against."
   };
 
-  function pill(label, value, kind, fmt) {
+  function preMark(on) {
+    if (!on) return "";
+    var label = (state.data && state.data.preseasonLabel) || "2026-27 preseason";
+    return "<span class=\"pre\" title=\"" + String(label).replace(/"/g, "") + "\">pre</span>";
+  }
+
+  function pill(label, value, kind, fmt, pre) {
     fmt = fmt || function (v) { return v == null ? "—" : String(v); };
     var sign = HockeyStats.pillSign(value, kind);
     var cls = "pill" + (sign ? " " + sign : "");
     var title = PILL_TITLES[kind] || label;
+    if (pre) title += " " + ((state.data && state.data.preseasonLabel) || "2026-27 preseason") + ".";
     return (
       '<div class="' + cls + '" title="' + title.replace(/"/g, "&quot;") + '">' +
-        '<span class="lab">' + label + "</span>" +
+        '<span class="lab">' + label + (pre ? " " + preMark(true) : "") + "</span>" +
         '<span class="val">' + fmt(value) + "</span>" +
       "</div>"
     );
@@ -91,15 +98,28 @@
   }
 
   function teamPills(t) {
+    var pre = t.preseason || {};
     return (
       '<div class="pills">' +
-        pill("Shooting plus save percentage", t.pdo, "pdo") +
-        pill("Average goal differential last five games", t.last5AvgGd, "last5", function (v) { return signed(v, 2); }) +
-        pill("Actual goals versus expected goals", t.gfMinusXg, "xgDiff", function (v) { return signed(v, 1); }) +
-        pill("Shots-on-goal share", t.sogShare, "sogShare", function (v) { return v == null ? "—" : v + "%"; }) +
-        pill("Save percentage last five games", t.last5SvPct, "last5Sv", function (v) { return v == null ? "—" : v + "%"; }) +
+        pill("Shooting plus save percentage", t.pdo, "pdo", null, pre.pdo) +
+        pill("Average goal differential last five games", t.last5AvgGd, "last5", function (v) { return signed(v, 2); }, pre.last5) +
+        pill("Actual goals versus expected goals", t.gfMinusXg, "xgDiff", function (v) { return signed(v, 1); }, false) +
+        pill("Shots-on-goal share", t.sogShare, "sogShare", function (v) { return v == null ? "—" : v + "%"; }, pre.sogShare) +
+        pill("Save percentage last five games", t.last5SvPct, "last5Sv", function (v) { return v == null ? "—" : v + "%"; }, pre.last5Sv) +
       "</div>"
     );
+  }
+
+  function recordLine(t) {
+    return "<div>" + t.record + (t.preseason && t.preseason.record ? " " + preMark(true) : "") + "</div>";
+  }
+
+  function edgeDetail(e) {
+    if (!e || e.measured == null || e.totalMeasures == null) return "";
+    var low = !!e.lowData;
+    var text = "based on " + e.measured + " of " + e.totalMeasures + " stats";
+    if (low) text += " · low data";
+    return "<span class=\"edge-meta" + (low ? " low" : "") + "\">" + text + "</span>";
   }
 
   function extraPills(t) {
@@ -133,6 +153,7 @@
               '<span class="badge ' + (e.winner === "even" ? "even" : "") + '">' +
                 (e.winner === "even" ? "Even matchup" : "Edge: " + m.edgeName) +
               "</span>" +
+              edgeDetail(e) +
               marketFlag(m) +
             "</div>" +
             oddsLine(m) +
@@ -142,7 +163,7 @@
             '<div class="col">' +
               '<div class="team away">' +
                 (m.away.logo ? '<img src="' + m.away.logo + '" alt="">' : "") +
-                "<div><h3>" + m.away.name + "</h3><div>" + m.away.record + "</div></div>" +
+                "<div><h3>" + m.away.name + "</h3>" + recordLine(m.away) + "</div>" +
               "</div>" +
               teamPills(m.away) +
             "</div>" +
@@ -150,7 +171,7 @@
             '<div class="col">' +
               '<div class="team home">' +
                 (m.home.logo ? '<img src="' + m.home.logo + '" alt="">' : "") +
-                "<div><h3>" + m.home.name + "</h3><div>" + m.home.record + "</div></div>" +
+                "<div><h3>" + m.home.name + "</h3>" + recordLine(m.home) + "</div>" +
               "</div>" +
               teamPills(m.home) +
             "</div>" +
@@ -214,13 +235,15 @@
       return (
         "<tr data-game='" + m.id + "'>" +
           "<td>" + fmtTime(m.startTimeUTC) + "</td>" +
-          "<td>" + m.away.abbrev + " " + m.away.record + "</td>" +
-          "<td>" + m.home.abbrev + " " + m.home.record + "</td>" +
+          "<td>" + m.away.abbrev + " " + m.away.record + (m.away.preseason && m.away.preseason.record ? " " + preMark(true) : "") + "</td>" +
+          "<td>" + m.home.abbrev + " " + m.home.record + (m.home.preseason && m.home.preseason.record ? " " + preMark(true) : "") + "</td>" +
           "<td class='num'>" + m.edgeTeam +
+            (m.edge && m.edge.measured != null ? "<div class='edge-meta" + (m.edge.lowData ? " low" : "") + "'>" +
+              m.edge.measured + " of " + m.edge.totalMeasures + (m.edge.lowData ? " · low data" : "") + "</div>" : "") +
             (m.marketDisagree ? " <span class='mark miss' title='Disagrees with the DraftKings moneyline'>≠ DK</span>" : "") +
           "</td>" +
-          "<td>" + m.away.record + "</td>" +
-          "<td>" + m.home.record + "</td>" +
+          "<td>" + m.away.record + (m.away.preseason && m.away.preseason.record ? " " + preMark(true) : "") + "</td>" +
+          "<td>" + m.home.record + (m.home.preseason && m.home.preseason.record ? " " + preMark(true) : "") + "</td>" +
           "<td class='num'>" + signed((m.away.goalDiff || 0) - (m.home.goalDiff || 0), 0) + "</td>" +
           "<td class='num'>" + signed((m.away.pdo || 0) - (m.home.pdo || 0), 1) + "</td>" +
           "<td class='num'>" + signed((m.away.last5AvgGd || 0) - (m.home.last5AvgGd || 0), 2) + "</td>" +
