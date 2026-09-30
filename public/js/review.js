@@ -94,8 +94,11 @@
     }
     state.rows = payload.estimates || [];
     var extra = "";
-    if (payload.storageError) extra = " · not saved (" + payload.storage + ")";
-    else if (payload.persisted === false) extra = " · not saved";
+    if (payload.statsSeasonLabel) extra += " · stats " + payload.statsSeasonLabel;
+    if (payload.scoreboardSeasonLabel) extra += " · scoreboard " + payload.scoreboardSeasonLabel;
+    if (payload.note) extra += " · " + payload.note;
+    if (payload.storageError) extra += " · not saved (" + payload.storage + ")";
+    else if (payload.persisted === false) extra += " · not saved";
     renderSummary(payload.summary || HockeyArchive.summarize(state.rows), extra);
     var warn = $("storage-note");
     if (warn) {

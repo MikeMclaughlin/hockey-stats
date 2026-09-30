@@ -108,6 +108,20 @@
     var goalDiff = src.goalDifferential != null ? Number(src.goalDifferential) : (gf != null && ga != null ? gf - ga : null);
     var ptsPct = src.pointPct != null ? Number(src.pointPct) : (src.pointPctg != null ? Number(src.pointPctg) : null);
     var gamesPlayed = src.gamesPlayed != null ? Number(src.gamesPlayed) : (wins + losses + otl);
+    if (!gamesPlayed) {
+      return {
+        wins: 0,
+        losses: 0,
+        otl: 0,
+        goalDiff: null,
+        ptsPct: null,
+        goalsFor: null,
+        goalsAgainst: null,
+        gamesPlayed: 0,
+        source: useSummary ? "summary" : "standings",
+        seasonId: useSummary ? sumSeason : standSeason
+      };
+    }
     return {
       wins: wins,
       losses: losses,

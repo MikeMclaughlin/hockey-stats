@@ -340,7 +340,39 @@
     var sum = opts.summary || {};
     var mp = opts.moneypuck || {};
     var last5 = opts.last5 || null;
-    var gp = stand.gamesPlayed || sum.gamesPlayed || 0;
+    var gp = stand.gamesPlayed != null ? Number(stand.gamesPlayed) : (sum.gamesPlayed != null ? Number(sum.gamesPlayed) : 0);
+    if (!isFinite(gp) || gp < 0) gp = 0;
+    if (!gp) {
+      return {
+        abbrev: opts.abbrev,
+        name: opts.name,
+        logo: opts.logo,
+        record: "0–0–0",
+        wins: 0,
+        losses: 0,
+        otLosses: 0,
+        ptsPct: null,
+        goalDiff: null,
+        goalsFor: null,
+        goalsAgainst: null,
+        pdo: null,
+        last5AvgGd: null,
+        last5SvPct: null,
+        last5Games: 0,
+        last5Total: null,
+        sogShare: null,
+        xGoalsFor: null,
+        xGoalsAgainst: null,
+        gfMinusXg: null,
+        cfPct: null,
+        hdcfPct: null,
+        xgfPct5v5: null,
+        stXg: null,
+        gamesPlayed: 0,
+        restDays: opts.restDays != null ? opts.restDays : null,
+        b2b: opts.restDays === 1
+      };
+    }
     var w = stand.wins != null ? stand.wins : sum.wins;
     var l = stand.losses != null ? stand.losses : sum.losses;
     var otl = stand.otLosses != null ? stand.otLosses : sum.otLosses;

@@ -74,10 +74,13 @@
     }
     $("meta").textContent = (data.playerRowCount || 0) + " player-games · " +
       (data.gameCount || 0) + " boxscores" +
+      (data.statsSeasonLabel ? " · stats " + data.statsSeasonLabel : "") +
+      (data.scoreboardSeasonLabel ? " · scoreboard " + data.scoreboardSeasonLabel : "") +
       (data.earlySeason ? " · early season" : "");
     var note = "Boxscores through cache" +
       (data.fetchedThisCall ? " · fetched " + data.fetchedThisCall + " new this load" : " · using cache") +
       " · " + (data.playerRowCount || 0) + " player-games.";
+    if (data.seasonNote) note += " " + data.seasonNote;
     if (data.softened) {
       note += " Streak length softened from " + data.lengthRequested + " to " + data.length +
         " because most players have fewer than five games.";
