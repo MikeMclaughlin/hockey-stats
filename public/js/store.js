@@ -13,6 +13,7 @@
   var ROOT = path.join(__dirname, "..", "..");
   var DATA = path.join(ROOT, "data");
   var PREFIX = "hockey-stats/";
+  var WRITE_PROBE = "health-write-test.json";
 
   var KEYS = {
     estimates: "estimates.json",
@@ -25,6 +26,9 @@
   };
 
   var lastWrite = { at: null, name: null, error: null };
+
+  var BLOB_SETUP_HINT =
+    "Connect a private Vercel Blob store to the hockey-stats project (it sets BLOB_STORE_ID; @vercel/blob authenticates with the deployment OIDC token) or set BLOB_READ_WRITE_TOKEN. Either one enables Blob. The function filesystem is read-only until then.";
 
   function loadEnvLocal() {
     var file = path.join(ROOT, ".env.local");
@@ -51,8 +55,20 @@
     return String(process.env.BLOB_READ_WRITE_TOKEN || "").trim();
   }
 
+  function blobStoreId() {
+    return String(process.env.BLOB_STORE_ID || "").trim();
+  }
+
+  // token when BLOB_READ_WRITE_TOKEN is set (passed explicitly so it wins).
+  // oidc when only BLOB_STORE_ID is set. none uses the local file fallback.
+  function blobAuthMode() {
+    if (blobToken()) return "token";
+    if (blobStoreId()) return "oidc";
+    return "none";
+  }
+
   function usesBlob() {
-    return blobToken().length > 0;
+    return blobAuthMode() !== "none";
   }
 
   function onVercel() {
@@ -67,7 +83,17 @@
 
   function blobHint() {
     if (usesBlob() || !onVercel()) return null;
-    return "Add BLOB_READ_WRITE_TOKEN to the Vercel project hockey-stats (Storage → Blob). The function filesystem is read-only, so estimates cannot be saved until that token is set.";
+    return BLOB_SETUP_HINT;
+  }
+
+  // @vercel/blob 2.8 resolveBlobAuth: an explicit token always wins.
+  // OIDC: pass storeId and omit token and oidcToken so the SDK reads and
+  // refreshes VERCEL_OIDC_TOKEN itself. A manually passed oidcToken is not refreshed.
+  function blobAuthOptions() {
+    var mode = blobAuthMode();
+    if (mode === "token") return { token: blobToken() };
+    if (mode === "oidc") return { storeId: blobStoreId() };
+    return {};
   }
 
   function localPath(name) {
@@ -95,42 +121,35 @@
     return require("@vercel/blob");
   }
 
+  function streamToText(stream) {
+    if (!stream) return Promise.resolve("");
+    if (typeof Response === "function") return new Response(stream).text();
+    return new Promise(function (resolve, reject) {
+      var chunks = [];
+      stream.on("data", function (c) { chunks.push(Buffer.isBuffer(c) ? c : Buffer.from(c)); });
+      stream.on("end", function () { resolve(Buffer.concat(chunks).toString("utf8")); });
+      stream.on("error", reject);
+    });
+  }
+
   async function readBlobBody(name) {
-    var token = blobToken();
     var api = blobApi();
     var pathname = blobPath(name);
-    if (typeof api.get === "function") {
-      try {
-        var got = await api.get(pathname, { token: token, access: "private" });
-        if (got && got.stream && got.statusCode !== 404 && typeof Response === "function") {
-          var text = await new Response(got.stream).text();
-          if (text) return JSON.parse(text);
-        }
-      } catch (e) { /* list fallback */ }
-    }
-    var listed = await api.list({ prefix: pathname, token: token, limit: 20 });
-    var blobs = (listed && listed.blobs) || [];
-    var hit = null;
-    for (var i = 0; i < blobs.length; i++) {
-      if (blobs[i].pathname === pathname) { hit = blobs[i]; break; }
-    }
-    if (!hit && blobs.length === 1) hit = blobs[0];
-    if (!hit) return null;
-    var res = await fetch(hit.url, { headers: { Authorization: "Bearer " + token } });
-    if (!res.ok) return null;
-    return await res.json();
+    var got = await api.get(pathname, Object.assign({ access: "private", useCache: false }, blobAuthOptions()));
+    if (!got || got.statusCode === 404 || !got.stream) return null;
+    var text = await streamToText(got.stream);
+    if (!text) return null;
+    return JSON.parse(text);
   }
 
   async function writeBlob(name, body) {
-    var token = blobToken();
     var api = blobApi();
-    await api.put(blobPath(name), JSON.stringify(body), {
+    return api.put(blobPath(name), JSON.stringify(body), Object.assign({
       access: "private",
-      token: token,
       contentType: "application/json",
       addRandomSuffix: false,
       allowOverwrite: true
-    });
+    }, blobAuthOptions()));
   }
 
   async function readJson(name, fallback) {
@@ -147,10 +166,7 @@
   }
 
   function readonlyError() {
-    var err = new Error(
-      "EROFS: read-only file system, open 'data/" + "estimates.json'. " +
-      "Set BLOB_READ_WRITE_TOKEN on the Vercel project hockey-stats so estimates persist in Vercel Blob."
-    );
+    var err = new Error("EROFS: read-only file system. " + BLOB_SETUP_HINT);
     err.code = "BLOB_REQUIRED";
     return err;
   }
@@ -172,16 +188,57 @@
     }
   }
 
+  async function writeTest() {
+    var mode = blobAuthMode();
+    if (mode === "none") {
+      return { ok: false, skipped: true, error: null, at: null, mode: "none" };
+    }
+    var at = new Date().toISOString();
+    var probe = { probe: true, at: at, mode: mode };
+    try {
+      var putResult = await writeBlob(WRITE_PROBE, probe);
+      var headTarget = (putResult && putResult.url) || blobPath(WRITE_PROBE);
+      var api = blobApi();
+      var meta = await api.head(headTarget, blobAuthOptions());
+      var got = await readBlobBody(WRITE_PROBE);
+      var headOk = !!(meta && (meta.pathname === blobPath(WRITE_PROBE) || meta.url));
+      var readOk = !!(got && got.probe === true && got.at === at);
+      var ok = headOk && readOk;
+      return {
+        ok: ok,
+        skipped: false,
+        error: ok ? null : "write probe read-back mismatch",
+        at: at,
+        mode: mode,
+        pathname: (putResult && putResult.pathname) || blobPath(WRITE_PROBE)
+      };
+    } catch (e) {
+      return {
+        ok: false,
+        skipped: false,
+        error: String(e.message || e),
+        at: at,
+        mode: mode,
+        pathname: blobPath(WRITE_PROBE)
+      };
+    }
+  }
+
   return {
     KEYS: KEYS,
+    BLOB_SETUP_HINT: BLOB_SETUP_HINT,
     loadEnvLocal: loadEnvLocal,
     blobToken: blobToken,
+    blobStoreId: blobStoreId,
+    blobAuthMode: blobAuthMode,
+    blobAuthOptions: blobAuthOptions,
     usesBlob: usesBlob,
     onVercel: onVercel,
     storageMode: storageMode,
     blobHint: blobHint,
     readJson: readJson,
     writeJson: writeJson,
+    writeTest: writeTest,
     lastWrite: function () { return lastWrite; },
     listStored: async function () {
       if (!usesBlob()) {
@@ -194,7 +251,7 @@
       }
       try {
         var api = blobApi();
-        var listed = await api.list({ prefix: PREFIX, token: blobToken(), limit: 50 });
+        var listed = await api.list(Object.assign({ prefix: PREFIX, limit: 50 }, blobAuthOptions()));
         return ((listed && listed.blobs) || []).map(function (b) {
           return { name: b.pathname, uploadedAt: b.uploadedAt || null, source: "blob" };
         });
