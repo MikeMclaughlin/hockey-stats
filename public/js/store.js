@@ -22,7 +22,8 @@
     matchups: "matchups.json",
     playerGames: "player-games.json",
     matchupArchive: "matchup-archive-20262027.json",
-    cronStatus: "cron-status.json"
+    cronStatus: "cron-status.json",
+    statsSeason: "stats-season.json"
   };
 
   var lastWrite = { at: null, name: null, error: null };

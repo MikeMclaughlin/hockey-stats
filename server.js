@@ -19,10 +19,10 @@ var matchupCache = Object.create(null);
 
 function productVersion() {
   try {
-    var parts = String(require("./package.json").version || "1.2.0").split(".");
-    return (parts[0] || "1") + "." + (parts[1] || "2");
+    var parts = String(require("./package.json").version || "1.3.0").split(".");
+    return (parts[0] || "1") + "." + (parts[1] || "3");
   } catch (e) {
-    return "1.2";
+    return "1.3";
   }
 }
 
@@ -34,19 +34,27 @@ function formatSeason(id) {
   return start + "-" + end;
 }
 
-function seasonMeta(scoreSeason, statsSeason) {
+var LIVE_STATS_SEASON = 20262027;
+var EARLY_SEASON_GP = 10;
+var statsSeasonMemory = null;
+
+function seasonMeta(scoreSeason, statsSeason, maxGp) {
   var scoreLabel = formatSeason(scoreSeason);
   var statsLabel = formatSeason(statsSeason);
-  var same = String(scoreSeason) === String(statsSeason);
-  var note = "Scoreboard season " + scoreLabel + " · stats season " + statsLabel + ".";
-  if (!same) {
-    note += " " + scoreLabel + " has not started, so records and rates are the " + statsLabel + " regular season.";
+  var prior = Number(statsSeason) < Number(scoreSeason);
+  var early = Number(statsSeason) === LIVE_STATS_SEASON && maxGp != null && maxGp > 0 && maxGp < EARLY_SEASON_GP;
+  var note = "";
+  if (prior) {
+    note = "No " + scoreLabel + " regular-season game is final yet, so records and rates are the " + statsLabel + " regular season.";
+  } else if (early) {
+    note = statsLabel + " is early. Records and rates use a small sample.";
   }
   return {
     scoreboardSeason: scoreSeason,
     statsSeason: statsSeason,
     scoreboardSeasonLabel: scoreLabel,
     statsSeasonLabel: statsLabel,
+    earlySample: early,
     note: note
   };
 }
@@ -122,7 +130,7 @@ function sleep(ms) {
 
 function httpsGet(urlStr, cb, attempt) {
   attempt = attempt || 1;
-  https.get(urlStr, { headers: { "User-Agent": "hockey-stats/1.2", Accept: "*/*" } }, function (up) {
+  https.get(urlStr, { headers: { "User-Agent": "hockey-stats/1.3", Accept: "*/*" } }, function (up) {
     if (up.statusCode >= 300 && up.statusCode < 400 && up.headers.location) {
       up.resume();
       httpsGet(up.headers.location, cb, attempt);
@@ -194,14 +202,143 @@ function seasonIdFromScore(score) {
   return 20252026;
 }
 
-function statsSeasonFor(seasonId, score) {
-  /* If opening night / no games played this season, use prior season advanced stats. */
-  var games = score.games || [];
-  var anyLive = games.some(function (g) {
-    return g.gameState && g.gameState !== "FUT" && g.gameState !== "PRE";
+function isFinalState(state) {
+  var st = String(state || "").toUpperCase();
+  return st === "OFF" || st === "FINAL" || st.indexOf("FINAL") === 0;
+}
+
+function priorSeasonId(seasonId) {
+  var n = Number(seasonId);
+  if (!isFinite(n) || n < 10000000) return 20252026;
+  return n - 10001;
+}
+
+function standingsSnapshot(payload, seasonId) {
+  var rows = (payload && payload.standings) || [];
+  var maxGp = 0;
+  var played = false;
+  rows.forEach(function (row) {
+    if (Number(row.seasonId) !== Number(seasonId)) return;
+    var gp = Number(row.gamesPlayed) || 0;
+    if (gp > maxGp) maxGp = gp;
+    if (gp > 0) played = true;
   });
-  if (seasonId >= 20262027 && !anyLive) return 20252026;
-  return seasonId;
+  return { played: played, maxGp: maxGp };
+}
+
+function sameSeasonRow(row, seasonId) {
+  if (!row) return null;
+  if (row.seasonId == null) return row;
+  if (Number(row.seasonId) !== Number(seasonId)) return null;
+  return row;
+}
+
+async function readStatsSeasonLock() {
+  if (statsSeasonMemory && statsSeasonMemory.locked && Number(statsSeasonMemory.statsSeason) >= LIVE_STATS_SEASON) {
+    return statsSeasonMemory;
+  }
+  var cached = await store.readJson(store.KEYS.statsSeason, null);
+  if (cached && cached.locked && Number(cached.statsSeason) >= LIVE_STATS_SEASON) {
+    statsSeasonMemory = {
+      statsSeason: Number(cached.statsSeason),
+      locked: true,
+      source: cached.source || "cache"
+    };
+    return statsSeasonMemory;
+  }
+  return null;
+}
+
+async function detectFinalRegularGame(seasonId) {
+  var startYear = Math.floor(Number(seasonId) / 10000);
+  var cursor = startYear + "-09-01";
+  var today = new Date().toISOString().slice(0, 10);
+  var guard = 0;
+  while (cursor <= today && guard < 16) {
+    guard += 1;
+    try {
+      var sched = await getJson("https://api-web.nhle.com/v1/schedule/" + cursor);
+      var found = false;
+      var foundDate = null;
+      (sched.gameWeek || []).forEach(function (week) {
+        (week.games || []).forEach(function (g) {
+          if (found) return;
+          if (Number(g.season) !== Number(seasonId)) return;
+          if (Number(g.gameType) !== 2) return;
+          if (!isFinalState(g.gameState)) return;
+          found = true;
+          foundDate = g.gameDate || cursor;
+        });
+      });
+      if (found) return { yes: true, source: "schedule", date: foundDate };
+      var next = sched.nextStartDate;
+      if (!next || next <= cursor) cursor = shiftDate(cursor, 7);
+      else cursor = next;
+    } catch (e) {
+      cursor = shiftDate(cursor, 7);
+    }
+  }
+  try {
+    var est = await store.readJson(store.KEYS.estimates, null);
+    var byId = (est && est.byId) || {};
+    var ids = Object.keys(byId);
+    for (var i = 0; i < ids.length; i++) {
+      var row = byId[ids[i]];
+      if (!row || Number(row.seasonId) !== Number(seasonId)) continue;
+      if (row.graded || row.actualAway != null || row.actualHome != null) {
+        return { yes: true, source: "archive", date: row.gameDate || null };
+      }
+    }
+    var arch = await store.readJson(store.KEYS.matchupArchive, null);
+    var games = (arch && arch.games) || (arch && arch.byId) || null;
+    if (games && typeof games === "object") {
+      var keys = Object.keys(games);
+      for (var j = 0; j < keys.length; j++) {
+        var g = games[keys[j]];
+        if (!g || Number(g.seasonId) !== Number(seasonId)) continue;
+        if (Number(g.gameType) && Number(g.gameType) !== 2) continue;
+        if (g.graded || g.actualAway != null || g.actualHome != null || isFinalState(g.gameState)) {
+          if (g.actualAway != null || g.actualHome != null || g.graded) {
+            return { yes: true, source: "archive", date: g.gameDate || null };
+          }
+        }
+      }
+    }
+  } catch (e) { /* archive is optional evidence */ }
+  return { yes: false, source: "none" };
+}
+
+/**
+ * Stats season is global: once any live-season regular-season game is final,
+ * every viewed date uses that season. The lock is cached and is not cleared.
+ */
+async function resolveStatsSeason(scoreboardSeason, standingsPayload) {
+  var locked = await readStatsSeasonLock();
+  if (!locked) {
+    var snap = standingsPayload ? standingsSnapshot(standingsPayload, LIVE_STATS_SEASON) : { played: false, maxGp: 0 };
+    var detected = snap.played
+      ? { yes: true, source: "standings" }
+      : await detectFinalRegularGame(LIVE_STATS_SEASON);
+    if (detected.yes) {
+      var body = {
+        locked: true,
+        statsSeason: LIVE_STATS_SEASON,
+        detectedAt: new Date().toISOString(),
+        source: detected.source,
+        throughDate: detected.date || null
+      };
+      statsSeasonMemory = { statsSeason: LIVE_STATS_SEASON, locked: true, source: detected.source };
+      try { await store.writeJson(store.KEYS.statsSeason, body); } catch (e) { /* keep the in-memory lock */ }
+      locked = statsSeasonMemory;
+    }
+  }
+  var board = Number(scoreboardSeason) || priorSeasonId(LIVE_STATS_SEASON);
+  var statsSeason = locked ? Number(locked.statsSeason) : (board >= LIVE_STATS_SEASON ? priorSeasonId(board) : board);
+  return {
+    statsSeason: statsSeason,
+    locked: !!locked,
+    source: locked ? (locked.source || "cache") : "prior"
+  };
 }
 
 function mpSeasonYear(seasonId) {
@@ -227,7 +364,8 @@ async function buildMatchups(date) {
     oddsById = Object.create(null);
   }
   var seasonId = seasonIdFromScore(score);
-  var statsSeason = statsSeasonFor(seasonId, score);
+  var resolved = await resolveStatsSeason(seasonId, standings);
+  var statsSeason = resolved.statsSeason;
   var summaryUrl =
     "https://api.nhle.com/stats/rest/en/team/summary?cayenneExp=seasonId=" +
     statsSeason + "%20and%20gameTypeId=2";
@@ -255,7 +393,9 @@ async function buildMatchups(date) {
     if (g.homeTeam && g.homeTeam.abbrev) needed[g.homeTeam.abbrev] = true;
   });
 
-  var mpGamesCache = await store.readJson(store.KEYS.mpGames, []);
+  var mpGamesCache = mpSeasonYear(statsSeason) === "2025"
+    ? await store.readJson(store.KEYS.mpGames, [])
+    : [];
   var last5Map = {};
   var formMap = {};
   var abbrevs = Object.keys(needed);
@@ -264,7 +404,10 @@ async function buildMatchups(date) {
       var url = "https://api-web.nhle.com/v1/club-schedule-season/" + ab + "/" + statsSeason;
       return getJson(url)
         .then(function (sched) {
-          last5Map[ab] = last5FromSchedule(sched, ab);
+          var regular = (sched.games || []).filter(function (g) {
+            return !g.gameType || Number(g.gameType) === 2;
+          });
+          last5Map[ab] = last5FromSchedule({ games: regular }, ab);
           formMap[ab] = backtest.scheduleForm(sched.games || [], ab, score.currentDate);
         })
         .catch(function () {
@@ -281,8 +424,8 @@ async function buildMatchups(date) {
       abbrev: ab,
       name: meta.name || (teamObj.name && teamObj.name.default) || ab,
       logo: teamObj.logo,
-      stand: alignStand(standMap[ab], sumMap[ab]),
-      summary: sumMap[ab] || {},
+      stand: alignStand(sameSeasonRow(standMap[ab], statsSeason), sameSeasonRow(sumMap[ab], statsSeason)),
+      summary: sameSeasonRow(sumMap[ab], statsSeason) || {},
       moneypuck: mp[ab] || {},
       last5: last5Map[ab],
       last5SvPct: stats.last5SavePctFromMp(mpGamesCache, ab, score.currentDate),
@@ -336,7 +479,7 @@ async function buildMatchups(date) {
     };
   });
 
-  var seasons = seasonMeta(seasonId, statsSeason);
+  var seasons = seasonMeta(seasonId, statsSeason, standingsSnapshot(standings, statsSeason).maxGp);
   return {
     generatedAt: new Date().toISOString(),
     currentDate: score.currentDate,
@@ -344,6 +487,9 @@ async function buildMatchups(date) {
     nextDate: score.nextDate,
     seasonId: seasonId,
     statsSeason: statsSeason,
+    statsSeasonSource: resolved.source,
+    statsSeasonLocked: resolved.locked,
+    earlySample: seasons.earlySample,
     scoreboardSeason: seasons.scoreboardSeason,
     scoreboardSeasonLabel: seasons.scoreboardSeasonLabel,
     statsSeasonLabel: seasons.statsSeasonLabel,
@@ -434,11 +580,25 @@ async function estimatesPayload(est) {
     return String(a.gameDate || "").localeCompare(String(b.gameDate || "")) ||
       String(a.startTimeUTC || "").localeCompare(String(b.startTimeUTC || ""));
   });
-  return {
+  var payload = {
     generatedAt: new Date().toISOString(),
     estimates: estimates,
     summary: archive.summarize(estimates)
   };
+  try {
+    var score = await getJson("https://api-web.nhle.com/v1/score/now");
+    var standings = await getJson("https://api-web.nhle.com/v1/standings/now");
+    var seasonId = seasonIdFromScore(score);
+    var resolved = await resolveStatsSeason(seasonId, standings);
+    var seasons = seasonMeta(seasonId, resolved.statsSeason, standingsSnapshot(standings, resolved.statsSeason).maxGp);
+    payload.statsSeason = resolved.statsSeason;
+    payload.statsSeasonLabel = seasons.statsSeasonLabel;
+    payload.scoreboardSeason = seasonId;
+    payload.scoreboardSeasonLabel = seasons.scoreboardSeasonLabel;
+    payload.note = seasons.note;
+    payload.earlySample = seasons.earlySample;
+  } catch (e) { /* review still loads without the season line */ }
+  return payload;
 }
 
 async function gradeEstimates() {
@@ -610,21 +770,23 @@ async function buildTeamStats() {
   var score = await getJson("https://api-web.nhle.com/v1/score/now");
   var standings = await getJson("https://api-web.nhle.com/v1/standings/now");
   var seasonId = seasonIdFromScore(score);
-  var statsSeason = statsSeasonFor(seasonId, score);
+  var resolved = await resolveStatsSeason(seasonId, standings);
+  var statsSeason = resolved.statsSeason;
   var summary = await getJson(
     "https://api.nhle.com/stats/rest/en/team/summary?cayenneExp=seasonId=" +
       statsSeason + "%20and%20gameTypeId=2"
   );
   var standMap = indexStandings(standings);
   var sumMap = indexSummary(summary);
-  var types = [1, 2];
-  try {
-    var probe = await getJson("https://api-web.nhle.com/v1/club-schedule-season/TOR/" + seasonId);
-    if ((probe.games || []).some(function (g) {
-      var st = String(g.gameState || "").toUpperCase();
-      return g.gameType === 2 && (st === "OFF" || st === "FINAL" || st.indexOf("FINAL") === 0);
-    })) types = [2];
-  } catch (e) { /* keep preseason+regular */ }
+  var types = resolved.locked ? [2] : [1, 2];
+  if (!resolved.locked) {
+    try {
+      var probe = await getJson("https://api-web.nhle.com/v1/club-schedule-season/TOR/" + statsSeason);
+      if ((probe.games || []).some(function (g) {
+        return Number(g.gameType) === 2 && isFinalState(g.gameState);
+      })) types = [2];
+    } catch (e) { /* keep preseason+regular */ }
+  }
   var rows = [];
   var latest = "";
   for (var i = 0; i < stats.TEAMS.length; i++) {
@@ -634,26 +796,31 @@ async function buildTeamStats() {
     var awayForm = form;
     try {
       var sched = await getJson(
-        "https://api-web.nhle.com/v1/club-schedule-season/" + t.abbrev + "/" + seasonId
+        "https://api-web.nhle.com/v1/club-schedule-season/" + t.abbrev + "/" + statsSeason
       );
       form = teamStats.last5Form(sched.games || [], t.abbrev, { types: types });
       homeForm = teamStats.last5Form(sched.games || [], t.abbrev, { types: types, venue: "home" });
       awayForm = teamStats.last5Form(sched.games || [], t.abbrev, { types: types, venue: "away" });
     } catch (e) { /* keep empty form */ }
-    var row = teamStats.row(t, standMap[t.abbrev], sumMap[t.abbrev], form);
-    row.homeSplit = teamStats.row(t, standMap[t.abbrev], sumMap[t.abbrev], homeForm);
-    row.awaySplit = teamStats.row(t, standMap[t.abbrev], sumMap[t.abbrev], awayForm);
+    var standRow = sameSeasonRow(standMap[t.abbrev], statsSeason);
+    var sumRow = sameSeasonRow(sumMap[t.abbrev], statsSeason);
+    var row = teamStats.row(t, standRow, sumRow, form);
+    row.homeSplit = teamStats.row(t, standRow, sumRow, homeForm);
+    row.awaySplit = teamStats.row(t, standRow, sumRow, awayForm);
     (form.list || []).forEach(function (g) {
       if (g.date && g.date > latest) latest = g.date;
     });
     rows.push(row);
   }
   rows.sort(function (a, b) { return (b.wins || 0) - (a.wins || 0); });
-  var seasons = seasonMeta(seasonId, statsSeason);
+  var seasons = seasonMeta(seasonId, statsSeason, standingsSnapshot(standings, statsSeason).maxGp);
   return {
     generatedAt: new Date().toISOString(),
     seasonId: statsSeason,
     statsSeason: statsSeason,
+    statsSeasonSource: resolved.source,
+    statsSeasonLocked: resolved.locked,
+    earlySample: seasons.earlySample,
     scoreboardSeason: seasonId,
     statsSeasonLabel: seasons.statsSeasonLabel,
     scoreboardSeasonLabel: seasons.scoreboardSeasonLabel,
@@ -728,6 +895,23 @@ async function buildPlayerStreaks(query) {
   built.lengthRequested = plan.requested;
   built.earlySeason = plan.early;
   built.softened = plan.softened;
+  try {
+    var streakSeasonId = seasonIdFromScore(score);
+    var streakStandings = null;
+    try { streakStandings = await getJson("https://api-web.nhle.com/v1/standings/now"); } catch (e) { streakStandings = null; }
+    var streakResolved = await resolveStatsSeason(streakSeasonId, streakStandings);
+    var streakSeasons = seasonMeta(
+      streakSeasonId,
+      streakResolved.statsSeason,
+      standingsSnapshot(streakStandings, streakResolved.statsSeason).maxGp
+    );
+    built.statsSeason = streakResolved.statsSeason;
+    built.statsSeasonLabel = streakSeasons.statsSeasonLabel;
+    built.scoreboardSeason = streakSeasonId;
+    built.scoreboardSeasonLabel = streakSeasons.scoreboardSeasonLabel;
+    built.seasonNote = streakSeasons.note;
+    built.earlySample = streakSeasons.earlySample;
+  } catch (e) { /* streaks still return without the season label */ }
   built.maxPlayerGames = plan.maxGames;
   built.emptyHint = streaks.emptyHint(plan);
   return built;

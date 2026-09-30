@@ -117,9 +117,9 @@
         (data.throughDate ? " · last-five through " + data.throughDate : "") +
         (data.formTypes && data.formTypes.length === 1 ? " · regular season form" : " · includes preseason form");
       var note = $("note");
-      if (note && data.note) {
-        note.textContent = data.note;
-        note.classList.remove("hidden");
+      if (note) {
+        note.textContent = data.note || "";
+        note.classList.toggle("hidden", !data.note);
       }
       render();
     })

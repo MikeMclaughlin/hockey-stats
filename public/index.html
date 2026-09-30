@@ -24,7 +24,7 @@
         <a href="/review.html">Review</a>
         <a href="/backtest.html">Backtest</a>
       </nav>
-      <span class="app-version" title="App version">v1.2</span>
+      <span class="app-version" title="App version">v1.3</span>
       <div class="date-nav">
         <button type="button" id="prev-date">Previous day</button>
         <button type="button" id="today-date">Today</button>
@@ -82,13 +82,13 @@
         <li><strong>5v5 xGF%</strong> — MoneyPuck 5-on-5 expected goals for / (xGF + xGA).</li>
         <li><strong>Estimated score</strong> — projected goals from season scoring rate, xG rate, last-5 form, HDCF tilt, and a small home-ice bump.</li>
         <li><strong>Moneyline / O/U</strong> — NHL partner board for the US (DraftKings when posted). A “≠ DK” mark means the model edge and the DraftKings favorite are different teams.</li>
-        <li><strong>Seasons</strong> — the scoreboard season is the slate on the board. The stats season is the year behind records and rates. They differ until the new season has a completed game.</li>
+        <li><strong>Seasons</strong> — the scoreboard season is the slate on the board. Records and rates use the latest season that already has a final regular-season game, for every date, and that choice stays. Before any final, they stay on the previous regular season. Early in the season the sample is small. A team with no games in the stats season shows 0–0–0 and blank rates.</li>
         <li><strong>Updates</strong> — a scheduled job refreshes the board, re-locks estimates before puck drop, and grades finals. Opening the page is not required.</li>
       </ul>
     </section>
   </main>
   <footer>
-    <span>hockey-stats v1.2</span>
+    <span>hockey-stats v1.3</span>
     <span>NHL.com schedule + standings · MoneyPuck team summary</span>
   </footer>
   <script src="/js/stats.js"></script>

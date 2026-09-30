@@ -41,4 +41,15 @@ var current = ts.recordFromSources(
 );
 assert.strictEqual(current.wins, 1);
 assert.strictEqual(current.otl, 0);
+
+var idle = ts.recordFromSources(
+  { seasonId: 20262027, wins: 0, losses: 0, otLosses: 0, gamesPlayed: 0, goalDifferential: 0, goalFor: 0, goalAgainst: 0 },
+  null
+);
+assert.strictEqual(idle.wins, 0);
+assert.strictEqual(idle.losses, 0);
+assert.strictEqual(idle.otl, 0);
+assert.strictEqual(idle.gamesPlayed, 0);
+assert.strictEqual(idle.goalDiff, null);
+assert.strictEqual(idle.ptsPct, null);
 console.log("teamStats.test.js ok");
