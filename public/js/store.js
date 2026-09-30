@@ -20,7 +20,8 @@
     mpGames: "mp-games-2025.json",
     matchups: "matchups.json",
     playerGames: "player-games.json",
-    matchupArchive: "matchup-archive-20262027.json"
+    matchupArchive: "matchup-archive-20262027.json",
+    cronStatus: "cron-status.json"
   };
 
   var lastWrite = { at: null, name: null, error: null };
@@ -54,6 +55,21 @@
     return blobToken().length > 0;
   }
 
+  function onVercel() {
+    return !!(process.env.VERCEL || process.env.NOW_REGION);
+  }
+
+  function storageMode() {
+    if (usesBlob()) return "blob";
+    if (onVercel()) return "readonly";
+    return "local";
+  }
+
+  function blobHint() {
+    if (usesBlob() || !onVercel()) return null;
+    return "Add BLOB_READ_WRITE_TOKEN to the Vercel project hockey-stats (Storage → Blob). The function filesystem is read-only, so estimates cannot be saved until that token is set.";
+  }
+
   function localPath(name) {
     return path.join(DATA, name);
   }
@@ -79,26 +95,30 @@
     return require("@vercel/blob");
   }
 
-  async function readBlob(name, fallback) {
+  async function readBlobBody(name) {
     var token = blobToken();
-    try {
-      var api = blobApi();
-      var listed = await api.list({ prefix: blobPath(name), token: token, limit: 20 });
-      var blobs = (listed && listed.blobs) || [];
-      var hit = null;
-      for (var i = 0; i < blobs.length; i++) {
-        if (blobs[i].pathname === blobPath(name)) { hit = blobs[i]; break; }
-      }
-      if (!hit && blobs.length === 1) hit = blobs[0];
-      if (!hit) return fallback;
-      var res = await fetch(hit.url, {
-        headers: { Authorization: "Bearer " + token }
-      });
-      if (!res.ok) return fallback;
-      return await res.json();
-    } catch (e) {
-      return fallback;
+    var api = blobApi();
+    var pathname = blobPath(name);
+    if (typeof api.get === "function") {
+      try {
+        var got = await api.get(pathname, { token: token, access: "private" });
+        if (got && got.stream && got.statusCode !== 404 && typeof Response === "function") {
+          var text = await new Response(got.stream).text();
+          if (text) return JSON.parse(text);
+        }
+      } catch (e) { /* list fallback */ }
     }
+    var listed = await api.list({ prefix: pathname, token: token, limit: 20 });
+    var blobs = (listed && listed.blobs) || [];
+    var hit = null;
+    for (var i = 0; i < blobs.length; i++) {
+      if (blobs[i].pathname === pathname) { hit = blobs[i]; break; }
+    }
+    if (!hit && blobs.length === 1) hit = blobs[0];
+    if (!hit) return null;
+    var res = await fetch(hit.url, { headers: { Authorization: "Bearer " + token } });
+    if (!res.ok) return null;
+    return await res.json();
   }
 
   async function writeBlob(name, body) {
@@ -114,15 +134,34 @@
   }
 
   async function readJson(name, fallback) {
-    if (usesBlob()) return readBlob(name, fallback);
+    if (usesBlob()) {
+      try {
+        var fromBlob = await readBlobBody(name);
+        if (fromBlob != null) return fromBlob;
+      } catch (e) { /* fall through to the bundled file */ }
+      var mirrored = readLocal(name, undefined);
+      if (mirrored !== undefined) return mirrored;
+      return fallback;
+    }
     return readLocal(name, fallback);
+  }
+
+  function readonlyError() {
+    var err = new Error(
+      "EROFS: read-only file system, open 'data/" + "estimates.json'. " +
+      "Set BLOB_READ_WRITE_TOKEN on the Vercel project hockey-stats so estimates persist in Vercel Blob."
+    );
+    err.code = "BLOB_REQUIRED";
+    return err;
   }
 
   async function writeJson(name, body) {
     try {
       if (usesBlob()) {
         await writeBlob(name, body);
-        try { writeLocal(name, body); } catch (e) { /* mirror optional */ }
+        try { writeLocal(name, body); } catch (e) { /* mirror optional on Vercel */ }
+      } else if (onVercel()) {
+        throw readonlyError();
       } else {
         writeLocal(name, body);
       }
@@ -138,6 +177,9 @@
     loadEnvLocal: loadEnvLocal,
     blobToken: blobToken,
     usesBlob: usesBlob,
+    onVercel: onVercel,
+    storageMode: storageMode,
+    blobHint: blobHint,
     readJson: readJson,
     writeJson: writeJson,
     lastWrite: function () { return lastWrite; },

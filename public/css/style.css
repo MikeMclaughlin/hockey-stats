@@ -80,6 +80,37 @@ body {
   text-align: right;
   margin: 0;
 }
+.app-version {
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 0.15rem 0.55rem;
+  color: var(--muted);
+  background: #fff;
+}
+.date-nav {
+  display: flex;
+  gap: 0.35rem;
+}
+.date-nav button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.badge.warn {
+  background: #8a5a00;
+}
+tr.differ td {
+  background: #fff6e8;
+}
+select#season {
+  font: inherit;
+  padding: 0.35rem 0.45rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+}
 .nav {
   display: flex;
   gap: 0.7rem;

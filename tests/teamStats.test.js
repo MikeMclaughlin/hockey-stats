@@ -25,4 +25,20 @@ var row = ts.row(
 assert.strictEqual(row.abbrev, "TOR");
 assert.strictEqual(row.l5ot, 2);
 assert.strictEqual(row.sogGp, 31.2);
+
+var prior = ts.recordFromSources(
+  { seasonId: 20262027, wins: 0, losses: 0, otLosses: 0, gamesPlayed: 0 },
+  { seasonId: 20252026, wins: 43, losses: 30, otLosses: 9, gamesPlayed: 82, goalsFor: 261, goalsAgainst: 238 }
+);
+assert.strictEqual(prior.wins, 43);
+assert.strictEqual(prior.losses, 30);
+assert.strictEqual(prior.otl, 9);
+assert.strictEqual(prior.goalDiff, 23);
+
+var current = ts.recordFromSources(
+  { seasonId: 20262027, wins: 1, losses: 0, otLosses: 0, gamesPlayed: 1, pointPctg: 1 },
+  { seasonId: 20262027, wins: 1, losses: 0, otLosses: 0, gamesPlayed: 1 }
+);
+assert.strictEqual(current.wins, 1);
+assert.strictEqual(current.otl, 0);
 console.log("teamStats.test.js ok");

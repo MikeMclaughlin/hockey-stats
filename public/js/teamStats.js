@@ -78,21 +78,70 @@
     };
   }
 
+  function numOrNull(v) {
+    if (v == null || v === "") return null;
+    var n = Number(v);
+    return isFinite(n) ? n : null;
+  }
+
+  /**
+   * Wins/losses/OTL must come from the same season as the shot summary.
+   * Live standings (often 0-0-0 before the new season) are ignored when
+   * their seasonId does not match the summary season.
+   */
+  function recordFromSources(stand, summary) {
+    stand = stand || {};
+    summary = summary || {};
+    var standSeason = numOrNull(stand.seasonId);
+    var sumSeason = numOrNull(summary.seasonId);
+    var seasonsDiffer = standSeason != null && sumSeason != null && standSeason !== sumSeason;
+    var sumHas = summary.wins != null || summary.losses != null || summary.otLosses != null ||
+      Number(summary.gamesPlayed) > 0;
+    var useSummary = (seasonsDiffer && sumHas) ||
+      ((stand.wins == null && stand.losses == null) && sumHas);
+    var src = useSummary ? summary : stand;
+    var wins = src.wins != null ? Number(src.wins) : 0;
+    var losses = src.losses != null ? Number(src.losses) : 0;
+    var otl = src.otLosses != null ? Number(src.otLosses) : (src.otl != null ? Number(src.otl) : 0);
+    var gf = src.goalFor != null ? Number(src.goalFor) : (src.goalsFor != null ? Number(src.goalsFor) : null);
+    var ga = src.goalAgainst != null ? Number(src.goalAgainst) : (src.goalsAgainst != null ? Number(src.goalsAgainst) : null);
+    var goalDiff = src.goalDifferential != null ? Number(src.goalDifferential) : (gf != null && ga != null ? gf - ga : null);
+    var ptsPct = src.pointPct != null ? Number(src.pointPct) : (src.pointPctg != null ? Number(src.pointPctg) : null);
+    var gamesPlayed = src.gamesPlayed != null ? Number(src.gamesPlayed) : (wins + losses + otl);
+    return {
+      wins: wins,
+      losses: losses,
+      otl: otl,
+      goalDiff: goalDiff,
+      ptsPct: ptsPct,
+      goalsFor: gf,
+      goalsAgainst: ga,
+      gamesPlayed: gamesPlayed,
+      source: useSummary ? "summary" : "standings",
+      seasonId: useSummary ? sumSeason : standSeason
+    };
+  }
+
   function row(team, stand, summary, form) {
     stand = stand || {};
     summary = summary || {};
     form = form || { games: 0, w: 0, l: 0, ot: 0, gfGp: null, gaGp: null };
-    var gp = stand.gamesPlayed || summary.gamesPlayed || 0;
+    var rec = recordFromSources(stand, summary);
+    var gp = rec.gamesPlayed || stand.gamesPlayed || summary.gamesPlayed || 0;
     var sog = summary.shotsForPerGame;
     var soga = summary.shotsAgainstPerGame;
     if (sog == null && summary.shotsFor != null && gp) sog = summary.shotsFor / gp;
     if (soga == null && summary.shotsAgainst != null && gp) soga = summary.shotsAgainst / gp;
+    var ptsPct = rec.ptsPct;
+    if (ptsPct == null && gp) {
+      ptsPct = Math.round((((rec.wins * 2) + rec.otl) / (gp * 2)) * 1000) / 1000;
+    }
     return {
       abbrev: team.abbrev,
       name: team.name,
-      wins: stand.wins != null ? stand.wins : summary.wins,
-      losses: stand.losses != null ? stand.losses : summary.losses,
-      otl: stand.otLosses != null ? stand.otLosses : summary.otLosses,
+      wins: rec.wins,
+      losses: rec.losses,
+      otl: rec.otl,
       sogGp: sog != null ? Math.round(Number(sog) * 10) / 10 : null,
       sogaGp: soga != null ? Math.round(Number(soga) * 10) / 10 : null,
       l5w: form.w,
@@ -100,11 +149,11 @@
       l5ot: form.ot,
       l5gfGp: form.gfGp,
       l5gaGp: form.gaGp,
-      ptsPct: stand.pointPct != null ? stand.pointPct : (gp ? Math.round(((num(stand.points) || ((num(stand.wins) * 2) + num(stand.otLosses))) / (gp * 2)) * 1000) / 1000 : null),
-      goalDiff: stand.goalDifferential != null ? stand.goalDifferential : null,
+      ptsPct: ptsPct,
+      goalDiff: rec.goalDiff,
       lastFive: form.list || []
     };
   }
 
-  return { last5Form: last5Form, row: row };
+  return { last5Form: last5Form, row: row, recordFromSources: recordFromSources };
 });

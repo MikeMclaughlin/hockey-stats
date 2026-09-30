@@ -2,5 +2,10 @@
   "functions": {
     "api/*.js": { "maxDuration": 60, "includeFiles": "{public,data}/**" },
     "server.js": { "maxDuration": 60, "includeFiles": "{public,data}/**" }
-  }
+  },
+  "crons": [
+    { "path": "/api/cron", "schedule": "0 4 * * *" },
+    { "path": "/api/cron", "schedule": "0 13 * * *" },
+    { "path": "/api/cron", "schedule": "0 21 * * *" }
+  ]
 }

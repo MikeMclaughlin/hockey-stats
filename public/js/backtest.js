@@ -304,7 +304,7 @@
     sum.maeGoals = graded.length ? stats.round(mae / graded.length, 2) : null;
     sum.skipped = rows.length - graded.length;
     sum.games = rows.length;
-    return { season: "20252026", rows: rows, summary: sum };
+    return { season: String((opts && opts.season) || "20252026"), rows: rows, summary: sum };
   }
 
   return {

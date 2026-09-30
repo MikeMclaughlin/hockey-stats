@@ -18,16 +18,72 @@
     return { version: 1, byId: {} };
   }
 
+  function parseTime(iso) {
+    var t = Date.parse(iso || "");
+    return isFinite(t) ? t : null;
+  }
+
   /**
-   * First projection for a game is frozen. Later refreshes do not rewrite it.
+   * Puck drop freezes the lock. Before that, a changed projection may replace it.
    */
-  function freezeEstimate(store, row) {
+  function hasStarted(row, nowMs) {
+    if (!row) return false;
+    if (isFinalState(row.gameState)) return true;
+    var state = String(row.gameState || "").toUpperCase();
+    if (state === "LIVE" || state === "CRIT" || state.indexOf("LIVE") === 0) return true;
+    var start = parseTime(row.startTimeUTC);
+    if (start != null && nowMs != null && start <= nowMs) return true;
+    return false;
+  }
+
+  function shouldRelock(existing, incoming, now) {
+    if (!existing || existing.graded) return false;
+    if (!incoming) return false;
+    var nowMs = parseTime(now);
+    if (nowMs == null) nowMs = Date.now();
+    if (hasStarted(existing, nowMs) || hasStarted(incoming, nowMs)) return false;
+    if (isFinalState(incoming.gameState)) return false;
+    if (incoming.projectedAway == null || incoming.projectedHome == null) return false;
+    return Number(existing.projectedAway) !== Number(incoming.projectedAway) ||
+      Number(existing.projectedHome) !== Number(incoming.projectedHome);
+  }
+
+  function applyProjection(existing, row, now) {
+    if (!existing.priorLocks) existing.priorLocks = [];
+    existing.priorLocks.push({
+      projectedAway: existing.projectedAway,
+      projectedHome: existing.projectedHome,
+      projectedLabel: existing.projectedLabel,
+      lockedAt: existing.lockedAt || existing.createdAt || null
+    });
+    existing.projectedAway = row.projectedAway;
+    existing.projectedHome = row.projectedHome;
+    existing.projectedLabel = row.projectedAway + "–" + row.projectedHome;
+    existing.lockedAt = now || new Date().toISOString();
+    existing.relocked = true;
+    return existing;
+  }
+
+  /**
+   * First projection for a game is frozen once the puck drops.
+   * Pass { relock: true } to replace the lock while the game is still in the future.
+   */
+  function freezeEstimate(store, row, opts) {
     store = store || emptyStore();
     store.byId = store.byId || {};
+    opts = opts || {};
     var id = String(row.id);
     var existing = store.byId[id];
     if (existing) {
       if (!existing.lockedAt) existing.lockedAt = existing.createdAt || new Date().toISOString();
+      if (row.gameState) existing.gameState = row.gameState;
+      if (row.startTimeUTC) existing.startTimeUTC = row.startTimeUTC;
+      if (opts.relock && shouldRelock(existing, row, opts.now)) {
+        applyProjection(existing, row, opts.now);
+      }
+      var nowMs = parseTime(opts.now);
+      if (nowMs == null) nowMs = Date.now();
+      existing.lockOpen = !existing.graded && !hasStarted(existing, nowMs);
       return existing;
     }
     var saved = {
@@ -169,6 +225,8 @@
     listEstimates: listEstimates,
     summarize: summarize,
     verdict: verdict,
-    winnerOf: winnerOf
+    winnerOf: winnerOf,
+    hasStarted: hasStarted,
+    shouldRelock: shouldRelock
   };
 });

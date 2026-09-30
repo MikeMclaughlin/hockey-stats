@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Hockey Stats — 2025-26 backtest</title>
+  <title>Hockey Stats — score backtest</title>
   <link rel="stylesheet" href="/css/style.css">
 </head>
 <body>
@@ -11,7 +11,7 @@
     <div class="brand">
       <img class="nhl-logo" src="/img/nhl.svg" alt="NHL">
       <div>
-        <h1>2025-26 score backtest</h1>
+        <h1 id="title">Score backtest</h1>
         <p class="tag">Walk-forward estimates vs official finals</p>
       </div>
     </div>
@@ -24,6 +24,14 @@
         <a href="/review.html">Review</a>
         <a href="/backtest.html" aria-current="page">Backtest</a>
       </nav>
+      <span class="app-version" title="App version">v1.1</span>
+      <label>Season
+        <select id="season">
+          <option value="20242025">2024-25</option>
+          <option value="20252026" selected>2025-26</option>
+          <option value="20262027">2026-27</option>
+        </select>
+      </label>
       </div>
       <p id="meta" class="meta meta-line">Loading…</p>
     </div>
@@ -77,8 +85,8 @@
     </section>
   </main>
   <footer>
-    <span>hockey-stats v1.4.1</span>
-    <span>NHL club-schedule-season 20252026</span>
+    <span>hockey-stats v1.1</span>
+    <span id="season-foot">NHL club-schedule-season</span>
   </footer>
   <script src="/js/archive.js"></script>
   <script src="/js/table-filter.js"></script>
