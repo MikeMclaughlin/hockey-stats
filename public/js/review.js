@@ -53,7 +53,7 @@
     var tbody = document.querySelector("#review tbody");
     var rows = sorted();
     if (!rows.length) {
-      tbody.innerHTML = '<tr><td colspan="8" class="empty">No locked estimates yet. Open Matchups so today’s slate is saved. On Vercel that save needs BLOB_READ_WRITE_TOKEN.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="8" class="empty">No locked estimates yet. Open Matchups so today’s slate is saved. On Vercel that save needs BLOB_READ_WRITE_TOKEN or a connected Blob store (BLOB_STORE_ID).</td></tr>';
       return;
     }
     tbody.innerHTML = rows.map(function (r) {

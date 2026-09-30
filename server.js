@@ -19,10 +19,10 @@ var matchupCache = Object.create(null);
 
 function productVersion() {
   try {
-    var parts = String(require("./package.json").version || "1.1.0").split(".");
-    return (parts[0] || "1") + "." + (parts[1] || "0");
+    var parts = String(require("./package.json").version || "1.2.0").split(".");
+    return (parts[0] || "1") + "." + (parts[1] || "2");
   } catch (e) {
-    return "1.1";
+    return "1.2";
   }
 }
 
@@ -122,7 +122,7 @@ function sleep(ms) {
 
 function httpsGet(urlStr, cb, attempt) {
   attempt = attempt || 1;
-  https.get(urlStr, { headers: { "User-Agent": "hockey-stats/1.1", Accept: "*/*" } }, function (up) {
+  https.get(urlStr, { headers: { "User-Agent": "hockey-stats/1.2", Accept: "*/*" } }, function (up) {
     if (up.statusCode >= 300 && up.statusCode < 400 && up.headers.location) {
       up.resume();
       httpsGet(up.headers.location, cb, attempt);
@@ -475,6 +475,7 @@ async function gradeEstimates() {
 }
 
 var CRON_SCHEDULES = ["0 4 * * *", "0 13 * * *", "0 21 * * *"];
+var CRON_AUTH_HINT = "Set CRON_SECRET on the Vercel project and send Authorization: Bearer <CRON_SECRET>. Vercel Cron adds that header automatically.";
 
 function cronSecret() {
   return String(process.env.CRON_SECRET || "").trim();
@@ -522,6 +523,8 @@ async function runScheduledUpdate() {
     summary: graded.summary || null,
     persisted: !!(graded.persisted && !storageError),
     storage: store.storageMode(),
+    auth: store.blobAuthMode(),
+    hint: storageError ? (store.blobHint() || storageError) : store.blobHint(),
     storageError: storageError
   };
   try {
@@ -779,7 +782,7 @@ function handleApi(req, res, url) {
       sendJson(res, 401, {
         ok: false,
         error: "unauthorized",
-        hint: "Set CRON_SECRET on the Vercel project and send Authorization: Bearer <CRON_SECRET>. Vercel Cron adds that header automatically."
+        hint: CRON_AUTH_HINT
       });
       return true;
     }
@@ -796,15 +799,20 @@ function handleApi(req, res, url) {
   }
   if (pathname === "/api/health") {
     var lw = store.lastWrite ? store.lastWrite() : {};
-    var hint = store.blobHint();
-    if (process.env.VERCEL && !cronSecret()) {
-      var cronHint = "Add CRON_SECRET to the Vercel project so /api/cron accepts the scheduled refresh. Vercel sends it as Authorization: Bearer <CRON_SECRET>.";
-      hint = hint ? hint + " " + cronHint : cronHint;
-    }
     Promise.all([
       store.listStored(),
-      store.readJson(store.KEYS.cronStatus, null)
+      store.readJson(store.KEYS.cronStatus, null),
+      store.writeTest()
     ]).then(function (pair) {
+      var writeTest = pair[2];
+      var hint = store.blobHint();
+      if (writeTest && writeTest.ok === false && writeTest.error) {
+        var fail = "Blob write test failed (" + writeTest.mode + "): " + writeTest.error;
+        hint = hint ? hint + " " + fail : fail;
+      }
+      if (process.env.VERCEL && !cronSecret()) {
+        hint = hint ? hint + " " + CRON_AUTH_HINT : CRON_AUTH_HINT;
+      }
       sendJson(res, 200, {
         ok: true,
         service: "hockey-stats",
@@ -812,6 +820,8 @@ function handleApi(req, res, url) {
         port: PORT,
         blob: store.usesBlob(),
         storage: store.storageMode(),
+        auth: store.blobAuthMode(),
+        writeTest: writeTest,
         blobWriteAt: lw.at || null,
         blobWriteName: lw.name || null,
         blobWriteError: lw.error || null,
@@ -820,6 +830,20 @@ function handleApi(req, res, url) {
         cronSchedulesUTC: CRON_SCHEDULES,
         cron: pair[1],
         files: pair[0]
+      });
+    }).catch(function (err) {
+      sendJson(res, 200, {
+        ok: true,
+        service: "hockey-stats",
+        version: productVersion(),
+        port: PORT,
+        blob: store.usesBlob(),
+        storage: store.storageMode(),
+        auth: store.blobAuthMode(),
+        writeTest: { ok: false, skipped: false, error: String(err.message || err), at: null, mode: store.blobAuthMode() },
+        hint: store.blobHint() || String(err.message || err),
+        cronSecret: !!cronSecret(),
+        cronSchedulesUTC: CRON_SCHEDULES
       });
     });
     return true;
