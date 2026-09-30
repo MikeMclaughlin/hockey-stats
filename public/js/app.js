@@ -57,6 +57,9 @@
   function oddsLine(m) {
     var o = m.odds;
     if (!o || (o.awayMl == null && o.homeMl == null && o.total == null)) {
+      if (m.oddsMissing) {
+        return '<p class="odds muted">Odds were not saved for this game.</p>';
+      }
       return '<p class="odds muted">Moneyline and over/under not posted yet.</p>';
     }
     var aw = HockeyStats.impliedWinPct ? HockeyStats.impliedWinPct(o.awayMl) : null;
@@ -69,6 +72,7 @@
       ? "O/U " + o.total + " (O " + am(o.overPrice) + " / U " + am(o.underPrice) + ")"
       : "O/U —";
     var src = o.partner ? " · " + o.partner : "";
+    if (o.locked) src += " · saved";
     var hold = HockeyStats.twoWayHold ? HockeyStats.twoWayHold(o.awayMl, o.homeMl) : null;
     var vig = hold != null ? "<span>Hold " + hold + "%</span>" : "";
     return '<p class="odds"><span>Moneyline ' + ml + "</span><span>" + ou.replace("O/U", "Over/under") + src + "</span>" + vig + "</p>";
@@ -91,9 +95,16 @@
       '<div class="pills">' +
         pill("Shooting plus save percentage", t.pdo, "pdo") +
         pill("Average goal differential last five games", t.last5AvgGd, "last5", function (v) { return signed(v, 2); }) +
-        pill("Save percentage last five games", t.last5SvPct, "last5Sv", function (v) { return v == null ? "—" : v + "%"; }) +
-        pill("Shots-on-goal share", t.sogShare, "sogShare", function (v) { return v == null ? "—" : v + "%"; }) +
         pill("Actual goals versus expected goals", t.gfMinusXg, "xgDiff", function (v) { return signed(v, 1); }) +
+        pill("Shots-on-goal share", t.sogShare, "sogShare", function (v) { return v == null ? "—" : v + "%"; }) +
+        pill("Save percentage last five games", t.last5SvPct, "last5Sv", function (v) { return v == null ? "—" : v + "%"; }) +
+      "</div>"
+    );
+  }
+
+  function extraPills(t) {
+    return (
+      '<div class="pills">' +
         pill("Shot-attempt share", t.cfPct, "cf", function (v) { return v == null ? "—" : v + "%"; }) +
         pill("High-danger chance share", t.hdcfPct, "hdcf", function (v) { return v == null ? "—" : v + "%"; }) +
         pill("Even-strength expected-goals share", t.xgfPct5v5, "xgf5v5", function (v) { return v == null ? "—" : v + "%"; }) +
@@ -133,9 +144,6 @@
                 (m.away.logo ? '<img src="' + m.away.logo + '" alt="">' : "") +
                 "<div><h3>" + m.away.name + "</h3><div>" + m.away.record + "</div></div>" +
               "</div>" +
-              '<div class="pos-count away" title="Number of positive stat pills">' +
-                (HockeyStats.countPositivePills ? HockeyStats.countPositivePills(m.away) : "") +
-              "</div>" +
               teamPills(m.away) +
             "</div>" +
             '<div class="vs">@</div>' +
@@ -144,12 +152,17 @@
                 (m.home.logo ? '<img src="' + m.home.logo + '" alt="">' : "") +
                 "<div><h3>" + m.home.name + "</h3><div>" + m.home.record + "</div></div>" +
               "</div>" +
-              '<div class="pos-count home" title="Number of positive stat pills">' +
-                (HockeyStats.countPositivePills ? HockeyStats.countPositivePills(m.home) : "") +
-              "</div>" +
               teamPills(m.home) +
             "</div>" +
           "</div>" +
+          '<details class="more-stats">' +
+            "<summary>Shot-attempt share, high-danger chances, and expected goals</summary>" +
+            '<div class="sides more-sides">' +
+              '<div class="col">' + extraPills(m.away) + "</div>" +
+              '<div class="vs"></div>' +
+              '<div class="col">' + extraPills(m.home) + "</div>" +
+            "</div>" +
+          "</details>" +
           notesLine(m) +
         "</article>"
       );

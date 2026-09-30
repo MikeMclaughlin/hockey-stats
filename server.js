@@ -19,10 +19,10 @@ var matchupCache = Object.create(null);
 
 function productVersion() {
   try {
-    var parts = String(require("./package.json").version || "1.3.0").split(".");
-    return (parts[0] || "1") + "." + (parts[1] || "3");
+    var parts = String(require("./package.json").version || "1.4.0").split(".");
+    return (parts[0] || "1") + "." + (parts[1] || "4");
   } catch (e) {
-    return "1.3";
+    return "1.4";
   }
 }
 
@@ -130,7 +130,7 @@ function sleep(ms) {
 
 function httpsGet(urlStr, cb, attempt) {
   attempt = attempt || 1;
-  https.get(urlStr, { headers: { "User-Agent": "hockey-stats/1.3", Accept: "*/*" } }, function (up) {
+  https.get(urlStr, { headers: { "User-Agent": "hockey-stats/1.4", Accept: "*/*" } }, function (up) {
     if (up.statusCode >= 300 && up.statusCode < 400 && up.headers.location) {
       up.resume();
       httpsGet(up.headers.location, cb, attempt);
@@ -345,23 +345,106 @@ function mpSeasonYear(seasonId) {
   return String(Math.floor(Number(seasonId) / 10000));
 }
 
+async function fetchPartnerOdds(date) {
+  var url = "https://api-web.nhle.com/v1/partner-game/US/" + (date || "now");
+  try {
+    var partner = await getJson(url);
+    var name = partner.bettingPartner && partner.bettingPartner.name;
+    var map = Object.create(null);
+    (partner.games || []).forEach(function (og) {
+      var parsed = stats.parsePartnerOdds(og);
+      parsed.partner = name || null;
+      if (parsed.awayMl == null && parsed.homeMl == null && parsed.total == null) return;
+      map[String(og.gameId)] = parsed;
+    });
+    return map;
+  } catch (e) {
+    return Object.create(null);
+  }
+}
+
+function publicOdds(row) {
+  var lines = archive.oddsLines(row);
+  if (!lines) return null;
+  lines.saved = true;
+  lines.locked = !!(row && row.locked);
+  return lines;
+}
+
+async function loadOddsStore() {
+  var data = await store.readJson(store.KEYS.odds, null);
+  if (data && data.byId) return data;
+  return { version: 1, byId: {} };
+}
+
+/**
+ * Snapshot every game's moneyline and total. Live partner odds (DraftKings
+ * when that book is posted) update the line until puck drop. After start,
+ * the saved line is what the card shows. Past dates are also asked of the
+ * NHL partner feed; a 404 leaves recovery to the odds store and matchup archive.
+ */
+async function applyOddsSnapshots(matchups, liveById) {
+  var oddsStore = await loadOddsStore();
+  var arch = await store.readJson(store.KEYS.matchupArchive, null);
+  var archById = (arch && arch.byId) || {};
+  var needDates = Object.create(null);
+  (matchups || []).forEach(function (m) {
+    var id = String(m.id);
+    var started = archive.hasStarted(m, Date.now());
+    var saved = oddsStore.byId[id];
+    var live = liveById[id];
+    if (started && !archive.oddsLines(saved) && !archive.oddsLines(live)) needDates[m.gameDate] = true;
+  });
+  var recovered = Object.create(null);
+  var dates = Object.keys(needDates);
+  for (var i = 0; i < dates.length; i++) {
+    if (!dates[i]) continue;
+    var fetched = await fetchPartnerOdds(dates[i]);
+    Object.keys(fetched).forEach(function (id) { recovered[id] = fetched[id]; });
+  }
+  var wrote = false;
+  (matchups || []).forEach(function (m) {
+    var id = String(m.id);
+    var started = archive.hasStarted(m, Date.now());
+    var live = liveById[id] || recovered[id] || null;
+    var fromArchive = archById[id] && archById[id].odds;
+    var seed = live || (started ? fromArchive : null);
+    var result = archive.snapshotOdds(oddsStore, {
+      id: m.id,
+      gameDate: m.gameDate,
+      startTimeUTC: m.startTimeUTC,
+      gameState: m.gameState,
+      awayAbbrev: m.away && m.away.abbrev,
+      homeAbbrev: m.home && m.home.abbrev,
+      odds: seed
+    });
+    if (result.wrote) wrote = true;
+    var savedOdds = publicOdds(result.row);
+    if (started) {
+      m.odds = savedOdds;
+      m.oddsMissing = !savedOdds;
+    } else {
+      m.odds = (live && archive.oddsLines(live)) ? Object.assign({ saved: !!result.row, locked: false }, archive.oddsLines(live)) : savedOdds;
+      m.oddsMissing = false;
+    }
+  });
+  if (wrote) {
+    try { await store.writeJson(store.KEYS.odds, oddsStore); }
+    catch (e) { /* board still returns the in-memory lines */ }
+  }
+  return oddsStore;
+}
+
 async function buildMatchups(date) {
   var day = cleanDate(date);
   var score = await getJson(day
     ? "https://api-web.nhle.com/v1/score/" + day
     : "https://api-web.nhle.com/v1/score/now");
   var standings = await getJson("https://api-web.nhle.com/v1/standings/now");
-  var oddsById = Object.create(null);
-  var oddsPartner = null;
-  try {
-    var partner = await getJson("https://api-web.nhle.com/v1/partner-game/US/now");
-    oddsPartner = partner.bettingPartner && partner.bettingPartner.name;
-    (partner.games || []).forEach(function (og) {
-      oddsById[og.gameId] = stats.parsePartnerOdds(og);
-      oddsById[og.gameId].partner = oddsPartner;
-    });
-  } catch (e) {
-    oddsById = Object.create(null);
+  var liveOdds = await fetchPartnerOdds(null);
+  if (day) {
+    var datedOdds = await fetchPartnerOdds(day);
+    Object.keys(datedOdds).forEach(function (id) { liveOdds[id] = datedOdds[id]; });
   }
   var seasonId = seasonIdFromScore(score);
   var resolved = await resolveStatsSeason(seasonId, standings);
@@ -448,7 +531,7 @@ async function buildMatchups(date) {
     var edge = stats.matchupEdge(away, home);
     var winnerTeam = edge.winner === "away" ? away : edge.winner === "home" ? home : null;
     var projected = stats.estimateScore(away, home);
-    var odds = oddsById[g.id] || null;
+    var odds = liveOdds[String(g.id)] || null;
     var market = stats.marketSide(odds);
     var marketDisagree = !!(market && market !== "even" && edge.winner && edge.winner !== market);
     return {
@@ -477,6 +560,20 @@ async function buildMatchups(date) {
         odds
       )
     };
+  });
+
+  await applyOddsSnapshots(matchups, liveOdds);
+  matchups.forEach(function (m) {
+    var market = stats.marketSide(m.odds);
+    m.marketSide = market;
+    m.marketDisagree = !!(market && market !== "even" && m.edge && m.edge.winner && m.edge.winner !== market);
+    m.notes = backtest.buildNotes(
+      { gameDate: m.gameDate, awayAbbrev: m.away.abbrev, homeAbbrev: m.home.abbrev },
+      formMap[m.away.abbrev] || { lastDate: null, dates: [], results: [] },
+      formMap[m.home.abbrev] || { lastDate: null, dates: [], results: [] },
+      m.projected,
+      m.odds
+    );
   });
 
   var seasons = seasonMeta(seasonId, statsSeason, standingsSnapshot(standings, statsSeason).maxGp);
