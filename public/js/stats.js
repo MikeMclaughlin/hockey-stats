@@ -649,11 +649,42 @@
   }
 
   /**
-   * Projected score from GF/GA rates and xG, with 5v5 xGF% tilt,
-   * a small last-5 term, and home ice. Ties are broken toward home
-   * (NHL games in the 2025-26 backtest never finished even).
+   * Defaults match the 1.6 formula. A 1.7 replay may replace a number
+   * only when winner accuracy, total-goals error, and margin error all improve.
+   * goalie is 0 unless that replay says otherwise. goalieSv is save percentage
+   * on a 0–100 scale for the starter's prior games, and is ignored when absent.
    */
-  function estimateScore(away, home) {
+  var SCORE_MODEL = {
+    wGf: 0.40,
+    wXg: 0.35,
+    wOpp: 0.25,
+    last5: 0.04,
+    hdcf: 0.35,
+    xgf5: 1.35,
+    homeIce: 0.32,
+    b2b: 0.15,
+    restBump: 0.08,
+    stXg: 0.25,
+    floor: 1.2,
+    minGoals: 1,
+    goalie: 0,
+    marginMode: "round",
+    marginScale: 1,
+    marginCap: 5
+  };
+
+  function modelValue(opts, key) {
+    if (opts && opts[key] != null && opts[key] !== "") return opts[key];
+    return SCORE_MODEL[key];
+  }
+
+  /**
+   * Projected score from GF/GA rates and xG, with 5v5 xGF% tilt,
+   * a small last-5 term, and home ice. Ties are broken toward the higher
+   * raw side, and toward home when the raw scores match.
+   * Pass opts to override SCORE_MODEL for a replay. Live calls use the defaults.
+   */
+  function estimateScore(away, home, opts) {
     away = away || {};
     home = home || {};
     var agp = away.gamesPlayed || 82;
@@ -664,46 +695,91 @@
     var homeGa = rate(home.goalsAgainst, hgp, 3);
     var awayXg = rate(away.xGoalsFor, agp, awayGf);
     var homeXg = rate(home.xGoalsFor, hgp, homeGf);
-    var awayOff = 0.40 * awayGf + 0.35 * awayXg + 0.25 * homeGa;
-    var homeOff = 0.40 * homeGf + 0.35 * homeXg + 0.25 * awayGa;
-    if (away.last5AvgGd != null) awayOff += 0.04 * away.last5AvgGd;
-    if (home.last5AvgGd != null) homeOff += 0.04 * home.last5AvgGd;
+    var awayOff = modelValue(opts, "wGf") * awayGf + modelValue(opts, "wXg") * awayXg + modelValue(opts, "wOpp") * homeGa;
+    var homeOff = modelValue(opts, "wGf") * homeGf + modelValue(opts, "wXg") * homeXg + modelValue(opts, "wOpp") * awayGa;
+    var last5w = modelValue(opts, "last5");
+    if (away.last5AvgGd != null) awayOff += last5w * away.last5AvgGd;
+    if (home.last5AvgGd != null) homeOff += last5w * home.last5AvgGd;
     if (away.hdcfPct != null && home.hdcfPct != null) {
       var hdTilt = (away.hdcfPct - home.hdcfPct) / 100;
-      awayOff += hdTilt * 0.35;
-      homeOff -= hdTilt * 0.35;
+      awayOff += hdTilt * modelValue(opts, "hdcf");
+      homeOff -= hdTilt * modelValue(opts, "hdcf");
     }
     if (away.xgfPct5v5 != null && home.xgfPct5v5 != null) {
       var xTilt = (away.xgfPct5v5 - home.xgfPct5v5) / 100;
-      awayOff += xTilt * 1.35;
-      homeOff -= xTilt * 1.35;
+      awayOff += xTilt * modelValue(opts, "xgf5");
+      homeOff -= xTilt * modelValue(opts, "xgf5");
     }
-    homeOff += 0.32;
-    if (away.restDays === 1) awayOff -= 0.15;
-    if (home.restDays === 1) homeOff -= 0.15;
-    if (home.restDays >= 3 && away.restDays === 1) homeOff += 0.08;
+    homeOff += modelValue(opts, "homeIce");
+    if (away.restDays === 1) awayOff -= modelValue(opts, "b2b");
+    if (home.restDays === 1) homeOff -= modelValue(opts, "b2b");
+    if (home.restDays >= 3 && away.restDays === 1) homeOff += modelValue(opts, "restBump");
     if (away.stXg != null && home.stXg != null) {
       var stTilt = (away.stXg - home.stXg) / 20;
-      awayOff += stTilt * 0.25;
-      homeOff -= stTilt * 0.25;
+      awayOff += stTilt * modelValue(opts, "stXg");
+      homeOff -= stTilt * modelValue(opts, "stXg");
     }
-    awayOff = Math.max(1.2, awayOff);
-    homeOff = Math.max(1.2, homeOff);
+    var goalieW = modelValue(opts, "goalie");
+    if (goalieW && away.goalieSv != null && home.goalieSv != null) {
+      var gTilt = (Number(away.goalieSv) - Number(home.goalieSv)) / 100;
+      awayOff += gTilt * goalieW;
+      homeOff -= gTilt * goalieW;
+    }
+    var floor = modelValue(opts, "floor");
+    awayOff = Math.max(floor, awayOff);
+    homeOff = Math.max(floor, homeOff);
+    var minGoals = modelValue(opts, "minGoals");
+    var scored;
+    if (modelValue(opts, "marginMode") === "scaled") {
+      scored = scaledMargin(awayOff, homeOff, modelValue(opts, "marginScale"), modelValue(opts, "marginCap"), minGoals);
+    } else {
+      scored = roundedScore(awayOff, homeOff, minGoals);
+    }
+    return {
+      away: scored.away,
+      home: scored.home,
+      awayRaw: round(awayOff, 2),
+      homeRaw: round(homeOff, 2),
+      label: scored.away + "–" + scored.home
+    };
+  }
+
+  function roundedScore(awayOff, homeOff, minGoals) {
     var a = Math.round(awayOff);
     var h = Math.round(homeOff);
-    if (a < 1) a = 1;
-    if (h < 1) h = 1;
+    if (a < minGoals) a = minGoals;
+    if (h < minGoals) h = minGoals;
     if (a === h) {
       if (homeOff >= awayOff) h += 1;
       else a += 1;
     }
-    return {
-      away: a,
-      home: h,
-      awayRaw: round(awayOff, 2),
-      homeRaw: round(homeOff, 2),
-      label: a + "–" + h
-    };
+    return { away: a, home: h };
+  }
+
+  /**
+   * Turn the raw goal difference into a whole-number margin of at least 1,
+   * capped so a lopsided rate cannot invent a blowout the league rarely plays.
+   * The side with the higher raw total gets the margin. An exact raw tie goes to the home team.
+   */
+  function scaledMargin(awayOff, homeOff, scale, cap, minGoals) {
+    var total = Math.max(0, awayOff + homeOff);
+    var diff = homeOff - awayOff;
+    var sign = diff > 0 || diff === 0 ? 1 : -1;
+    var margin = Math.round(Math.abs(diff) * (scale || 1));
+    if (margin < 1) margin = 1;
+    if (margin > cap) margin = cap;
+    var t = Math.round(total);
+    if ((t - margin) % 2 !== 0) t += 1;
+    var win = (t + margin) / 2;
+    var lose = (t - margin) / 2;
+    if (lose < minGoals) {
+      lose = minGoals;
+      win = lose + margin;
+    }
+    win = Math.round(win);
+    lose = Math.round(lose);
+    if (sign > 0) return { away: lose, home: win };
+    return { away: win, home: lose };
   }
 
   return {
@@ -723,6 +799,7 @@
     parseMoneyPuckCsv: parseMoneyPuckCsv,
     buildTeamProfile: buildTeamProfile,
     estimateScore: estimateScore,
+    SCORE_MODEL: SCORE_MODEL,
     parsePartnerOdds: parsePartnerOdds,
     formatAmerican: formatAmerican,
     impliedWinPct: impliedWinPct,

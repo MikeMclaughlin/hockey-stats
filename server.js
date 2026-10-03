@@ -19,10 +19,10 @@ var matchupCache = Object.create(null);
 
 function productVersion() {
   try {
-    var parts = String(require("./package.json").version || "1.6.0").split(".");
-    return (parts[0] || "1") + "." + (parts[1] || "6");
+    var parts = String(require("./package.json").version || "1.7.0").split(".");
+    return (parts[0] || "1") + "." + (parts[1] || "7");
   } catch (e) {
-    return "1.6";
+    return "1.7";
   }
 }
 
@@ -78,7 +78,6 @@ function alignStand(stand, summary) {
   return next;
 }
 var ESTIMATES_FILE = path.join(ROOT, "data", "estimates.json");
-var BACKTEST_FILE = path.join(ROOT, "data", "backtest-20252026.json");
 var MP_GAMES_FILE = path.join(ROOT, "data", "mp-games-2025.json");
 
 var TYPES = {
@@ -130,7 +129,7 @@ function sleep(ms) {
 
 function httpsGet(urlStr, cb, attempt) {
   attempt = attempt || 1;
-  https.get(urlStr, { headers: { "User-Agent": "hockey-stats/1.6", Accept: "*/*" } }, function (up) {
+  https.get(urlStr, { headers: { "User-Agent": "hockey-stats/1.7", Accept: "*/*" } }, function (up) {
     if (up.statusCode >= 300 && up.statusCode < 400 && up.headers.location) {
       up.resume();
       httpsGet(up.headers.location, cb, attempt);
@@ -1226,28 +1225,30 @@ async function loadMoneyPuckGames() {
   return all;
 }
 
-var BACKTEST_SEASONS = ["20242025", "20252026", "20262027"];
+var BACKTEST_SEASONS = ["20212022", "20222023", "20232024", "20242025", "20252026"];
 
 function backtestFile(season) {
   return "backtest-" + season + ".json";
 }
 
-function listBacktestSeasons() {
-  var have = Object.create(null);
+function backtestPublicPath(season) {
+  return path.join(ROOT, "public", "data", backtestFile(season));
+}
+
+function readBacktestFile(season) {
   try {
-    fs.readdirSync(path.join(ROOT, "data")).forEach(function (name) {
-      var m = /^backtest-(\d{8})\.json$/.exec(name);
-      if (m) have[m[1]] = true;
-    });
-  } catch (e) { /* no data dir */ }
-  var ids = BACKTEST_SEASONS.slice();
-  Object.keys(have).forEach(function (id) {
-    if (ids.indexOf(id) === -1) ids.push(id);
+    return JSON.parse(fs.readFileSync(backtestPublicPath(season), "utf8"));
+  } catch (e) {
+    return null;
+  }
+}
+
+function listBacktestSeasons() {
+  var seasons = BACKTEST_SEASONS.map(function (id) {
+    return { id: id, label: formatSeason(id), available: !!readBacktestFile(id) };
   });
-  ids.sort();
-  return ids.map(function (id) {
-    return { id: id, label: formatSeason(id), available: !!have[id] };
-  });
+  var ready = seasons.every(function (s) { return s.available; });
+  return [{ id: "all", label: "All seasons", available: ready }].concat(seasons);
 }
 
 async function runBacktest(season) {
@@ -1634,37 +1635,32 @@ function handleApi(req, res, url) {
   }
   if (pathname === "/api/backtest") {
     var btSeason = String(url.searchParams.get("season") || "20252026");
-    if (!/^\d{8}$/.test(btSeason)) btSeason = "20252026";
-    var btName = backtestFile(btSeason);
     var seasons = listBacktestSeasons();
-    var known = seasons.some(function (s) { return s.id === btSeason && s.available; });
-    store.readJson(btName, null).then(function (cached) {
-      var allowRefresh = url.searchParams.get("refresh") === "1" && !process.env.VERCEL;
-      if (cached && !allowRefresh) {
-        cached.seasons = seasons;
-        cached.season = cached.season || btSeason;
-        sendJson(res, 200, cached);
-        return;
-      }
-      if (!known && !allowRefresh) {
-        sendJson(res, 200, {
-          season: btSeason,
-          seasons: seasons,
-          rows: [],
-          summary: archive.summarize([]),
-          unavailable: true,
-          message: "No cached backtest for " + formatSeason(btSeason) + " yet."
-        });
-        return;
-      }
-      return runBacktest(btSeason).then(function (body) {
-        return store.writeJson(btName, body).catch(function () {}).then(function () {
-          body.seasons = listBacktestSeasons();
-          sendJson(res, 200, body);
-        });
+    if (btSeason === "all") {
+      sendJson(res, 200, {
+        season: "all",
+        seasons: seasons,
+        rows: [],
+        summary: archive.summarize([]),
+        message: "All seasons load from /data/backtest-SEASON.json, one file at a time."
       });
-    }).catch(function (err) {
-      sendJson(res, 502, { error: String(err.message || err), seasons: seasons });
+      return true;
+    }
+    if (!/^\d{8}$/.test(btSeason)) btSeason = "20252026";
+    var cached = readBacktestFile(btSeason);
+    if (cached) {
+      cached.seasons = seasons;
+      cached.season = cached.season || btSeason;
+      sendJson(res, 200, cached);
+      return true;
+    }
+    sendJson(res, 200, {
+      season: btSeason,
+      seasons: seasons,
+      rows: [],
+      summary: archive.summarize([]),
+      unavailable: true,
+      message: "No cached backtest for " + formatSeason(btSeason) + " yet."
     });
     return true;
   }

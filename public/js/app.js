@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var state = { data: null, sortKey: "time", sortDir: 1 };
+  var state = { data: null, sortKey: "pdo", sortDir: -1 };
 
   function $(id) { return document.getElementById(id); }
 
@@ -309,7 +309,7 @@
     if (key === "awayRecord") return m.away.ptsPct || 0;
     if (key === "homeRecord") return m.home.ptsPct || 0;
     if (key === "gd") return (m.away.goalDiff || 0) - (m.home.goalDiff || 0);
-    if (key === "pdo") return (m.away.pdo || 0) - (m.home.pdo || 0);
+    if (key === "pdo") return pdoGapAbs(m);
     if (key === "l5") return (m.away.last5AvgGd || 0) - (m.home.last5AvgGd || 0);
     if (key === "sog") return (m.away.sogShare || 0) - (m.home.sogShare || 0);
     if (key === "xg") return (m.away.gfMinusXg || 0) - (m.home.gfMinusXg || 0);
@@ -326,6 +326,13 @@
     return "";
   }
 
+  function pdoGapAbs(m) {
+    var ap = m.away && m.away.pdo;
+    var hp = m.home && m.home.pdo;
+    if (ap == null || hp == null || !isFinite(Number(ap)) || !isFinite(Number(hp))) return null;
+    return Math.abs(Number(ap) - Number(hp));
+  }
+
   function sortedRows() {
     var rows = (state.data && state.data.matchups) || [];
     var key = state.sortKey;
@@ -333,7 +340,14 @@
     return rows.slice().sort(function (a, b) {
       var av = rowValue(a, key);
       var bv = rowValue(b, key);
-      if (typeof av === "string") return av.localeCompare(bv) * dir;
+      var aMissing = av == null || av === "";
+      var bMissing = bv == null || bv === "";
+      if (key === "pdo") {
+        if (aMissing && bMissing) return 0;
+        if (aMissing) return 1;
+        if (bMissing) return -1;
+      }
+      if (typeof av === "string" || typeof bv === "string") return String(av).localeCompare(String(bv)) * dir;
       if (av === bv) return 0;
       return av > bv ? dir : -dir;
     });
@@ -524,7 +538,7 @@
     th.addEventListener("click", function () {
       var key = th.getAttribute("data-key");
       if (state.sortKey === key) state.sortDir *= -1;
-      else { state.sortKey = key; state.sortDir = 1; }
+      else { state.sortKey = key; state.sortDir = key === "pdo" ? -1 : 1; }
       var q = new URLSearchParams(location.search);
       q.set("sort", state.sortKey);
       q.set("dir", String(state.sortDir));
