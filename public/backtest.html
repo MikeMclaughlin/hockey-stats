@@ -4,11 +4,11 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Hockey Stats — score backtest</title>
-  <link rel="icon" href="/favicon.ico?v=1.6" sizes="any">
-  <link rel="icon" href="/favicon.svg?v=1.6" type="image/svg+xml">
-  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png?v=1.6">
-  <link rel="icon" type="image/png" sizes="192x192" href="/favicon-192x192.png?v=1.6">
-  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png?v=1.6">
+  <link rel="icon" href="/favicon.ico?v=1.7" sizes="any">
+  <link rel="icon" href="/favicon.svg?v=1.7" type="image/svg+xml">
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png?v=1.7">
+  <link rel="icon" type="image/png" sizes="192x192" href="/favicon-192x192.png?v=1.7">
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png?v=1.7">
   <link rel="stylesheet" href="/css/style.css">
 </head>
 <body>
@@ -29,12 +29,15 @@
         <a href="/review.html">Review</a>
         <a href="/backtest.html" aria-current="page">Backtest</a>
       </nav>
-      <span class="app-version" title="App version">v1.6</span>
+      <span class="app-version" title="App version">v1.7</span>
       <label>Season
         <select id="season">
+          <option value="all" selected>All seasons</option>
+          <option value="20212022">2021-22</option>
+          <option value="20222023">2022-23</option>
+          <option value="20232024">2023-24</option>
           <option value="20242025">2024-25</option>
-          <option value="20252026" selected>2025-26</option>
-          <option value="20262027">2026-27</option>
+          <option value="20252026">2025-26</option>
         </select>
       </label>
       </div>
@@ -42,7 +45,21 @@
     </div>
   </header>
   <main>
-    <p class="note" id="note"><span id="stamp"></span> Each row uses only games before that night. Last-5 GD is from official scores. PDO and 5v5 xGF% are running totals from MoneyPuck game logs (situation all / 5on5).</p>
+    <p class="note" id="note"><span id="stamp"></span> Each row uses only games before that night. Last five goal differential is from official scores. Shots, expected goals, Corsi, high danger shots, and special teams expected goals are MoneyPuck running totals when that game has a log. <span id="limits"></span></p>
+    <div class="controls">
+      <label>Team
+        <input id="team" type="text" placeholder="BOS or Boston">
+      </label>
+      <label class="check"><input id="b2b" type="checkbox"> Played last night</label>
+      <label>Edge pick
+        <select id="side">
+          <option value="">Any side</option>
+          <option value="favorite">Favorite</option>
+          <option value="underdog">Underdog</option>
+        </select>
+      </label>
+    </div>
+    <p class="note" id="fav-note">Favorite is the club with the higher points percentage before the game. Historical moneylines are not in this file, so this is a standings proxy, not a betting line. A toss up is not a firm pick and is left out of both filters.</p>
     <section id="summary" class="summary"></section>
     <section class="board">
       <h2>Graded games <small id="shown" class="meta"></small></h2>
@@ -64,6 +81,8 @@
               <th data-key="homeLast5Sv" class="num">Home L5 SV%</th>
               <th data-key="awayXgf5" class="num">Away 5v5 xGF%</th>
               <th data-key="homeXgf5" class="num">Home 5v5 xGF%</th>
+              <th data-key="edgeAbbrev">Edge</th>
+              <th data-key="edgeRole">Side</th>
               <th data-key="notes">Notes</th>
             </tr>
             <tr class="filters">
@@ -81,6 +100,8 @@
               <th><input data-filter="homeLast5Sv" placeholder="<=89"></th>
               <th><input data-filter="awayXgf5" placeholder=">=52"></th>
               <th><input data-filter="homeXgf5" placeholder="<=48"></th>
+              <th></th>
+              <th></th>
               <th><input data-filter="notes" placeholder="b2b / streak / rest"></th>
             </tr>
           </thead>
@@ -90,8 +111,9 @@
     </section>
   </main>
   <footer>
-    <span>v1.6</span>
+    <span>v1.7</span>
   </footer>
+  <script src="/js/stats.js"></script>
   <script src="/js/archive.js"></script>
   <script src="/js/table-filter.js"></script>
   <script src="/js/backtest-app.js"></script>

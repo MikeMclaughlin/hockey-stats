@@ -1,7 +1,23 @@
 (function () {
   "use strict";
 
-  var state = { rows: [], sortKey: "gameDate", sortDir: 1, filters: {} };
+  var SEASONS = [
+    { id: "all", label: "All seasons" },
+    { id: "20212022", label: "2021-22" },
+    { id: "20222023", label: "2022-23" },
+    { id: "20232024", label: "2023-24" },
+    { id: "20242025", label: "2024-25" },
+    { id: "20252026", label: "2025-26" }
+  ];
+  var state = {
+    rows: [],
+    sortKey: "gameDate",
+    sortDir: -1,
+    filters: {},
+    team: "",
+    b2b: false,
+    side: ""
+  };
   var NUMERIC = {
     totalErr: true, awayPdo: true, homePdo: true,
     awayLast5: true, homeLast5: true, awayLast5Sv: true, homeLast5Sv: true,
@@ -59,12 +75,42 @@
       homeLast5Sv: r.homeLast5Sv,
       awayXgf5: r.awayXgf5,
       homeXgf5: r.homeXgf5,
+      edgeAbbrev: r.edgeAbbrev || "",
+      edgeRole: r.edgeRole || "",
       notes: r.notes || ""
     };
   }
 
+  function teamName(abbrev) {
+    var hit = window.HockeyStats && HockeyStats.teamByAbbrev(abbrev);
+    if (hit && hit.name) return hit.name;
+    if (abbrev === "ARI") return "Arizona Coyotes";
+    if (abbrev === "UTA") return "Utah Mammoth";
+    return abbrev || "";
+  }
+
+  function teamHit(r) {
+    var q = String(state.team || "").trim().toLowerCase();
+    if (!q) return true;
+    var bits = [r.awayAbbrev, r.homeAbbrev, teamName(r.awayAbbrev), teamName(r.homeAbbrev)];
+    return bits.some(function (n) { return String(n || "").toLowerCase().indexOf(q) !== -1; });
+  }
+
+  function playedLastNight(r) {
+    if (r.awayB2B || r.homeB2B) return true;
+    var notes = r.notes || "";
+    return notes.indexOf("played last night") !== -1 || notes.indexOf("Both on a back-to-back") !== -1;
+  }
+
+  function sideHit(r) {
+    if (!state.side) return true;
+    return r.edgeRole === state.side;
+  }
+
   function filteredRows() {
     return state.rows.filter(function (r) {
+      if (!teamHit(r) || !sideHit(r)) return false;
+      if (state.b2b && !playedLastNight(r)) return false;
       return TableFilter.rowMatches(displayOf(r), state.filters, NUMERIC);
     });
   }
@@ -88,7 +134,8 @@
       '<div class="stat"><b>' + s.graded + "</b><span>graded</span></div>" +
       '<div class="stat"><b>' + (s.exactPct == null ? "—" : s.exactPct + "%") + "</b><span>exact score</span></div>" +
       '<div class="stat"><b>' + (s.winnerPct == null ? "—" : s.winnerPct + "%") + "</b><span>winner</span></div>" +
-      '<div class="stat"><b>' + (s.maeGoals == null ? "—" : s.maeGoals) + "</b><span>avg |goals| miss</span></div>";
+      '<div class="stat"><b>' + (s.meanTotalGoalsError == null ? "—" : s.meanTotalGoalsError) + "</b><span>total goals error</span></div>" +
+      '<div class="stat"><b>' + (s.meanMarginError == null ? "—" : s.meanMarginError) + "</b><span>margin error</span></div>";
   }
 
   function render() {
@@ -102,7 +149,7 @@
       return String(av).localeCompare(String(bv)) * state.sortDir;
     });
     var empty = rows.length === 0
-      ? "<tr><td colspan='15' class='empty'>No games match the column filters.</td></tr>"
+      ? "<tr><td colspan='17' class='empty'>No games match these filters.</td></tr>"
       : "";
     document.querySelector("#bt tbody").innerHTML = empty || rows.map(function (r) {
       var v = verdictOf(r);
@@ -121,6 +168,8 @@
         "<td class='num'>" + pct(r.homeLast5Sv) + "</td>" +
         "<td class='num'>" + pct(r.awayXgf5) + "</td>" +
         "<td class='num'>" + pct(r.homeXgf5) + "</td>" +
+        "<td>" + (r.edgeAbbrev || "—") + (r.edgeTossUp ? " toss up" : "") + "</td>" +
+        "<td>" + (r.edgeRole || "—") + "</td>" +
         "<td class='notes'>" + (r.notes || "—") + "</td>" +
         "</tr>";
     }).join("");
@@ -164,11 +213,34 @@
     }).join("");
   }
 
-  function loadData(season) {
-    return fetch("/api/backtest?season=" + encodeURIComponent(season || "20252026")).then(readJson).catch(function () {
-      if ((season || "20252026") !== "20252026") throw new Error("Backtest API unavailable");
-      return fetch("/data/backtest-20252026.json").then(readJson);
+  function loadOne(season) {
+    return fetch("/data/backtest-" + season + ".json").then(readJson).catch(function () {
+      return fetch("/api/backtest?season=" + encodeURIComponent(season)).then(readJson);
     });
+  }
+
+  function loadData(season) {
+    if (season === "all") {
+      var ids = SEASONS.filter(function (s) { return s.id !== "all"; }).map(function (s) { return s.id; });
+      return Promise.all(ids.map(loadOne)).then(function (parts) {
+        var rows = [];
+        var limits = [];
+        parts.forEach(function (p) {
+          rows = rows.concat(p.rows || []);
+          if (p.limits && !limits.length) limits = p.limits;
+        });
+        return {
+          season: "all",
+          seasons: SEASONS.map(function (s) { return { id: s.id, label: s.label, available: true }; }),
+          rows: rows,
+          limits: limits,
+          favoriteMethod: "points-percentage",
+          generatedAt: (parts[0] && parts[0].generatedAt) || null,
+          source: "2021-22 through 2025-26 regular season."
+        };
+      });
+    }
+    return loadOne(season || "20252026");
   }
 
   function applyPayload(d) {
@@ -192,7 +264,7 @@
       $("meta").textContent = d.message || "No cached backtest for this season.";
       $("summary").innerHTML = "";
       document.querySelector("#bt tbody").innerHTML =
-        "<tr><td colspan='15' class='empty'>" + (d.message || "No cached backtest for this season.") + "</td></tr>";
+        "<tr><td colspan='17' class='empty'>" + (d.message || "No cached backtest for this season.") + "</td></tr>";
       if ($("stamp")) $("stamp").textContent = "";
       return;
     }
@@ -200,6 +272,11 @@
       $("stamp").textContent = d.generatedAt
         ? "Cached snapshot " + d.generatedAt + ". "
         : "Cached snapshot. ";
+    }
+    if ($("limits")) {
+      var bits = d.limits || [];
+      if (d.modelNote) bits = bits.concat([d.modelNote]);
+      $("limits").textContent = bits.join(" ");
     }
       var q = new URLSearchParams(location.search);
       document.querySelectorAll("#bt [data-filter]").forEach(function (input) {
@@ -214,7 +291,7 @@
       render();
   }
 
-  var bootSeason = new URLSearchParams(location.search).get("season") || "20252026";
+  var bootSeason = new URLSearchParams(location.search).get("season") || "all";
   if ($("season")) $("season").value = bootSeason;
   loadData(bootSeason)
     .then(applyPayload)
@@ -235,11 +312,30 @@
     });
   }
 
+  if ($("team")) {
+    $("team").addEventListener("input", function () {
+      state.team = $("team").value;
+      render();
+    });
+  }
+  if ($("b2b")) {
+    $("b2b").addEventListener("change", function () {
+      state.b2b = !!$("b2b").checked;
+      render();
+    });
+  }
+  if ($("side")) {
+    $("side").addEventListener("change", function () {
+      state.side = $("side").value;
+      render();
+    });
+  }
+
   document.querySelectorAll("#bt thead tr:first-child th").forEach(function (th) {
     th.addEventListener("click", function () {
       var key = th.getAttribute("data-key");
       if (state.sortKey === key) state.sortDir *= -1;
-      else { state.sortKey = key; state.sortDir = 1; }
+      else { state.sortKey = key; state.sortDir = key === "gameDate" ? -1 : 1; }
       var q = new URLSearchParams(location.search);
       q.set("sort", state.sortKey);
       q.set("dir", String(state.sortDir));

@@ -143,6 +143,15 @@ select#season {
   width: 4.5rem;
   padding: 0.35rem 0.4rem;
 }
+.controls input#team {
+  width: 11rem;
+}
+.controls label.check {
+  flex-direction: row;
+  align-items: center;
+  font-size: 0.9rem;
+  color: var(--ink);
+}
 .panel {
   background: var(--card);
   border: 1px solid var(--line);
@@ -522,6 +531,31 @@ select#range {
   border: 1px solid var(--line);
   border-radius: 12px;
 }
+.table-wrap.fit {
+  overflow-x: hidden;
+}
+#board {
+  table-layout: fixed;
+  width: 100%;
+}
+#board th,
+#board td {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  padding: 0.32rem 0.16rem;
+  vertical-align: top;
+  font-size: 0.72rem;
+  line-height: 1.2;
+}
+#board th {
+  font-size: 0.64rem;
+  font-weight: 700;
+}
+#board .edge-meta,
+#board .score-status {
+  font-size: 0.62rem;
+}
 table {
   width: 100%;
   border-collapse: collapse;
@@ -593,6 +627,14 @@ footer {
   color: var(--muted);
 }
 @media (max-width: 720px) {
+  #board th,
+  #board td {
+    font-size: 0.5rem;
+    padding: 0.16rem 0.05rem;
+  }
+  #board th {
+    font-size: 0.46rem;
+  }
   .top {
     flex-direction: column;
     align-items: flex-start;

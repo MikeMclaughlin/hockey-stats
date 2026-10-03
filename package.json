@@ -1,6 +1,6 @@
 {
   "name": "hockey-stats",
-  "version": "1.6.0",
+  "version": "1.7.0",
   "private": true,
   "description": "SPA for current NHL matchups with record, PDO, last-5 GD, SOG share, xG vs GF, CF%, HDCF%, locked score estimates",
   "main": "server.js",

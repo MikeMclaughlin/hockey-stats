@@ -130,15 +130,48 @@
       render();
     });
   });
+  var FILTER_KEY = "hockey-stats.teamFilters";
+
+  function saveTeamFilters() {
+    try {
+      localStorage.setItem(FILTER_KEY, JSON.stringify({
+        filters: state.filters,
+        split: state.split
+      }));
+    } catch (e) { /* private mode */ }
+  }
+
+  function restoreTeamFilters() {
+    try {
+      var raw = localStorage.getItem(FILTER_KEY);
+      if (!raw) return;
+      var saved = JSON.parse(raw);
+      if (saved && saved.filters) {
+        state.filters = saved.filters;
+        document.querySelectorAll("#teams input[data-filter]").forEach(function (inp) {
+          var k = inp.getAttribute("data-filter");
+          inp.value = saved.filters[k] || "";
+        });
+      }
+      if (saved && saved.split && $("split")) {
+        state.split = saved.split;
+        $("split").value = saved.split;
+      }
+    } catch (e) { /* ignore a bad saved value */ }
+  }
+
+  restoreTeamFilters();
   document.querySelectorAll("#teams input[data-filter]").forEach(function (inp) {
     inp.addEventListener("input", function () {
       state.filters[inp.getAttribute("data-filter")] = inp.value;
+      saveTeamFilters();
       render();
     });
   });
   if ($("split")) {
     $("split").addEventListener("change", function () {
       state.split = $("split").value;
+      saveTeamFilters();
       render();
     });
   }

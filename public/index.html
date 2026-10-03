@@ -4,11 +4,11 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Hockey Stats — Matchups</title>
-  <link rel="icon" href="/favicon.ico?v=1.6" sizes="any">
-  <link rel="icon" href="/favicon.svg?v=1.6" type="image/svg+xml">
-  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png?v=1.6">
-  <link rel="icon" type="image/png" sizes="192x192" href="/favicon-192x192.png?v=1.6">
-  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png?v=1.6">
+  <link rel="icon" href="/favicon.ico?v=1.7" sizes="any">
+  <link rel="icon" href="/favicon.svg?v=1.7" type="image/svg+xml">
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png?v=1.7">
+  <link rel="icon" type="image/png" sizes="192x192" href="/favicon-192x192.png?v=1.7">
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png?v=1.7">
   <link rel="stylesheet" href="/css/style.css">
 </head>
 <body>
@@ -29,7 +29,7 @@
         <a href="/review.html">Review</a>
         <a href="/backtest.html">Backtest</a>
       </nav>
-      <span class="app-version" title="App version">v1.6</span>
+      <span class="app-version" title="App version">v1.7</span>
       <div class="date-nav">
         <button type="button" id="prev-date">Previous day</button>
         <button type="button" id="today-date">Today</button>
@@ -46,7 +46,7 @@
     <div id="cards" class="cards"></div>
     <section class="board">
       <h2>Matchup board</h2>
-      <div class="table-wrap">
+      <div class="table-wrap fit">
         <table id="board">
           <thead>
             <tr>
@@ -55,20 +55,20 @@
               <th data-key="home">Home</th>
               <th data-key="score" class="num">Score</th>
               <th data-key="edge" class="num">Edge</th>
-              <th data-key="awayRecord">Away wins–losses–overtime losses</th>
-              <th data-key="homeRecord">Home wins–losses–overtime losses</th>
-              <th data-key="gd" class="num">Goal differential gap</th>
-              <th data-key="pdo" class="num">Shooting plus save gap</th>
-              <th data-key="l5" class="num">Last-five goal differential gap</th>
-              <th data-key="sog" class="num">Shots-on-goal share gap</th>
-              <th data-key="xg" class="num">Goals versus expected gap</th>
-              <th data-key="cf" class="num">Shot-attempt share gap</th>
-              <th data-key="hdcf" class="num">High-danger chance share gap</th>
-              <th data-key="xgf5" class="num">Even-strength expected-goals gap</th>
-              <th data-key="proj" class="num">Estimated score</th>
-              <th data-key="mlAway" class="num">Away moneyline</th>
-              <th data-key="mlHome" class="num">Home moneyline</th>
-              <th data-key="ou" class="num">Over/under</th>
+              <th data-key="awayRecord">Away record</th>
+              <th data-key="homeRecord">Home record</th>
+              <th data-key="gd" class="num">Goal diff gap</th>
+              <th data-key="pdo" class="num">PDO gap</th>
+              <th data-key="l5" class="num">Last five GD</th>
+              <th data-key="sog" class="num">Shot share gap</th>
+              <th data-key="xg" class="num">Goals vs xG</th>
+              <th data-key="cf" class="num">Corsi gap</th>
+              <th data-key="hdcf" class="num">High danger gap</th>
+              <th data-key="xgf5" class="num">Even strength xG</th>
+              <th data-key="proj" class="num">Estimate</th>
+              <th data-key="mlAway" class="num">Away line</th>
+              <th data-key="mlHome" class="num">Home line</th>
+              <th data-key="ou" class="num">Total</th>
             </tr>
           </thead>
           <tbody></tbody>
@@ -79,7 +79,7 @@
       <h2>How the edge is scored</h2>
       <ul>
         <li><strong>Season record</strong> — regulation/OT wins–losses–OT losses. Compared on points percentage.</li>
-        <li><strong>PDO</strong> — shooting % + save % from shots on goal. ~100 is league-normal; much higher is finishing/save luck.</li>
+        <li><strong>PDO</strong> — shooting % + save % from shots on goal. ~100 is league-normal; much higher is finishing/save luck. The board opens sorted by the absolute PDO gap, largest first. A game missing PDO on either side sorts last.</li>
         <li><strong>Avg GD last 5</strong> — (GF − GA) / games in each club’s last five completed regular-season games.</li>
         <li><strong>SOG share</strong> — shots on goal for / (SF + SA).</li>
         <li><strong>Expected vs actual</strong> — MoneyPuck xGoals vs actual goals (GF − xGF). Positive means outscoring the shot quality.</li>
@@ -98,7 +98,7 @@
     </section>
   </main>
   <footer>
-    <span>v1.6</span>
+    <span>v1.7</span>
   </footer>
   <script src="/js/archive.js"></script>
   <script src="/js/stats.js"></script>
