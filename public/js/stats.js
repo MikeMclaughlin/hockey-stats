@@ -144,6 +144,10 @@
     return { games: used, total: gd, avg: round(gd / used, 2) };
   }
 
+  // Left unchanged after the 2025-26 replay (1,140 games, both clubs at least
+  // 5 GP): Edge picks won 55.8% (636 of 1,140). Modest weight moves changed
+  // that by about three games. cf, hdcf, xgDiff, and stXg are not in that
+  // replay, so those four weights stay as well.
   var EDGE_WEIGHTS = {
     ptsPct: 1.2,
     gd: 1.0,
@@ -224,6 +228,112 @@
       measured: measured,
       totalMeasures: totalMeasures,
       lowData: measured * 2 < totalMeasures
+    };
+  }
+
+  /**
+   * A matchup is a toss-up when the absolute Edge score is under 0.25.
+   * On the 2025-26 replay that is about the closest tenth of games.
+   */
+  var TOSSUP_ABS_SCORE = 0.25;
+
+  /**
+   * P(the nominal Edge side wins), from 1,140 graded 2025-26 games.
+   * The pick won about 55% until |score| reached 1.75, then about 65%
+   * (99 games at or above that). A fitted curve did not beat a flat 55%.
+   */
+  var EDGE_WIN_PROB_HIGH_ABS = 1.75;
+  var EDGE_WIN_PROB_BASE = 55;
+  var EDGE_WIN_PROB_HIGH = 65;
+
+  function isTossUp(edge) {
+    if (!edge || edge.score == null || !isFinite(edge.score)) return false;
+    return Math.abs(edge.score) < TOSSUP_ABS_SCORE;
+  }
+
+  function edgeWinProb(edge) {
+    if (!edge || edge.score == null || !isFinite(edge.score)) return null;
+    var pick = Math.abs(edge.score) >= EDGE_WIN_PROB_HIGH_ABS ? EDGE_WIN_PROB_HIGH : EDGE_WIN_PROB_BASE;
+    var side = edge.winner === "away" ? "away" : "home";
+    var away = side === "away" ? pick : 100 - pick;
+    return {
+      away: away,
+      home: 100 - away,
+      pick: pick,
+      side: side,
+      tossUp: isTossUp(edge)
+    };
+  }
+
+  function noVigProb(odds) {
+    if (!odds || odds.awayMl == null || odds.homeMl == null) return null;
+    var away = impliedWinPct(odds.awayMl);
+    var home = impliedWinPct(odds.homeMl);
+    if (away == null || home == null || away + home <= 0) return null;
+    return {
+      away: round(100 * away / (away + home), 1),
+      home: round(100 * home / (away + home), 1)
+    };
+  }
+
+  function periodLabel(descriptor) {
+    descriptor = descriptor || {};
+    var n = Number(descriptor.number);
+    var type = String(descriptor.periodType || "").toUpperCase();
+    if (type === "SO") return "SO";
+    if (type === "OT") return n > 4 ? "OT" + (n - 3) : "OT";
+    if (n === 1) return "1st";
+    if (n === 2) return "2nd";
+    if (n === 3) return "3rd";
+    if (n > 3) return n + "th";
+    return "";
+  }
+
+  function isLiveState(state) {
+    var st = String(state || "").toUpperCase();
+    return st === "LIVE" || st === "CRIT" || st.indexOf("LIVE") === 0;
+  }
+
+  function isFinalScoreState(state) {
+    var st = String(state || "").toUpperCase();
+    return st === "OFF" || st === "FINAL" || st.indexOf("FINAL") === 0;
+  }
+
+  /**
+   * Final or live score from an NHL scoreboard game.
+   * Future games stay blank even if the feed sends 0–0.
+   */
+  function presentScore(game) {
+    game = game || {};
+    var st = String(game.gameState || "").toUpperCase();
+    var awayRaw = game.awayTeam && game.awayTeam.score;
+    var homeRaw = game.homeTeam && game.homeTeam.score;
+    var final = isFinalScoreState(st);
+    var live = isLiveState(st);
+    var pd = game.periodDescriptor || {};
+    var clock = game.clock || {};
+    var period = periodLabel(pd);
+    var status = null;
+    if (final) {
+      var last = (game.gameOutcome && game.gameOutcome.lastPeriodType) || pd.periodType || "";
+      last = String(last).toUpperCase();
+      status = (last === "OT" || last === "SO") ? "Final/" + last : "Final";
+    } else if (live) {
+      if (clock.inIntermission) status = (period || "Period") + " intermission";
+      else status = [period, clock.timeRemaining].filter(Boolean).join(" ");
+    }
+    var away = Number(awayRaw);
+    var home = Number(homeRaw);
+    var show = (final || live) && isFinite(away) && isFinite(home);
+    return {
+      away: show ? away : null,
+      home: show ? home : null,
+      state: st,
+      live: live,
+      final: final,
+      status: status,
+      period: period || null,
+      clock: clock.timeRemaining || null
     };
   }
 
@@ -645,6 +755,16 @@
     explainEdge: explainEdge,
     pillSign: pillSign,
     METRIC_LABELS: METRIC_LABELS,
-    EDGE_WEIGHTS: EDGE_WEIGHTS
+    EDGE_WEIGHTS: EDGE_WEIGHTS,
+    TOSSUP_ABS_SCORE: TOSSUP_ABS_SCORE,
+    EDGE_WIN_PROB_HIGH_ABS: EDGE_WIN_PROB_HIGH_ABS,
+    EDGE_WIN_PROB_BASE: EDGE_WIN_PROB_BASE,
+    EDGE_WIN_PROB_HIGH: EDGE_WIN_PROB_HIGH,
+    isTossUp: isTossUp,
+    edgeWinProb: edgeWinProb,
+    noVigProb: noVigProb,
+    presentScore: presentScore,
+    isLiveState: isLiveState,
+    isFinalScoreState: isFinalScoreState
   };
 });

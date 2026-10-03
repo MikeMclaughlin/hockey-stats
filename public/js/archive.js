@@ -171,9 +171,31 @@
     row.gameState = gameState || row.gameState;
     row.correct = row.projectedAway === row.actualAway && row.projectedHome === row.actualHome;
     row.winnerCorrect = winnerOf(row.projectedAway, row.projectedHome) === winnerOf(row.actualAway, row.actualHome);
+    var errs = scoreErrors(row);
+    row.totalGoalsError = errs.totalGoalsError;
+    row.marginError = errs.marginError;
+    row.projectedTotal = errs.projectedTotal;
+    row.actualTotal = errs.actualTotal;
     row.graded = true;
-    row.gradedAt = new Date().toISOString();
+    row.gradedAt = row.gradedAt || new Date().toISOString();
     return row;
+  }
+
+  function scoreErrors(row) {
+    row = row || {};
+    if (row.projectedAway == null || row.projectedHome == null || row.actualAway == null || row.actualHome == null) {
+      return { totalGoalsError: null, marginError: null, projectedTotal: null, actualTotal: null };
+    }
+    var projectedTotal = Number(row.projectedAway) + Number(row.projectedHome);
+    var actualTotal = Number(row.actualAway) + Number(row.actualHome);
+    var projectedMargin = Number(row.projectedAway) - Number(row.projectedHome);
+    var actualMargin = Number(row.actualAway) - Number(row.actualHome);
+    return {
+      totalGoalsError: Math.abs(projectedTotal - actualTotal),
+      marginError: Math.abs(projectedMargin - actualMargin),
+      projectedTotal: projectedTotal,
+      actualTotal: actualTotal
+    };
   }
 
   function isFinalState(state) {
@@ -191,11 +213,16 @@
     var graded = 0;
     var exact = 0;
     var winner = 0;
+    var totalErr = 0;
+    var marginErr = 0;
     rows.forEach(function (r) {
       if (!r.graded) return;
       graded += 1;
       if (r.correct) exact += 1;
       if (r.winnerCorrect) winner += 1;
+      var errs = scoreErrors(r);
+      if (errs.totalGoalsError != null) totalErr += errs.totalGoalsError;
+      if (errs.marginError != null) marginErr += errs.marginError;
     });
     return {
       total: total,
@@ -204,8 +231,30 @@
       exact: exact,
       winner: winner,
       exactPct: graded ? Math.round((exact / graded) * 1000) / 10 : null,
-      winnerPct: graded ? Math.round((winner / graded) * 1000) / 10 : null
+      winnerPct: graded ? Math.round((winner / graded) * 1000) / 10 : null,
+      meanTotalGoalsError: graded ? Math.round((totalErr / graded) * 100) / 100 : null,
+      meanMarginError: graded ? Math.round((marginErr / graded) * 100) / 100 : null,
+      empty: graded === 0
     };
+  }
+
+  /**
+   * Keep the pre-game Edge pick until puck drop, then lock it.
+   * A game that has already started does not gain a new pick.
+   */
+  function rememberEdge(existing, row, nowMs) {
+    if (!existing || !row || !row.edgeWinner) return existing;
+    if (existing.edgeLocked) return existing;
+    if (hasStarted(existing, nowMs) || hasStarted(row, nowMs)) {
+      if (existing.edgeWinner) existing.edgeLocked = true;
+      return existing;
+    }
+    existing.edgeWinner = row.edgeWinner;
+    existing.edgeScore = row.edgeScore != null ? row.edgeScore : null;
+    existing.edgeAbbrev = row.edgeAbbrev || null;
+    existing.edgeTossUp = !!row.edgeTossUp;
+    existing.edgeLocked = false;
+    return existing;
   }
 
   function oddsLines(odds) {
@@ -289,6 +338,8 @@
     isFinalState: isFinalState,
     listEstimates: listEstimates,
     summarize: summarize,
+    scoreErrors: scoreErrors,
+    rememberEdge: rememberEdge,
     verdict: verdict,
     winnerOf: winnerOf,
     hasStarted: hasStarted,

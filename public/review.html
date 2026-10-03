@@ -4,11 +4,11 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Hockey Stats — Estimate review</title>
-  <link rel="icon" href="/favicon.ico?v=1.5" sizes="any">
-  <link rel="icon" href="/favicon.svg?v=1.5" type="image/svg+xml">
-  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png?v=1.5">
-  <link rel="icon" type="image/png" sizes="192x192" href="/favicon-192x192.png?v=1.5">
-  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png?v=1.5">
+  <link rel="icon" href="/favicon.ico?v=1.6" sizes="any">
+  <link rel="icon" href="/favicon.svg?v=1.6" type="image/svg+xml">
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png?v=1.6">
+  <link rel="icon" type="image/png" sizes="192x192" href="/favicon-192x192.png?v=1.6">
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png?v=1.6">
   <link rel="stylesheet" href="/css/style.css">
 </head>
 <body>
@@ -29,7 +29,11 @@
         <a href="/review.html" aria-current="page">Review</a>
         <a href="/backtest.html">Backtest</a>
       </nav>
-      <span class="app-version" title="App version">v1.5</span>
+      <span class="app-version" title="App version">v1.6</span>
+      <label>Range <select id="range">
+        <option value="season">2026-27 so far</option>
+        <option value="7">Last 7 days</option>
+      </select></label>
       <button type="button" id="grade">Grade finals</button>
       </div>
       <p id="meta" class="meta meta-line">Loading…</p>
@@ -38,7 +42,9 @@
 
   <main>
     <p id="storage-note" class="note hidden"></p>
+    <section id="accuracy" class="summary"></section>
     <section id="summary" class="summary"></section>
+    <section id="market" class="market-summary"></section>
     <section class="board">
       <h2>Season estimates</h2>
       <div class="table-wrap">
@@ -53,6 +59,8 @@
               <th data-key="actualLabel">Final</th>
               <th data-key="verdict">Result</th>
               <th data-key="winnerCorrect">Winner</th>
+              <th data-key="totalGoalsError" class="num">Total error</th>
+              <th data-key="marginError" class="num">Margin error</th>
             </tr>
           </thead>
           <tbody></tbody>
@@ -66,13 +74,18 @@
         <li><strong>Winner only</strong> — the score missed, but the projected winner was right.</li>
         <li><strong>Miss</strong> — both the score and the winner missed.</li>
         <li><strong>Pending</strong> — the game has not been graded yet.</li>
+        <li><strong>Total error</strong> — absolute difference between projected total goals and actual total goals.</li>
+        <li><strong>Margin error</strong> — absolute difference between the projected goal margin (away minus home) and the actual margin.</li>
+        <li><strong>Range</strong> — 2026-27 so far, or the last 7 days ending on the NHL scoreboard date. Counts use graded games in that range only. If none are graded, the accuracy line says no graded games yet.</li>
+        <li><strong>Edge vs market</strong> — the saved Edge pick (or the pick rebuilt from saved pre-game stats) against the saved moneyline favorite, and the locked total against the saved over/under. A toss-up (|Edge score| under 0.25) is not a firm pick. Games with neither a moneyline nor a total are left out and counted on their own.</li>
         <li><strong>Lock</strong> — the estimate updates when the model changes until puck drop (start time). After that it stays put, even if the live projection moves. Review shows the locked score beside the current model. A row marked “locked ≠ live” was frozen earlier (for example on Sep 10) and the model has since moved.</li>
       </ul>
     </section>
   </main>
   <footer>
-    <span>v1.5</span>
+    <span>v1.6</span>
   </footer>
+  <script src="/js/stats.js"></script>
   <script src="/js/archive.js"></script>
   <script src="/js/review.js"></script>
 </body>

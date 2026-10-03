@@ -4,11 +4,11 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Hockey Stats — Matchups</title>
-  <link rel="icon" href="/favicon.ico?v=1.5" sizes="any">
-  <link rel="icon" href="/favicon.svg?v=1.5" type="image/svg+xml">
-  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png?v=1.5">
-  <link rel="icon" type="image/png" sizes="192x192" href="/favicon-192x192.png?v=1.5">
-  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png?v=1.5">
+  <link rel="icon" href="/favicon.ico?v=1.6" sizes="any">
+  <link rel="icon" href="/favicon.svg?v=1.6" type="image/svg+xml">
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png?v=1.6">
+  <link rel="icon" type="image/png" sizes="192x192" href="/favicon-192x192.png?v=1.6">
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png?v=1.6">
   <link rel="stylesheet" href="/css/style.css">
 </head>
 <body>
@@ -29,7 +29,7 @@
         <a href="/review.html">Review</a>
         <a href="/backtest.html">Backtest</a>
       </nav>
-      <span class="app-version" title="App version">v1.5</span>
+      <span class="app-version" title="App version">v1.6</span>
       <div class="date-nav">
         <button type="button" id="prev-date">Previous day</button>
         <button type="button" id="today-date">Today</button>
@@ -53,6 +53,7 @@
               <th data-key="time">Time</th>
               <th data-key="away">Away</th>
               <th data-key="home">Home</th>
+              <th data-key="score" class="num">Score</th>
               <th data-key="edge" class="num">Edge</th>
               <th data-key="awayRecord">Away wins–losses–overtime losses</th>
               <th data-key="homeRecord">Home wins–losses–overtime losses</th>
@@ -89,13 +90,17 @@
         <li><strong>Moneyline / O/U</strong> — NHL partner board for the US (DraftKings when posted). The line is saved for every game and kept after puck drop. A played game with no saved line says so. A “≠ DK” mark means the model edge and the DraftKings favorite are different teams.</li>
         <li><strong>Seasons</strong> — the scoreboard season is the slate on the board. Records and rates use the latest season that already has a final regular-season game, for every date, and that choice stays. Before any final, they stay on the previous regular season. Early in the season the sample is small. A team with no regular-season games yet shows 2026-27 preseason for record, goals, shots, PDO, last five, and rest, marked pre. A stat with no preseason source stays blank. MoneyPuck does not publish 2026-27 preseason, so shot-attempt share, high-danger chances, expected goals, and special-teams expected goals stay blank until a regular-season MoneyPuck row exists. Regular-season numbers replace preseason as soon as that stat has them.</li>
         <li><strong>Edge sample</strong> — next to the edge, “based on N of 11 stats” counts how many measures had a number for both teams, including preseason fills. A blank on either side scores zero and is not counted. Fewer than 6 of 11 is marked low data.</li>
-        <li><strong>Updates</strong> — a scheduled job refreshes the board, re-locks estimates before puck drop, and grades finals. Opening the page is not required.</li>
+        <li><strong>Score</strong> — finals show the official score. A game in progress shows the live score, period, and clock when the NHL scoreboard has them, and the page checks again about every 90 seconds while any game is live. A finished game keeps its saved final if a later feed drops the score.</li>
+        <li><strong>Toss-up</strong> — an Edge score within 0.25 of zero (absolute value under 0.25) is labeled Toss-up and is not a firm pick. The Edge side is shown at 55% until the absolute score reaches 1.75, then 65%, next to the no-vig moneyline when a line is saved. That split is the 2025-26 replay (1,140 games): about 55% until 1.75, about 65% above it.</li>
+        <li><strong>Result</strong> — a finished game shows the locked estimate against the actual score (winner right or wrong) and whether the saved Edge pick was right. If the pick was not stored on the estimate, it is rebuilt once from the saved pre-game stats. A toss-up is not graded as a pick.</li>
+        <li><strong>Updates</strong> — a scheduled job refreshes the board, re-locks estimates before puck drop, and grades finals. Opening the page is not required. Live scores are not on that job.</li>
       </ul>
     </section>
   </main>
   <footer>
-    <span>v1.5</span>
+    <span>v1.6</span>
   </footer>
+  <script src="/js/archive.js"></script>
   <script src="/js/stats.js"></script>
   <script src="/js/app.js"></script>
 </body>

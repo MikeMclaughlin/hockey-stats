@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var state = { rows: [], sortKey: "gameDate", sortDir: 1 };
+  var state = { rows: [], sortKey: "gameDate", sortDir: 1, asOf: null };
 
   function $(id) { return document.getElementById(id); }
 
@@ -25,7 +25,7 @@
   function sorted() {
     var key = state.sortKey;
     var dir = state.sortDir;
-    return state.rows.slice().sort(function (a, b) {
+    return ranged().slice().sort(function (a, b) {
       var av = rowValue(a, key);
       var bv = rowValue(b, key);
       if (typeof av === "number" && typeof bv === "number") {
@@ -36,14 +36,82 @@
     });
   }
 
+  function dayStamp(iso) {
+    var t = Date.parse(String(iso || "").slice(0, 10) + "T00:00:00Z");
+    return isFinite(t) ? t : null;
+  }
+
+  function inRange(r) {
+    var mode = ($("range") && $("range").value) || "season";
+    if (mode === "7") {
+      var asOf = dayStamp(state.asOf || new Date().toISOString().slice(0, 10));
+      var game = dayStamp(r.gameDate);
+      if (asOf == null || game == null) return false;
+      return game <= asOf && game >= asOf - 6 * 86400000;
+    }
+    if (String(r.seasonId) === "20262027") return true;
+    return String(r.gameDate || "") >= "2026-09-01";
+  }
+
+  function ranged() {
+    return state.rows.filter(inRange);
+  }
+
+  function stat(value, label) {
+    return '<div class="stat"><b>' + value + "</b><span>" + label + "</span></div>";
+  }
+
+  function renderAccuracy(rows) {
+    var box = $("accuracy");
+    if (!box) return;
+    var graded = rows.filter(function (r) { return r.graded; });
+    if (!graded.length) {
+      box.innerHTML = '<p class="accuracy-empty">no graded games yet</p>';
+      return;
+    }
+    var sum = HockeyArchive.summarize(graded);
+    box.innerHTML =
+      stat(sum.winner + " of " + sum.graded + " (" + sum.winnerPct + "%)", "winner picks") +
+      stat(sum.exact + " of " + sum.graded + " (" + sum.exactPct + "%)", "exact scores") +
+      stat(sum.meanTotalGoalsError == null ? "—" : sum.meanTotalGoalsError, "total-goals error") +
+      stat(sum.meanMarginError == null ? "—" : sum.meanMarginError, "goal-margin error");
+  }
+
+  function renderMarket(rows) {
+    var box = $("market");
+    if (!box) return;
+    var graded = rows.filter(function (r) { return r.graded; });
+    if (!graded.length) {
+      box.textContent = "";
+      return;
+    }
+    var noOdds = graded.filter(function (r) { return r.oddsMissing; }).length;
+    var toss = graded.filter(function (r) { return r.edgeTossUpView; }).length;
+    var picks = graded.filter(function (r) { return r.edgePickWon === true || r.edgePickWon === false; });
+    var pickWins = picks.filter(function (r) { return r.edgePickWon; }).length;
+    var favs = graded.filter(function (r) { return r.favoriteWon === true || r.favoriteWon === false; });
+    var favWins = favs.filter(function (r) { return r.favoriteWon; }).length;
+    var both = picks.filter(function (r) { return r.edgeAgreesFavorite === true || r.edgeAgreesFavorite === false; });
+    var same = both.filter(function (r) { return r.edgeAgreesFavorite; }).length;
+    var ou = graded.filter(function (r) { return r.ouHit === true || r.ouHit === false; });
+    var ouHits = ou.filter(function (r) { return r.ouHit; }).length;
+    box.innerHTML =
+      "Edge pick won " + pickWins + " of " + picks.length +
+      ". Market favorite won " + favWins + " of " + favs.length +
+      ". Same side on " + same + " of " + both.length +
+      ". Over/under hit " + ouHits + " of " + ou.length +
+      ". " + noOdds + " graded game" + (noOdds === 1 ? "" : "s") + " had no saved odds" +
+      ". " + toss + " toss-up" + (toss === 1 ? "" : "s") + " excluded from the Edge pick.";
+  }
+
   function renderSummary(sum, extra) {
     extra = extra || "";
     $("summary").innerHTML =
-      '<div class="stat"><b>' + sum.total + "</b><span>locked</span></div>" +
-      '<div class="stat"><b>' + sum.graded + "</b><span>graded</span></div>" +
-      '<div class="stat"><b>' + sum.pending + "</b><span>pending</span></div>" +
-      '<div class="stat"><b>' + (sum.exactPct == null ? "—" : sum.exactPct + "%") + "</b><span>exact</span></div>" +
-      '<div class="stat"><b>' + (sum.winnerPct == null ? "—" : sum.winnerPct + "%") + "</b><span>winner</span></div>";
+      stat(sum.total, "locked") +
+      stat(sum.graded, "graded") +
+      stat(sum.pending, "pending") +
+      stat(sum.exactPct == null ? "—" : sum.exactPct + "%", "exact") +
+      stat(sum.winnerPct == null ? "—" : sum.winnerPct + "%", "winner");
     $("meta").textContent = sum.total + " estimates · exact " +
       (sum.exactPct == null ? "—" : sum.exactPct + "%") + " · winner " +
       (sum.winnerPct == null ? "—" : sum.winnerPct + "%") + extra;
@@ -53,7 +121,10 @@
     var tbody = document.querySelector("#review tbody");
     var rows = sorted();
     if (!rows.length) {
-      tbody.innerHTML = '<tr><td colspan="8" class="empty">No locked estimates yet. Open Matchups so today’s slate is saved. On Vercel that save needs BLOB_READ_WRITE_TOKEN or a connected Blob store (BLOB_STORE_ID).</td></tr>';
+      var empty = state.rows.length
+        ? "No estimates in this range."
+        : "No locked estimates yet. Open Matchups so today’s slate is saved. On Vercel that save needs BLOB_READ_WRITE_TOKEN or a connected Blob store (BLOB_STORE_ID).";
+      tbody.innerHTML = '<tr><td colspan="10" class="empty">' + empty + "</td></tr>";
       return;
     }
     tbody.innerHTML = rows.map(function (r) {
@@ -72,6 +143,8 @@
           "<td class='num'>" + (r.actualLabel || "—") + "</td>" +
           "<td><span class='mark " + v + "'>" + verdictLabel(v) + "</span></td>" +
           "<td>" + (!r.graded ? "—" : r.winnerCorrect ? "Yes" : "No") + "</td>" +
+          "<td class='num'>" + (r.graded && r.totalGoalsError != null ? r.totalGoalsError : "—") + "</td>" +
+          "<td class='num'>" + (r.graded && r.marginError != null ? r.marginError : "—") + "</td>" +
         "</tr>"
       );
     }).join("");
@@ -84,6 +157,7 @@
   }
 
   function render(payload) {
+    state.payload = payload || {};
     if (payload && payload.error && !(payload.estimates && payload.estimates.length)) {
       $("meta").textContent = payload.error;
       var warn = $("storage-note");
@@ -93,13 +167,17 @@
       }
     }
     state.rows = payload.estimates || [];
+    state.asOf = payload.asOf || state.asOf;
     var extra = "";
     if (payload.statsSeasonLabel) extra += " · stats " + payload.statsSeasonLabel;
     if (payload.scoreboardSeasonLabel) extra += " · scoreboard " + payload.scoreboardSeasonLabel;
     if (payload.note) extra += " · " + payload.note;
     if (payload.storageError) extra += " · not saved (" + payload.storage + ")";
     else if (payload.persisted === false) extra += " · not saved";
-    renderSummary(payload.summary || HockeyArchive.summarize(state.rows), extra);
+    var shown = ranged();
+    renderAccuracy(shown);
+    renderMarket(shown);
+    renderSummary(HockeyArchive.summarize(shown), extra);
     var warn = $("storage-note");
     if (warn) {
       if (payload.storageError) {
@@ -130,6 +208,9 @@
       renderTable();
     });
   });
+
+  var range = $("range");
+  if (range) range.addEventListener("change", function () { render(state.payload || { estimates: state.rows, asOf: state.asOf }); });
 
   $("grade").addEventListener("click", function () {
     $("meta").textContent = "Grading…";
