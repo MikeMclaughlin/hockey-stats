@@ -19,10 +19,10 @@ var matchupCache = Object.create(null);
 
 function productVersion() {
   try {
-    var parts = String(require("./package.json").version || "1.5.0").split(".");
-    return (parts[0] || "1") + "." + (parts[1] || "5");
+    var parts = String(require("./package.json").version || "1.6.0").split(".");
+    return (parts[0] || "1") + "." + (parts[1] || "6");
   } catch (e) {
-    return "1.5";
+    return "1.6";
   }
 }
 
@@ -130,7 +130,7 @@ function sleep(ms) {
 
 function httpsGet(urlStr, cb, attempt) {
   attempt = attempt || 1;
-  https.get(urlStr, { headers: { "User-Agent": "hockey-stats/1.5", Accept: "*/*" } }, function (up) {
+  https.get(urlStr, { headers: { "User-Agent": "hockey-stats/1.6", Accept: "*/*" } }, function (up) {
     if (up.statusCode >= 300 && up.statusCode < 400 && up.headers.location) {
       up.resume();
       httpsGet(up.headers.location, cb, attempt);
@@ -521,6 +521,7 @@ async function buildMatchups(date) {
   var score = await getJson(day
     ? "https://api-web.nhle.com/v1/score/" + day
     : "https://api-web.nhle.com/v1/score/now");
+  rememberScoreboard(day || "now", score);
   var standings = await getJson("https://api-web.nhle.com/v1/standings/now");
   var liveOdds = await fetchPartnerOdds(null);
   if (day) {
@@ -688,6 +689,7 @@ async function buildMatchups(date) {
       gameState: g.gameState,
       gameType: g.gameType,
       gameTypeLabel: stats.gameLabel(g.gameType),
+      scoreboard: stats.presentScore(g),
       away: away,
       home: home,
       edge: edge,
@@ -782,6 +784,19 @@ async function persistMatchups(body) {
     if (row && archive.isFinalState(m.gameState) && as != null && hs != null) {
       archive.applyResult(row, as, hs, m.gameState);
     }
+    if (row && m.edge && m.edge.winner) {
+      var edgeAbbrev = m.edge.winner === "away"
+        ? (m.away && m.away.abbrev)
+        : (m.home && m.home.abbrev);
+      archive.rememberEdge(row, {
+        edgeWinner: m.edge.winner,
+        edgeScore: m.edge.score,
+        edgeAbbrev: edgeAbbrev,
+        edgeTossUp: stats.isTossUp(m.edge),
+        gameState: m.gameState,
+        startTimeUTC: m.startTimeUTC
+      }, Date.now());
+    }
   });
   await saveEstimates(storeEst);
   var arch = await store.readJson(store.KEYS.matchupArchive, archive.emptyStore());
@@ -818,9 +833,257 @@ async function persistMatchups(body) {
   return storeEst;
 }
 
+var SCORE_CACHE_MS = 45 * 1000;
+var scoreCache = Object.create(null);
+
+function rememberScoreboard(key, score) {
+  if (!score) return;
+  scoreCache[key || "now"] = { at: Date.now(), score: score };
+}
+
+async function loadScoreboard(date) {
+  var key = date || "now";
+  var hit = scoreCache[key];
+  if (hit && hit.score && Date.now() - hit.at < SCORE_CACHE_MS) return hit;
+  var url = date
+    ? "https://api-web.nhle.com/v1/score/" + date
+    : "https://api-web.nhle.com/v1/score/now";
+  var score = await getJson(url);
+  rememberScoreboard(key, score);
+  return scoreCache[key];
+}
+
+function scorePayload(packed) {
+  var score = (packed && packed.score) || {};
+  var games = (score.games || []).map(function (g) {
+    var presented = stats.presentScore(g);
+    return {
+      id: g.id,
+      away: presented.away,
+      home: presented.home,
+      state: presented.state,
+      live: presented.live,
+      final: presented.final,
+      status: presented.status,
+      period: presented.period,
+      clock: presented.clock,
+      awayAbbrev: g.awayTeam && g.awayTeam.abbrev,
+      homeAbbrev: g.homeTeam && g.homeTeam.abbrev
+    };
+  });
+  return {
+    currentDate: score.currentDate || null,
+    prevDate: score.prevDate || null,
+    nextDate: score.nextDate || null,
+    cachedAt: packed && packed.at ? new Date(packed.at).toISOString() : new Date().toISOString(),
+    games: games
+  };
+}
+
+async function overlayScores(body, date) {
+  var packed;
+  try {
+    packed = await loadScoreboard(date || null);
+  } catch (e) {
+    return body;
+  }
+  var byId = {};
+  ((packed.score && packed.score.games) || []).forEach(function (g) {
+    byId[String(g.id)] = g;
+  });
+  (body.matchups || []).forEach(function (m) {
+    var game = byId[String(m.id)];
+    var prev = m.scoreboard || {};
+    if (!game) return;
+    var fresh = stats.presentScore(game);
+    if (fresh.away == null && prev.final && prev.away != null && prev.home != null) {
+      fresh.away = prev.away;
+      fresh.home = prev.home;
+      fresh.final = true;
+      fresh.live = false;
+      fresh.status = fresh.status || prev.status || "Final";
+    }
+    m.scoreboard = fresh;
+    if (fresh.state) m.gameState = fresh.state;
+    if (fresh.away != null && m.away) m.away.score = fresh.away;
+    if (fresh.home != null && m.home) m.home.score = fresh.home;
+  });
+  return body;
+}
+
+function edgePickFrom(row, archRow, awayAbbrev, homeAbbrev) {
+  if (row && row.edgeWinner) {
+    return {
+      winner: row.edgeWinner,
+      score: row.edgeScore != null ? row.edgeScore : null,
+      abbrev: row.edgeAbbrev || (row.edgeWinner === "away" ? awayAbbrev : homeAbbrev),
+      tossUp: !!row.edgeTossUp,
+      source: "saved"
+    };
+  }
+  if (!archRow || !archRow.awayPills || !archRow.homePills) return null;
+  var edge = stats.matchupEdge(archRow.awayPills, archRow.homePills);
+  if (!edge || edge.score == null) return null;
+  var winner = edge.winner === "away" ? "away" : "home";
+  return {
+    winner: winner,
+    score: edge.score,
+    abbrev: winner === "away" ? awayAbbrev : homeAbbrev,
+    tossUp: stats.isTossUp(edge),
+    source: "archive"
+  };
+}
+
+function performanceView(matchup, row, archRow) {
+  var board = matchup.scoreboard || {};
+  var actualAway = board.away;
+  var actualHome = board.home;
+  if ((actualAway == null || actualHome == null) && row && row.actualAway != null && row.actualHome != null) {
+    actualAway = row.actualAway;
+    actualHome = row.actualHome;
+  }
+  var final = !!(board.final || (row && row.graded));
+  if (!final || actualAway == null || actualHome == null) return null;
+  if (board.away == null) {
+    matchup.scoreboard = Object.assign({}, board, {
+      away: actualAway,
+      home: actualHome,
+      final: true,
+      live: false,
+      status: board.status || "Final"
+    });
+  }
+  var projectedAway = row && row.projectedAway != null ? Number(row.projectedAway) : null;
+  var projectedHome = row && row.projectedHome != null ? Number(row.projectedHome) : null;
+  var missingEstimate = projectedAway == null || projectedHome == null;
+  var exact = null;
+  var winnerCorrect = null;
+  var errs = { totalGoalsError: null, marginError: null };
+  if (!missingEstimate) {
+    exact = projectedAway === Number(actualAway) && projectedHome === Number(actualHome);
+    winnerCorrect = archive.winnerOf(projectedAway, projectedHome) === archive.winnerOf(actualAway, actualHome);
+    errs = archive.scoreErrors({
+      projectedAway: projectedAway,
+      projectedHome: projectedHome,
+      actualAway: actualAway,
+      actualHome: actualHome
+    });
+  }
+  var pick = edgePickFrom(row, archRow, matchup.away && matchup.away.abbrev, matchup.home && matchup.home.abbrev);
+  var actualWinner = archive.winnerOf(actualAway, actualHome);
+  var edgeCorrect = null;
+  if (pick && !pick.tossUp && pick.winner && pick.winner !== "even" && actualWinner && actualWinner !== "tie") {
+    edgeCorrect = pick.winner === actualWinner;
+  }
+  return {
+    estimateLabel: missingEstimate ? null : projectedAway + "–" + projectedHome,
+    actualLabel: Number(actualAway) + "–" + Number(actualHome),
+    exact: exact,
+    winnerCorrect: winnerCorrect,
+    totalGoalsError: errs.totalGoalsError,
+    marginError: errs.marginError,
+    edgeAbbrev: pick ? pick.abbrev : null,
+    edgeWinner: pick ? pick.winner : null,
+    edgeCorrect: edgeCorrect,
+    tossUp: !!(pick && pick.tossUp),
+    edgeSource: pick ? pick.source : null,
+    missingEstimate: missingEstimate,
+    missingEdge: !pick
+  };
+}
+
+async function attachHistory(body) {
+  var est = await loadEstimates();
+  var arch = await store.readJson(store.KEYS.matchupArchive, archive.emptyStore());
+  (body.matchups || []).forEach(function (m) {
+    var id = String(m.id);
+    var row = est.byId && est.byId[id];
+    var archRow = arch.byId && arch.byId[id];
+    var awayAbbrev = m.away && m.away.abbrev;
+    var homeAbbrev = m.home && m.home.abbrev;
+    var pick = edgePickFrom(row, archRow, awayAbbrev, homeAbbrev);
+    if (!row && !pick) {
+      m.saved = null;
+      m.performance = null;
+      return;
+    }
+    m.saved = {
+      projectedAway: row ? row.projectedAway : null,
+      projectedHome: row ? row.projectedHome : null,
+      projectedLabel: row ? row.projectedLabel : null,
+      edgeWinner: pick ? pick.winner : null,
+      edgeScore: pick ? pick.score : null,
+      edgeAbbrev: pick ? pick.abbrev : null,
+      edgeTossUp: pick ? !!pick.tossUp : false,
+      edgeSource: pick ? pick.source : null,
+      graded: !!(row && row.graded),
+      actualAway: row ? row.actualAway : null,
+      actualHome: row ? row.actualHome : null
+    };
+    m.performance = performanceView(m, row, archRow);
+  });
+  return body;
+}
+
+function annotateReviewRow(row, archRow, oddsRow) {
+  var errs = archive.scoreErrors(row);
+  row.totalGoalsError = errs.totalGoalsError;
+  row.marginError = errs.marginError;
+  row.projectedTotal = errs.projectedTotal;
+  row.actualTotal = errs.actualTotal;
+  var pick = edgePickFrom(row, archRow, row.awayAbbrev, row.homeAbbrev);
+  row.edgeWinnerView = pick ? pick.winner : null;
+  row.edgeAbbrevView = pick ? pick.abbrev : null;
+  row.edgeScoreView = pick ? pick.score : null;
+  row.edgeTossUpView = !!(pick && pick.tossUp);
+  row.edgeSource = pick ? pick.source : null;
+  var lines = oddsRow ? archive.oddsLines(oddsRow) : null;
+  var hasMl = !!(lines && lines.awayMl != null && lines.homeMl != null);
+  var hasTotal = !!(lines && lines.total != null);
+  row.savedOdds = hasMl || hasTotal;
+  row.oddsMissing = !row.savedOdds;
+  row.marketSide = hasMl ? stats.marketSide(lines) : null;
+  row.ouLine = hasTotal ? lines.total : null;
+  var actualWinner = row.graded ? archive.winnerOf(row.actualAway, row.actualHome) : null;
+  row.edgePickWon = null;
+  if (row.graded && pick && !pick.tossUp && pick.winner && pick.winner !== "even" && actualWinner && actualWinner !== "tie") {
+    row.edgePickWon = pick.winner === actualWinner;
+  }
+  row.favoriteWon = null;
+  if (row.graded && hasMl && row.marketSide && row.marketSide !== "even" && actualWinner && actualWinner !== "tie") {
+    row.favoriteWon = row.marketSide === actualWinner;
+  }
+  row.edgeAgreesFavorite = null;
+  if (pick && !pick.tossUp && hasMl && row.marketSide && row.marketSide !== "even" && pick.winner !== "even") {
+    row.edgeAgreesFavorite = pick.winner === row.marketSide;
+  }
+  row.ouPick = null;
+  row.ouHit = null;
+  if (hasTotal && row.projectedAway != null && row.projectedHome != null) {
+    var projectedTotal = Number(row.projectedAway) + Number(row.projectedHome);
+    if (projectedTotal > lines.total) row.ouPick = "over";
+    else if (projectedTotal < lines.total) row.ouPick = "under";
+    else row.ouPick = "push";
+    if (row.graded && row.actualAway != null && row.actualHome != null && row.ouPick !== "push") {
+      var actualTotal = Number(row.actualAway) + Number(row.actualHome);
+      if (actualTotal === Number(lines.total)) row.ouHit = null;
+      else row.ouHit = (actualTotal > lines.total ? "over" : "under") === row.ouPick;
+    }
+  }
+  return row;
+}
+
 async function estimatesPayload(est) {
   est = est || await loadEstimates();
-  var estimates = archive.listEstimates(est).sort(function (a, b) {
+  var arch = await store.readJson(store.KEYS.matchupArchive, archive.emptyStore());
+  var oddsStore = await store.readJson(store.KEYS.odds, { byId: {} });
+  var estimates = archive.listEstimates(est).map(function (row) {
+    return annotateReviewRow(
+      row,
+      arch.byId && arch.byId[String(row.id)],
+      oddsStore.byId && oddsStore.byId[String(row.id)]
+    );
+  }).sort(function (a, b) {
     return String(a.gameDate || "").localeCompare(String(b.gameDate || "")) ||
       String(a.startTimeUTC || "").localeCompare(String(b.startTimeUTC || ""));
   });
@@ -841,6 +1104,7 @@ async function estimatesPayload(est) {
     payload.scoreboardSeasonLabel = seasons.scoreboardSeasonLabel;
     payload.note = seasons.note;
     payload.earlySample = seasons.earlySample;
+    payload.asOf = score.currentDate || null;
   } catch (e) { /* review still loads without the season line */ }
   return payload;
 }
@@ -1199,6 +1463,7 @@ function detectRoute(req, url) {
   if (/\.(html|css|js|json|svg|png|ico)(\s|$|\?)/i.test(blob) && blob.indexOf("/api/") === -1) return p;
   var fromApi = blob.indexOf("/api/") !== -1 || /(^|\s)api\//.test(blob);
   if (!fromApi) return p;
+  if (blob.indexOf("/api/scores") !== -1 || blob.indexOf("api/scores") !== -1) return "/api/scores";
   if (blob.indexOf("cron") !== -1) return "/api/cron";
   if (blob.indexOf("grade") !== -1) return "/api/estimates/grade";
   if (blob.indexOf("seed") !== -1) return "/api/seed";
@@ -1298,35 +1563,52 @@ function handleApi(req, res, url) {
     });
     return true;
   }
+  if (pathname === "/api/scores") {
+    var scoreDate = cleanDate(url.searchParams.get("date"));
+    loadScoreboard(scoreDate)
+      .then(function (packed) { sendJson(res, 200, scorePayload(packed)); })
+      .catch(function (err) {
+        sendJson(res, 502, { error: String(err.message || err), games: [] });
+      });
+    return true;
+  }
   if (pathname === "/api/matchups") {
     var boardDate = cleanDate(url.searchParams.get("date"));
     var cacheKey = boardDate || "now";
     var hit = matchupCache[cacheKey];
+    function sendBoard(body, persist) {
+      var chain = persist
+        ? persistMatchups(body).catch(function (err) {
+          body.storageError = String(err.message || err);
+          body.storage = store.storageMode();
+        })
+        : Promise.resolve();
+      chain.then(function () {
+        return overlayScores(body, boardDate);
+      }).then(function () {
+        return attachHistory(body);
+      }).then(function () {
+        sendJson(res, 200, body);
+      }).catch(function (err) {
+        body.scoreError = String(err.message || err);
+        sendJson(res, 200, body);
+      });
+    }
     if (hit && hit.body && Date.now() - hit.at < CACHE_MS && url.searchParams.get("refresh") !== "1") {
-      sendJson(res, 200, hit.body);
+      sendBoard(hit.body, false);
       return true;
     }
     buildMatchups(boardDate)
       .then(function (body) {
         matchupCache[cacheKey] = { at: Date.now(), body: body };
-        if (boardDate) {
-          sendJson(res, 200, body);
-          return;
-        }
-        persistMatchups(body).then(function () {
-          sendJson(res, 200, body);
-        }).catch(function (err) {
-          body.storageError = String(err.message || err);
-          body.storage = store.storageMode();
-          sendJson(res, 200, body);
-        });
+        sendBoard(body, !boardDate);
       })
       .catch(function (err) {
         store.readJson(store.KEYS.matchups, null).then(function (fallback) {
           if (fallback && !boardDate) {
             fallback.stale = true;
             fallback.error = String(err.message || err);
-            sendJson(res, 200, fallback);
+            sendBoard(fallback, false);
             return;
           }
           sendJson(res, 502, { error: String(err.message || err), matchups: [] });
@@ -1422,6 +1704,7 @@ function routeKey(pathname) {
   if (p === "/version" || p === "/api/version") return "/api/version";
   if (p === "/cron" || p === "/api/cron") return "/api/cron";
   if (p === "/seed" || p === "/api/seed") return "/api/seed";
+  if (p === "/scores" || p === "/api/scores") return "/api/scores";
   if (p === "/matchups" || p === "/api/matchups") return "/api/matchups";
   if (p === "/backtest" || p === "/api/backtest") return "/api/backtest";
   if (p === "/streaks" || p === "/api/streaks") return "/api/streaks";

@@ -122,6 +122,111 @@
     return "<span class=\"edge-meta" + (low ? " low" : "") + "\">" + text + "</span>";
   }
 
+  var SCORE_POLL_MS = 90000;
+  var scoreTimer = null;
+
+  function edgeProbTitle() {
+    return "Toss-up when the absolute Edge score is under 0.25. The Edge side is 55% until that score reaches 1.75, then 65%. Market is the no-vig moneyline.";
+  }
+
+  function scoreInner(m) {
+    var s = m.scoreboard || {};
+    if (s.away == null || s.home == null || !(s.live || s.final)) return "";
+    var num = m.away.abbrev + " " + s.away + " – " + s.home + " " + m.home.abbrev;
+    var status = s.status ? '<span class="score-status">' + s.status + "</span>" : "";
+    return '<span class="score-num">' + num + "</span>" + status;
+  }
+
+  function edgeBadge(m) {
+    var e = m.edge || {};
+    var title = edgeProbTitle().replace(/"/g, "&quot;");
+    if (HockeyStats.isTossUp(e)) {
+      return '<span class="badge toss" title="' + title + '">Toss-up</span>';
+    }
+    if (e.winner === "even") return '<span class="badge even">Even matchup</span>';
+    return '<span class="badge">Edge: ' + m.edgeName + "</span>";
+  }
+
+  function edgeProbLine(m) {
+    var p = HockeyStats.edgeWinProb(m.edge);
+    if (!p) return "";
+    var side = p.side === "away" ? m.away : m.home;
+    var pct = p.side === "away" ? p.away : p.home;
+    var text = side.abbrev + " " + pct + "%";
+    var nv = HockeyStats.noVigProb(m.odds);
+    if (nv) text += " · market " + (p.side === "away" ? nv.away : nv.home) + "%";
+    return '<span class="edge-prob" title="' + edgeProbTitle().replace(/"/g, "&quot;") + '">' + text + "</span>";
+  }
+
+  function performanceOf(m) {
+    var sb = m.scoreboard || {};
+    if (!sb.final || sb.away == null || sb.home == null) return null;
+    var server = m.performance;
+    if (server && server.actualLabel === (sb.away + "–" + sb.home)) return server;
+    var saved = m.saved || null;
+    var actualAway = Number(sb.away);
+    var actualHome = Number(sb.home);
+    var projectedAway = saved && saved.projectedAway != null ? Number(saved.projectedAway) : null;
+    var projectedHome = saved && saved.projectedHome != null ? Number(saved.projectedHome) : null;
+    var missingEstimate = projectedAway == null || projectedHome == null;
+    var exact = null;
+    var winnerCorrect = null;
+    var totalErr = null;
+    var marginErr = null;
+    if (!missingEstimate && window.HockeyArchive) {
+      exact = projectedAway === actualAway && projectedHome === actualHome;
+      winnerCorrect = HockeyArchive.winnerOf(projectedAway, projectedHome) === HockeyArchive.winnerOf(actualAway, actualHome);
+      var errs = HockeyArchive.scoreErrors({
+        projectedAway: projectedAway,
+        projectedHome: projectedHome,
+        actualAway: actualAway,
+        actualHome: actualHome
+      });
+      totalErr = errs.totalGoalsError;
+      marginErr = errs.marginError;
+    }
+    var edgeCorrect = null;
+    var toss = !!(saved && saved.edgeTossUp);
+    if (saved && saved.edgeWinner && !toss && saved.edgeWinner !== "even" && window.HockeyArchive) {
+      var actualWinner = HockeyArchive.winnerOf(actualAway, actualHome);
+      if (actualWinner && actualWinner !== "tie") edgeCorrect = saved.edgeWinner === actualWinner;
+    }
+    return {
+      estimateLabel: missingEstimate ? null : projectedAway + "–" + projectedHome,
+      actualLabel: actualAway + "–" + actualHome,
+      exact: exact,
+      winnerCorrect: winnerCorrect,
+      totalGoalsError: totalErr,
+      marginError: marginErr,
+      edgeAbbrev: saved ? saved.edgeAbbrev : null,
+      edgeCorrect: edgeCorrect,
+      tossUp: toss,
+      edgeSource: saved ? saved.edgeSource : null,
+      missingEstimate: missingEstimate,
+      missingEdge: !(saved && saved.edgeWinner)
+    };
+  }
+
+  function resultInner(m) {
+    var p = performanceOf(m);
+    if (!p) return "";
+    var bits = [];
+    if (p.missingEstimate) bits.push("No saved estimate");
+    else {
+      bits.push("Estimate " + p.estimateLabel + " vs actual " + p.actualLabel);
+      if (p.exact) bits.push("exact score");
+      else bits.push(p.winnerCorrect ? "winner right" : "winner wrong");
+      if (p.totalGoalsError != null) bits.push("total off by " + p.totalGoalsError);
+      if (p.marginError != null) bits.push("margin off by " + p.marginError);
+    }
+    if (p.missingEdge) bits.push("No saved Edge pick");
+    else if (p.tossUp) bits.push("Toss-up, no firm pick");
+    else if (p.edgeCorrect == null) bits.push("Edge pick " + (p.edgeAbbrev || "") + " not graded");
+    else bits.push("Edge pick " + (p.edgeAbbrev || "") + (p.edgeCorrect ? " was right" : " was wrong"));
+    if (p.edgeSource === "archive") bits.push("pick from saved pre-game stats");
+    return bits.join(" · ");
+  }
+
   function extraPills(t) {
     return (
       '<div class="pills">' +
@@ -150,13 +255,14 @@
               "<span>" + fmtTime(m.startTimeUTC) + (m.venue ? " · " + m.venue : "") +
                 (m.gameTypeLabel ? " · " + m.gameTypeLabel : "") + "</span>" +
               '<span class="proj">Est. ' + m.away.abbrev + " " + proj.away + " – " + proj.home + " " + m.home.abbrev + "</span>" +
-              '<span class="badge ' + (e.winner === "even" ? "even" : "") + '">' +
-                (e.winner === "even" ? "Even matchup" : "Edge: " + m.edgeName) +
-              "</span>" +
+              '<span class="score-line" data-score="' + m.id + '">' + scoreInner(m) + "</span>" +
+              edgeBadge(m) +
+              edgeProbLine(m) +
               edgeDetail(e) +
               marketFlag(m) +
             "</div>" +
             oddsLine(m) +
+            '<p class="result-line" data-result="' + m.id + '">' + resultInner(m) + "</p>" +
             '<p class="why">' + why + "</p>" +
           "</div>" +
           '<div class="sides">' +
@@ -192,6 +298,11 @@
 
   function rowValue(m, key) {
     if (key === "time") return m.startTimeUTC || "";
+    if (key === "score") {
+      var sb = m.scoreboard || {};
+      if (sb.away == null || sb.home == null) return "";
+      return sb.away + "-" + sb.home;
+    }
     if (key === "away") return m.away.abbrev;
     if (key === "home") return m.home.abbrev;
     if (key === "edge") return m.edge ? m.edge.score : 0;
@@ -237,7 +348,8 @@
           "<td>" + fmtTime(m.startTimeUTC) + "</td>" +
           "<td>" + m.away.abbrev + " " + m.away.record + (m.away.preseason && m.away.preseason.record ? " " + preMark(true) : "") + "</td>" +
           "<td>" + m.home.abbrev + " " + m.home.record + (m.home.preseason && m.home.preseason.record ? " " + preMark(true) : "") + "</td>" +
-          "<td class='num'>" + m.edgeTeam +
+          "<td class='num score-cell' data-score='" + m.id + "'>" + scoreInner(m) + "</td>" +
+          "<td class='num'>" + (HockeyStats.isTossUp(m.edge) ? "Toss-up" : m.edgeTeam) +
             (m.edge && m.edge.measured != null ? "<div class='edge-meta" + (m.edge.lowData ? " low" : "") + "'>" +
               m.edge.measured + " of " + m.edge.totalMeasures + (m.edge.lowData ? " · low data" : "") + "</div>" : "") +
             (m.marketDisagree ? " <span class='mark miss' title='Disagrees with the DraftKings moneyline'>≠ DK</span>" : "") +
@@ -299,6 +411,7 @@
     }
     renderCards(data.matchups || []);
     renderTable();
+    armScores();
     document.querySelectorAll("#board tbody tr[data-game]").forEach(function (tr) {
       tr.style.cursor = "pointer";
       tr.addEventListener("click", function () {
@@ -323,6 +436,77 @@
     else q.delete("date");
     var s = q.toString();
     location.search = s ? "?" + s : "";
+  }
+
+  function anyLive() {
+    return ((state.data && state.data.matchups) || []).some(function (m) {
+      return m.scoreboard && m.scoreboard.live;
+    });
+  }
+
+  function paintScores() {
+    ((state.data && state.data.matchups) || []).forEach(function (m) {
+      document.querySelectorAll('[data-score="' + m.id + '"]').forEach(function (el) {
+        el.innerHTML = scoreInner(m);
+      });
+      document.querySelectorAll('[data-result="' + m.id + '"]').forEach(function (el) {
+        el.textContent = resultInner(m);
+      });
+    });
+  }
+
+  function applyScorePayload(body) {
+    var byId = {};
+    (body.games || []).forEach(function (g) { byId[String(g.id)] = g; });
+    ((state.data && state.data.matchups) || []).forEach(function (m) {
+      var g = byId[String(m.id)];
+      if (!g) return;
+      var prev = m.scoreboard || {};
+      if ((g.final || prev.final) && g.away == null && prev.away != null && prev.home != null) {
+        g = Object.assign({}, g, {
+          away: prev.away,
+          home: prev.home,
+          final: true,
+          live: false,
+          status: g.status || prev.status || "Final"
+        });
+      }
+      m.scoreboard = {
+        away: g.away,
+        home: g.home,
+        state: g.state,
+        live: !!g.live,
+        final: !!g.final,
+        status: g.status,
+        period: g.period,
+        clock: g.clock
+      };
+      if (g.state) m.gameState = g.state;
+    });
+    paintScores();
+    if (!anyLive() && scoreTimer) {
+      clearInterval(scoreTimer);
+      scoreTimer = null;
+    }
+  }
+
+  function refreshScores() {
+    var q = new URLSearchParams(location.search);
+    var url = "/api/scores" + (q.get("date") ? "?date=" + encodeURIComponent(q.get("date")) : "");
+    fetch(url)
+      .then(function (r) { return r.json(); })
+      .then(applyScorePayload)
+      .catch(function () {});
+  }
+
+  function armScores() {
+    if (scoreTimer) {
+      clearInterval(scoreTimer);
+      scoreTimer = null;
+    }
+    if (!anyLive()) return;
+    refreshScores();
+    scoreTimer = setInterval(refreshScores, SCORE_POLL_MS);
   }
 
   function load(refresh) {
