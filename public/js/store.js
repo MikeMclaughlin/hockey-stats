@@ -115,8 +115,9 @@
   }
 
   function writeLocal(name, body) {
-    fs.mkdirSync(DATA, { recursive: true });
-    fs.writeFileSync(localPath(name), JSON.stringify(body, null, 2));
+    var file = localPath(name);
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, JSON.stringify(body, null, 2));
   }
 
   function blobApi() {

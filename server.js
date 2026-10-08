@@ -9,6 +9,7 @@ var stats = require("./public/js/stats.js");
 var archive = require("./public/js/archive.js");
 var backtest = require("./public/js/backtest.js");
 var store = require("./public/js/store.js");
+var auth = require("./lib/auth.js");
 var streaks = require("./public/js/streaks.js");
 var teamStats = require("./public/js/teamStats.js");
 
@@ -19,10 +20,10 @@ var matchupCache = Object.create(null);
 
 function productVersion() {
   try {
-    var parts = String(require("./package.json").version || "1.7.0").split(".");
-    return (parts[0] || "1") + "." + (parts[1] || "7");
+    var parts = String(require("./package.json").version || "1.8.0").split(".");
+    return (parts[0] || "1") + "." + (parts[1] || "8");
   } catch (e) {
-    return "1.7";
+    return "1.8";
   }
 }
 
@@ -129,7 +130,7 @@ function sleep(ms) {
 
 function httpsGet(urlStr, cb, attempt) {
   attempt = attempt || 1;
-  https.get(urlStr, { headers: { "User-Agent": "hockey-stats/1.7", Accept: "*/*" } }, function (up) {
+  https.get(urlStr, { headers: { "User-Agent": "hockey-stats/1.8", Accept: "*/*" } }, function (up) {
     if (up.statusCode >= 300 && up.statusCode < 400 && up.headers.location) {
       up.resume();
       httpsGet(up.headers.location, cb, attempt);
@@ -162,6 +163,99 @@ function getJson(urlStr) {
       catch (e) { reject(e); }
     });
   });
+}
+
+function httpsRequest(method, urlStr, options) {
+  options = options || {};
+  return new Promise(function (resolve, reject) {
+    var u = new URL(urlStr);
+    var body = options.body || "";
+    var headers = Object.assign({
+      "User-Agent": "hockey-stats/1.8",
+      Accept: "application/json"
+    }, options.headers || {});
+    if (body) headers["Content-Length"] = Buffer.byteLength(body);
+    var req = https.request({
+      method: method,
+      hostname: u.hostname,
+      path: u.pathname + u.search,
+      headers: headers
+    }, function (up) {
+      var chunks = [];
+      up.on("data", function (c) { chunks.push(c); });
+      up.on("end", function () {
+        var text = Buffer.concat(chunks).toString("utf8");
+        if (up.statusCode !== 200) {
+          reject(new Error("HTTP " + up.statusCode));
+          return;
+        }
+        try { resolve(JSON.parse(text)); }
+        catch (e) { reject(e); }
+      });
+    });
+    req.on("error", reject);
+    if (body) req.write(body);
+    req.end();
+  });
+}
+
+function readBody(req, limit) {
+  return new Promise(function (resolve, reject) {
+    var chunks = [];
+    var size = 0;
+    req.on("data", function (c) {
+      size += c.length;
+      if (size > limit) {
+        reject(new Error("too large"));
+        req.destroy();
+        return;
+      }
+      chunks.push(c);
+    });
+    req.on("end", function () { resolve(Buffer.concat(chunks).toString("utf8")); });
+    req.on("error", reject);
+  });
+}
+
+function redirect(res, status, location, cookies) {
+  var headers = {
+    Location: location,
+    "Cache-Control": "no-store"
+  };
+  if (cookies && cookies.length) headers["Set-Cookie"] = cookies;
+  res.writeHead(status, headers);
+  res.end();
+}
+
+function requireAdmin(req, res) {
+  var session = auth.readSession(req);
+  if (!session) {
+    sendJson(res, 401, { ok: false, error: "unauthorized" });
+    return null;
+  }
+  if (!auth.isAdmin(session)) {
+    sendJson(res, 403, { ok: false, error: "forbidden" });
+    return null;
+  }
+  return session;
+}
+
+var PREF_SECTIONS = { teams: true, backtest: true, review: true, matchups: true, streaks: true };
+
+function cleanPrefs(input) {
+  if (!input || typeof input !== "object" || Array.isArray(input)) return {};
+  var out = {};
+  Object.keys(PREF_SECTIONS).forEach(function (key) {
+    var value = input[key];
+    if (value && typeof value === "object" && !Array.isArray(value)) out[key] = value;
+  });
+  var text = JSON.stringify(out);
+  if (text.length > 60000) return null;
+  return JSON.parse(text);
+}
+
+function prefsName(session) {
+  return "user-prefs/" + auth.emailHash(session.email) + ".json";
 }
 
 function getText(urlStr) {
@@ -1152,8 +1246,10 @@ function cronAuthorized(req) {
   var secret = cronSecret();
   var header = "";
   if (req && req.headers) header = String(req.headers.authorization || "");
-  if (secret) return header === "Bearer " + secret;
-  return !process.env.VERCEL;
+  if (secret && header === "Bearer " + secret) return true;
+  if (auth.isAdmin(auth.readSession(req))) return true;
+  if (!secret) return !process.env.VERCEL;
+  return false;
 }
 
 async function runScheduledUpdate() {
@@ -1460,7 +1556,14 @@ function detectRoute(req, url) {
     headers["x-forwarded-uri"],
     headers["x-matched-path"]
   ];
-  var blob = parts.filter(Boolean).join(" ").toLowerCase();
+  var blob = parts.filter(Boolean).map(function (part) {
+    var text = String(part);
+    var q = text.indexOf("?");
+    return (q >= 0 ? text.slice(0, q) : text);
+  }).join(" ").toLowerCase();
+  var authPath = blob.match(/\/api\/auth\/(login|logout|me|callback\/google)/);
+  if (authPath) return "/api/auth/" + authPath[1];
+  if (blob.indexOf("/api/prefs") !== -1 || /(^|\s)api\/prefs/.test(blob)) return "/api/prefs";
   if (/\.(html|css|js|json|svg|png|ico)(\s|$|\?)/i.test(blob) && blob.indexOf("/api/") === -1) return p;
   var fromApi = blob.indexOf("/api/") !== -1 || /(^|\s)api\//.test(blob);
   if (!fromApi) return p;
@@ -1480,7 +1583,110 @@ function detectRoute(req, url) {
 
 function handleApi(req, res, url) {
   var pathname = detectRoute(req, url);
+  if (pathname === "/api/auth/login" && req.method === "GET") {
+    if (!auth.enabled()) {
+      sendJson(res, 404, { ok: false, error: "sign-in is not configured" });
+      return true;
+    }
+    var issued = auth.issueState(url.searchParams.get("next"));
+    redirect(res, 302, auth.loginLocation(req, issued.nonce), [issued.cookie]);
+    return true;
+  }
+  if (pathname === "/api/auth/logout" && (req.method === "GET" || req.method === "POST")) {
+    redirect(res, 302, auth.safeNext(url.searchParams.get("next")), auth.clearCookies());
+    return true;
+  }
+  if (pathname === "/api/auth/me" && req.method === "GET") {
+    if (!auth.enabled()) {
+      sendJson(res, 200, { enabled: false, user: null, admin: false });
+      return true;
+    }
+    var me = auth.readSession(req);
+    sendJson(res, 200, {
+      enabled: true,
+      user: me ? { name: me.name } : null,
+      admin: auth.isAdmin(me)
+    });
+    return true;
+  }
+  if (pathname === "/api/auth/callback/google" && req.method === "GET") {
+    if (!auth.enabled()) {
+      redirect(res, 302, "/", []);
+      return true;
+    }
+    var saved = auth.readState(req);
+    var code = url.searchParams.get("code");
+    var state = url.searchParams.get("state");
+    if (!saved || !code || !state || state !== saved.s) {
+      redirect(res, 302, "/?auth=failed", auth.clearCookies());
+      return true;
+    }
+    var form = new URLSearchParams();
+    form.set("code", code);
+    form.set("client_id", String(process.env.GOOGLE_CLIENT_ID).trim());
+    form.set("client_secret", String(process.env.GOOGLE_CLIENT_SECRET).trim());
+    form.set("redirect_uri", auth.redirectUri(req));
+    form.set("grant_type", "authorization_code");
+    httpsRequest("POST", "https://oauth2.googleapis.com/token", {
+      body: form.toString(),
+      headers: { "Content-Type": "application/x-www-form-urlencoded" }
+    }).then(function (token) {
+      if (!token || !token.access_token) throw new Error("no token");
+      return httpsRequest("GET", "https://www.googleapis.com/oauth2/v3/userinfo", {
+        headers: { Authorization: "Bearer " + token.access_token }
+      });
+    }).then(function (profile) {
+      var email = profile && profile.email ? String(profile.email).trim().toLowerCase() : "";
+      if (!email || profile.email_verified !== true) {
+        redirect(res, 302, "/?auth=unverified", auth.clearCookies());
+        return;
+      }
+      var name = String(profile.name || email.split("@")[0] || "Signed in").slice(0, 80);
+      redirect(res, 302, saved.n || "/", [
+        auth.sessionCookie({ email: email, name: name, verified: true }),
+        auth.clearCookies()[1]
+      ]);
+    }).catch(function () {
+      redirect(res, 302, "/?auth=failed", auth.clearCookies());
+    });
+    return true;
+  }
+  if (pathname === "/api/prefs" && req.method === "GET") {
+    var reader = auth.readSession(req);
+    if (!reader) {
+      sendJson(res, 401, { ok: false, error: "unauthorized" });
+      return true;
+    }
+    store.readJson(prefsName(reader), {}).then(function (prefs) {
+      sendJson(res, 200, { ok: true, prefs: cleanPrefs(prefs) || {} });
+    }).catch(function (err) {
+      sendJson(res, 502, { ok: false, error: String(err.message || err) });
+    });
+    return true;
+  }
+  if (pathname === "/api/prefs" && req.method === "POST") {
+    var writer = auth.readSession(req);
+    if (!writer) {
+      sendJson(res, 401, { ok: false, error: "unauthorized" });
+      return true;
+    }
+    readBody(req, 80000).then(function (text) {
+      var incoming = cleanPrefs(JSON.parse(text || "{}"));
+      if (!incoming) throw new Error("preferences are too large");
+      var name = prefsName(writer);
+      return store.readJson(name, {}).then(function (prev) {
+        var merged = Object.assign({}, cleanPrefs(prev) || {}, incoming);
+        return store.writeJson(name, merged).then(function () {
+          sendJson(res, 200, { ok: true, prefs: merged });
+        });
+      });
+    }).catch(function (err) {
+      sendJson(res, 400, { ok: false, error: String(err.message || err) });
+    });
+    return true;
+  }
   if (pathname === "/api/seed" && (req.method === "POST" || req.method === "GET")) {
+    if (!requireAdmin(req, res)) return true;
     var names = [store.KEYS.estimates, store.KEYS.backtest, store.KEYS.mpGames, store.KEYS.playerGames, store.KEYS.matchups, store.KEYS.matchupArchive];
     Promise.all(names.map(function (n) {
       var local = store.readLocal(n, null);
@@ -1665,10 +1871,15 @@ function handleApi(req, res, url) {
     return true;
   }
   if (pathname === "/api/estimates") {
-    estimatesPayload().then(function (body) { sendJson(res, 200, body); });
+    var gradeOnRead = url.searchParams.get("grade") === "1";
+    var loadEstimatesView = gradeOnRead
+      ? gradeEstimates().catch(function () { return estimatesPayload(); })
+      : estimatesPayload();
+    loadEstimatesView.then(function (body) { sendJson(res, 200, body); });
     return true;
   }
   if (pathname === "/api/estimates/grade" && (req.method === "POST" || req.method === "GET")) {
+    if (!requireAdmin(req, res)) return true;
     gradeEstimates()
       .then(function (body) { sendJson(res, 200, body); })
       .catch(function (err) {
@@ -1696,6 +1907,8 @@ function requestUrl(req) {
 function routeKey(pathname) {
   var p = String(pathname || "").replace(/\/+$/, "") || "/";
   if (/\.(html|css|js|json|svg|png|ico)$/i.test(p)) return p;
+  if (p.indexOf("/api/auth/") === 0) return p;
+  if (p === "/api/prefs") return "/api/prefs";
   if (p === "/health" || p === "/api/health") return "/api/health";
   if (p === "/version" || p === "/api/version") return "/api/version";
   if (p === "/cron" || p === "/api/cron") return "/api/cron";

@@ -4,38 +4,32 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Hockey Stats — Matchups</title>
-  <link rel="icon" href="/favicon.ico?v=1.7" sizes="any">
-  <link rel="icon" href="/favicon.svg?v=1.7" type="image/svg+xml">
-  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png?v=1.7">
-  <link rel="icon" type="image/png" sizes="192x192" href="/favicon-192x192.png?v=1.7">
-  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png?v=1.7">
+  <link rel="icon" href="/favicon.ico?v=1.8" sizes="any">
+  <link rel="icon" href="/favicon.svg?v=1.8" type="image/svg+xml">
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png?v=1.8">
+  <link rel="icon" type="image/png" sizes="192x192" href="/favicon-192x192.png?v=1.8">
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png?v=1.8">
   <link rel="stylesheet" href="/css/style.css">
 </head>
-<body>
+<body data-page="matchups">
   <header class="top">
     <div class="brand">
-      <img class="nhl-logo" src="/img/nhl.svg" alt="NHL">
+      <img class="site-logo" src="/favicon.svg?v=1.8" alt="Hockey Stats">
       <div>
         <h1>Hockey Stats</h1>
         <p class="tag">Current NHL matchups · possession, finishing, and luck</p>
       </div>
     </div>
     <div class="toolbar">
-      <div class="toolbar-row">
-      <nav class="nav">
-        <a href="/" aria-current="page">Matchups</a>
-        <a href="/teams.html">Team Stats</a>
-        <a href="/streaks.html">Player Streaks</a>
-        <a href="/review.html">Review</a>
-        <a href="/backtest.html">Backtest</a>
-      </nav>
-      <span class="app-version" title="App version">v1.7</span>
-      <div class="date-nav">
-        <button type="button" id="prev-date">Previous day</button>
-        <button type="button" id="today-date">Today</button>
-        <button type="button" id="next-date">Next day</button>
-      </div>
-      <button type="button" id="refresh">Refresh</button>
+      <script src="/js/site-nav.js"></script>
+      <div class="toolbar-row nav-controls">
+        <div class="date-nav">
+          <button type="button" id="prev-date">Previous day</button>
+          <button type="button" id="today-date">Today</button>
+          <button type="button" id="next-date">Next day</button>
+        </div>
+        <button type="button" id="refresh">Refresh</button>
+        <button type="button" id="cards-toggle">Expand all</button>
       </div>
       <p id="meta" class="meta meta-line">Loading…</p>
     </div>
@@ -98,8 +92,10 @@
     </section>
   </main>
   <footer>
-    <span>v1.7</span>
+    <span>v1.8</span>
   </footer>
+  <script src="/js/dates.js"></script>
+  <script src="/js/prefs.js"></script>
   <script src="/js/archive.js"></script>
   <script src="/js/stats.js"></script>
   <script src="/js/app.js"></script>

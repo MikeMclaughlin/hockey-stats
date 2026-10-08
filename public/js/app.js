@@ -1,20 +1,13 @@
 (function () {
   "use strict";
 
-  var state = { data: null, sortKey: "pdo", sortDir: -1 };
+  var state = { data: null, sortKey: "pdo", sortDir: -1, cardsExpanded: false };
 
   function $(id) { return document.getElementById(id); }
 
   function fmtTime(iso) {
-    if (!iso) return "—";
-    try {
-      return new Date(iso).toLocaleString(undefined, {
-        weekday: "short", month: "short", day: "numeric",
-        hour: "numeric", minute: "2-digit"
-      });
-    } catch (e) {
-      return iso;
-    }
+    if (window.HockeyDates) return HockeyDates.formatTableDate(iso);
+    return iso || "—";
   }
 
   function signed(n, digits) {
@@ -102,8 +95,6 @@
     return (
       '<div class="pills">' +
         pill("Shooting plus save percentage", t.pdo, "pdo", null, pre.pdo) +
-        pill("Average goal differential last five games", t.last5AvgGd, "last5", function (v) { return signed(v, 2); }, pre.last5) +
-        pill("Actual goals versus expected goals", t.gfMinusXg, "xgDiff", function (v) { return signed(v, 1); }, false) +
         pill("Shots-on-goal share", t.sogShare, "sogShare", function (v) { return v == null ? "—" : v + "%"; }, pre.sogShare) +
         pill("Save percentage last five games", t.last5SvPct, "last5Sv", function (v) { return v == null ? "—" : v + "%"; }, pre.last5Sv) +
       "</div>"
@@ -228,8 +219,11 @@
   }
 
   function extraPills(t) {
+    var pre = t.preseason || {};
     return (
       '<div class="pills">' +
+        pill("Average goal differential last five games", t.last5AvgGd, "last5", function (v) { return signed(v, 2); }, pre.last5) +
+        pill("Actual goals versus expected goals", t.gfMinusXg, "xgDiff", function (v) { return signed(v, 1); }, false) +
         pill("Shot-attempt share", t.cfPct, "cf", function (v) { return v == null ? "—" : v + "%"; }) +
         pill("High-danger chance share", t.hdcfPct, "hdcf", function (v) { return v == null ? "—" : v + "%"; }) +
         pill("Even-strength expected-goals share", t.xgfPct5v5, "xgf5v5", function (v) { return v == null ? "—" : v + "%"; }) +
@@ -252,7 +246,7 @@
         '<article class="card" id="game-' + m.id + '">' +
           '<div class="card-head">' +
             '<div class="head-top">' +
-              "<span>" + fmtTime(m.startTimeUTC) + (m.venue ? " · " + m.venue : "") +
+              "<span>" + fmtTime(m.startTimeUTC) +
                 (m.gameTypeLabel ? " · " + m.gameTypeLabel : "") + "</span>" +
               '<span class="proj">Est. ' + m.away.abbrev + " " + proj.away + " – " + proj.home + " " + m.home.abbrev + "</span>" +
               '<span class="score-line" data-score="' + m.id + '">' + scoreInner(m) + "</span>" +
@@ -282,8 +276,8 @@
               teamPills(m.home) +
             "</div>" +
           "</div>" +
-          '<details class="more-stats">' +
-            "<summary>Shot-attempt share, high-danger chances, and expected goals</summary>" +
+          '<details class="more-stats"' + (state.cardsExpanded ? " open" : "") + ">" +
+            "<summary>Average goal differential, actual versus expected goals, shot-attempt share, high-danger chances, and expected goals</summary>" +
             '<div class="sides more-sides">' +
               '<div class="col">' + extraPills(m.away) + "</div>" +
               '<div class="vs"></div>' +
@@ -423,8 +417,9 @@
     } else {
       note.classList.add("hidden");
     }
-    renderCards(data.matchups || []);
+    renderCards(sortedRows());
     renderTable();
+    syncCardsButton();
     armScores();
     document.querySelectorAll("#board tbody tr[data-game]").forEach(function (tr) {
       tr.style.cursor = "pointer";
@@ -543,7 +538,10 @@
       q.set("sort", state.sortKey);
       q.set("dir", String(state.sortDir));
       history.replaceState(null, "", "/?" + q.toString());
+      renderCards(sortedRows());
       renderTable();
+      syncCardsButton();
+      saveBoardPrefs();
     });
   });
   (function bootQuery() {
@@ -552,12 +550,52 @@
     if (q.get("dir")) state.sortDir = Number(q.get("dir")) || 1;
   })();
 
+  function syncCardsButton() {
+    var btn = $("cards-toggle");
+    if (btn) btn.textContent = state.cardsExpanded ? "Collapse all" : "Expand all";
+  }
+
+  function saveBoardPrefs() {
+    if (!window.HockeyPrefs) return;
+    HockeyPrefs.patch("matchups", {
+      sortKey: state.sortKey,
+      sortDir: state.sortDir,
+      cardsExpanded: !!state.cardsExpanded
+    });
+  }
+
+  function setCardsExpanded(open) {
+    state.cardsExpanded = !!open;
+    document.querySelectorAll("#cards details.more-stats").forEach(function (el) {
+      el.open = state.cardsExpanded;
+    });
+    syncCardsButton();
+    saveBoardPrefs();
+  }
+
+  function startBoard() {
+    var q = new URLSearchParams(location.search);
+    if (window.HockeyPrefs && HockeyPrefs.signedIn()) {
+      var saved = HockeyPrefs.section("matchups");
+      if (saved) {
+        if (!q.get("sort") && saved.sortKey) state.sortKey = saved.sortKey;
+        if (!q.get("dir") && (saved.sortDir === 1 || saved.sortDir === -1)) state.sortDir = saved.sortDir;
+        if (saved.cardsExpanded) state.cardsExpanded = true;
+      }
+    }
+    syncCardsButton();
+    load(false);
+  }
+
   $("refresh").addEventListener("click", function () { load(true); });
+  var cardsBtn = $("cards-toggle");
+  if (cardsBtn) cardsBtn.addEventListener("click", function () { setCardsExpanded(!state.cardsExpanded); });
   var prevBtn = $("prev-date");
   var nextBtn = $("next-date");
   var todayBtn = $("today-date");
   if (prevBtn) prevBtn.addEventListener("click", function () { if (prevBtn.dataset.date) goDate(prevBtn.dataset.date); });
   if (nextBtn) nextBtn.addEventListener("click", function () { if (nextBtn.dataset.date) goDate(nextBtn.dataset.date); });
   if (todayBtn) todayBtn.addEventListener("click", function () { goDate(""); });
-  load(false);
+  if (window.HockeyPrefs) HockeyPrefs.ready.then(startBoard);
+  else startBoard();
 })();

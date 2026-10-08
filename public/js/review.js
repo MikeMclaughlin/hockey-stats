@@ -135,7 +135,7 @@
         : "";
       return (
         "<tr" + (differs ? " class='differ'" : "") + ">" +
-          "<td>" + (r.gameDate || "—") + "</td>" +
+          "<td>" + (window.HockeyDates ? HockeyDates.formatTableDate(r.gameDate) : (r.gameDate || "—")) + "</td>" +
           "<td>" + (r.awayAbbrev || "") + "</td>" +
           "<td>" + (r.homeAbbrev || "") + "</td>" +
           "<td class='num'>" + (r.projectedLabel || "—") + lockNote + "</td>" +
@@ -190,8 +190,17 @@
     renderTable();
   }
 
+  function saveReviewPrefs() {
+    if (!window.HockeyPrefs || !HockeyPrefs.signedIn()) return;
+    HockeyPrefs.patch("review", {
+      range: ($("range") && $("range").value) || "season",
+      sortKey: state.sortKey,
+      sortDir: state.sortDir
+    });
+  }
+
   function load() {
-    fetch("/api/estimates/grade", { method: "POST" })
+    fetch("/api/estimates?grade=1")
       .then(function (r) { return r.json(); })
       .then(render)
       .catch(function (err) {
@@ -205,22 +214,44 @@
       var key = th.getAttribute("data-key");
       if (state.sortKey === key) state.sortDir *= -1;
       else { state.sortKey = key; state.sortDir = 1; }
+      saveReviewPrefs();
       renderTable();
     });
   });
 
   var range = $("range");
-  if (range) range.addEventListener("change", function () { render(state.payload || { estimates: state.rows, asOf: state.asOf }); });
+  if (range) range.addEventListener("change", function () {
+    saveReviewPrefs();
+    render(state.payload || { estimates: state.rows, asOf: state.asOf });
+  });
 
   $("grade").addEventListener("click", function () {
     $("meta").textContent = "Grading…";
     fetch("/api/estimates/grade", { method: "POST" })
-      .then(function (r) { return r.json(); })
-      .then(render)
+      .then(function (r) {
+        return r.json().then(function (body) {
+          if (r.status === 401 || r.status === 403) {
+            $("meta").textContent = "Manual grading needs an admin sign-in. Opening this page still grades the finals.";
+            return;
+          }
+          render(body);
+        });
+      })
       .catch(function (err) {
         $("meta").textContent = String(err);
       });
   });
 
-  load();
+  function startReview() {
+    var saved = window.HockeyPrefs && HockeyPrefs.signedIn() && HockeyPrefs.section("review");
+    if (saved) {
+      if (saved.range && $("range")) $("range").value = saved.range;
+      if (saved.sortKey) state.sortKey = saved.sortKey;
+      if (saved.sortDir === 1 || saved.sortDir === -1) state.sortDir = saved.sortDir;
+    }
+    load();
+  }
+
+  if (window.HockeyPrefs) HockeyPrefs.ready.then(startReview);
+  else startReview();
 })();

@@ -60,7 +60,7 @@
   function displayOf(r) {
     var v = verdictOf(r);
     return {
-      gameDate: r.gameDate || "",
+      gameDate: window.HockeyDates ? HockeyDates.formatTableDate(r.gameDate) : (r.gameDate || ""),
       awayAbbrev: r.awayAbbrev,
       homeAbbrev: r.homeAbbrev,
       projectedLabel: r.projectedLabel,
@@ -154,7 +154,7 @@
     document.querySelector("#bt tbody").innerHTML = empty || rows.map(function (r) {
       var v = verdictOf(r);
       return "<tr>" +
-        "<td>" + (r.gameDate || "") + "</td>" +
+        "<td>" + (window.HockeyDates ? HockeyDates.formatTableDate(r.gameDate) : (r.gameDate || "")) + "</td>" +
         "<td>" + r.awayAbbrev + "</td>" +
         "<td>" + r.homeAbbrev + "</td>" +
         "<td class='num'>" + r.projectedLabel + "</td>" +
@@ -291,13 +291,58 @@
       render();
   }
 
-  var bootSeason = new URLSearchParams(location.search).get("season") || "all";
-  if ($("season")) $("season").value = bootSeason;
-  loadData(bootSeason)
-    .then(applyPayload)
-    .catch(function (err) {
-      $("meta").textContent = String(err);
+  function saveBacktestPrefs() {
+    if (!window.HockeyPrefs || !HockeyPrefs.signedIn()) return;
+    HockeyPrefs.patch("backtest", {
+      season: $("season") ? $("season").value : "all",
+      team: state.team,
+      b2b: !!state.b2b,
+      side: state.side,
+      sortKey: state.sortKey,
+      sortDir: state.sortDir,
+      filters: state.filters
     });
+  }
+
+  function applyBacktestPrefs() {
+    var saved = window.HockeyPrefs && HockeyPrefs.signedIn() && HockeyPrefs.section("backtest");
+    if (!saved) return;
+    var q = new URLSearchParams(location.search);
+    if (!q.get("season") && saved.season && $("season")) $("season").value = saved.season;
+    if (!q.get("sort") && saved.sortKey) state.sortKey = saved.sortKey;
+    if (!q.get("dir") && (saved.sortDir === 1 || saved.sortDir === -1)) state.sortDir = saved.sortDir;
+    if (saved.team != null && $("team")) {
+      state.team = saved.team;
+      $("team").value = saved.team;
+    }
+    if ($("b2b")) {
+      state.b2b = !!saved.b2b;
+      $("b2b").checked = state.b2b;
+    }
+    if (saved.side != null && $("side")) {
+      state.side = saved.side;
+      $("side").value = saved.side;
+    }
+    if (saved.filters) {
+      Object.keys(saved.filters).forEach(function (k) {
+        if (q.get(k)) return;
+        state.filters[k] = saved.filters[k];
+        var input = document.querySelector('#bt [data-filter="' + k + '"]');
+        if (input) input.value = saved.filters[k] || "";
+      });
+    }
+  }
+
+  function startBacktest() {
+    applyBacktestPrefs();
+    var bootSeason = ($("season") && $("season").value) || new URLSearchParams(location.search).get("season") || "all";
+    if ($("season")) $("season").value = bootSeason;
+    loadData(bootSeason)
+      .then(applyPayload)
+      .catch(function (err) {
+        $("meta").textContent = String(err);
+      });
+  }
 
   if ($("season")) {
     $("season").addEventListener("change", function () {
@@ -309,24 +354,28 @@
       loadData(id).then(applyPayload).catch(function (err) {
         $("meta").textContent = String(err);
       });
+      saveBacktestPrefs();
     });
   }
 
   if ($("team")) {
     $("team").addEventListener("input", function () {
       state.team = $("team").value;
+      saveBacktestPrefs();
       render();
     });
   }
   if ($("b2b")) {
     $("b2b").addEventListener("change", function () {
       state.b2b = !!$("b2b").checked;
+      saveBacktestPrefs();
       render();
     });
   }
   if ($("side")) {
     $("side").addEventListener("change", function () {
       state.side = $("side").value;
+      saveBacktestPrefs();
       render();
     });
   }
@@ -340,6 +389,7 @@
       q.set("sort", state.sortKey);
       q.set("dir", String(state.sortDir));
       history.replaceState(null, "", "/backtest.html?" + q.toString());
+      saveBacktestPrefs();
       render();
     });
   });
@@ -350,8 +400,12 @@
       var q = new URLSearchParams(location.search);
       q.set(input.getAttribute("data-filter"), input.value);
       history.replaceState(null, "", "/backtest.html?" + q.toString());
+      saveBacktestPrefs();
       render();
     });
     input.addEventListener("click", function (e) { e.stopPropagation(); });
   });
+
+  if (window.HockeyPrefs) HockeyPrefs.ready.then(startBacktest);
+  else startBacktest();
 })();
