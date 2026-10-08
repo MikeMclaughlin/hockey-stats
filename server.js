@@ -1203,7 +1203,10 @@ async function estimatesPayload(est) {
 }
 
 async function gradeEstimates() {
-  var est = await loadEstimates();
+  var loaded = await store.readJsonResult(store.KEYS.estimates, null);
+  var raw = loaded.value;
+  var est = raw && raw.byId ? raw : archive.emptyStore();
+  var before = JSON.stringify(est);
   var rows = archive.listEstimates(est).filter(function (r) { return !r.graded && r.gameDate; });
   var dates = {};
   rows.forEach(function (r) { dates[r.gameDate] = true; });
@@ -1220,18 +1223,29 @@ async function gradeEstimates() {
       archive.applyResult(row, as, hs, g.gameState);
     });
   }
-  var persisted = true;
+  var changed = JSON.stringify(est) !== before;
+  var persisted = false;
   var storageError = null;
-  try {
-    await saveEstimates(est);
-  } catch (e) {
-    persisted = false;
-    storageError = String(e.message || e);
+  var writeSkipped = null;
+  if (loaded.source === "fallback") {
+    writeSkipped = "bundled-fallback";
+  } else if (!changed) {
+    writeSkipped = "unchanged";
+    persisted = true;
+  } else {
+    try {
+      await saveEstimates(est);
+      persisted = true;
+    } catch (e) {
+      persisted = false;
+      storageError = String(e.message || e);
+    }
   }
   var graded = await estimatesPayload(est);
   graded.persisted = persisted;
   graded.storage = store.storageMode();
   graded.storageError = storageError;
+  graded.writeSkipped = writeSkipped;
   return graded;
 }
 

@@ -155,17 +155,29 @@
     }, blobAuthOptions()));
   }
 
-  async function readJson(name, fallback) {
-    if (usesBlob()) {
-      try {
-        var fromBlob = await readBlobBody(name);
-        if (fromBlob != null) return fromBlob;
-      } catch (e) { /* fall through to the bundled file */ }
-      var mirrored = readLocal(name, undefined);
-      if (mirrored !== undefined) return mirrored;
-      return fallback;
+  function bundledRead(name, fallback, reason) {
+    var mirrored = readLocal(name, undefined);
+    if (mirrored !== undefined) return { value: mirrored, source: "fallback", reason: reason };
+    return { value: fallback, source: "fallback", reason: reason };
+  }
+
+  // source "blob" or "local" is safe to write back. "fallback" means Blob
+  // 404'd or threw and the value is the bundled repo file (or the caller's
+  // fallback). Callers must not write that copy back to Blob.
+  async function readJsonResult(name, fallback) {
+    if (!usesBlob()) return { value: readLocal(name, fallback), source: "local" };
+    try {
+      var fromBlob = await readBlobBody(name);
+      if (fromBlob != null) return { value: fromBlob, source: "blob" };
+    } catch (e) {
+      return bundledRead(name, fallback, "error");
     }
-    return readLocal(name, fallback);
+    return bundledRead(name, fallback, "missing");
+  }
+
+  async function readJson(name, fallback) {
+    var result = await readJsonResult(name, fallback);
+    return result.value;
   }
 
   function readonlyError() {
@@ -240,6 +252,7 @@
     storageMode: storageMode,
     blobHint: blobHint,
     readJson: readJson,
+    readJsonResult: readJsonResult,
     writeJson: writeJson,
     writeTest: writeTest,
     lastWrite: function () { return lastWrite; },

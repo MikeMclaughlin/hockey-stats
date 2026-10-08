@@ -20,6 +20,9 @@ body {
   margin: 0;
   padding: 0;
 }
+html {
+  scrollbar-gutter: stable;
+}
 body {
   font-family: "Segoe UI", system-ui, sans-serif;
   background:
@@ -30,9 +33,9 @@ body {
 }
 .top {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 1rem;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.35rem;
   padding: 1.25rem 1.5rem;
   border-bottom: 1px solid var(--line);
   background: rgba(255, 255, 255, 0.8);
@@ -40,6 +43,14 @@ body {
   position: sticky;
   top: 0;
   z-index: 5;
+}
+.header-body {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  width: 100%;
+  min-width: 0;
 }
 .brand {
   display: flex;
@@ -68,7 +79,7 @@ body {
   flex-direction: column;
   align-items: stretch;
   gap: 0.35rem;
-  flex: 1 1 28rem;
+  flex: 1 1 auto;
   min-width: 0;
 }
 .toolbar-row {
@@ -92,6 +103,8 @@ body {
   padding: 0.15rem 0.55rem;
   color: var(--muted);
   background: #fff;
+  white-space: nowrap;
+  flex: 0 0 auto;
 }
 .date-nav {
   display: flex;
@@ -117,9 +130,11 @@ select#season {
 .nav-links {
   display: flex;
   align-items: center;
+  justify-content: flex-start;
   gap: 0.75rem;
   width: 100%;
   min-height: 2.5rem;
+  flex-wrap: wrap;
 }
 .nav-controls {
   min-height: 2.5rem;
@@ -153,14 +168,18 @@ select#season {
 }
 .nav {
   display: flex;
+  flex-wrap: wrap;
   gap: 0.7rem;
   min-height: 1.4rem;
+  min-width: 0;
 }
 .nav a {
   color: var(--ink);
   text-decoration: none;
   font-weight: 650;
   font-size: 0.92rem;
+  white-space: nowrap;
+  flex: 0 0 auto;
 }
 .nav a[aria-current="page"] {
   text-decoration: underline;
@@ -669,6 +688,14 @@ footer {
   color: var(--muted);
 }
 @media (max-width: 720px) {
+  .header-body {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .toolbar {
+    flex: 0 0 auto;
+    width: 100%;
+  }
   #board th,
   #board td {
     font-size: 0.5rem;
@@ -676,10 +703,6 @@ footer {
   }
   #board th {
     font-size: 0.46rem;
-  }
-  .top {
-    flex-direction: column;
-    align-items: flex-start;
   }
   .sides {
     grid-template-columns: 1fr;
