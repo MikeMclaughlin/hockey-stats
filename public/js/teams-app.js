@@ -74,7 +74,7 @@
     if (!list || !list.length) return "";
     return "<tr class='l5-detail'><td colspan='" + COLS + "'>" +
       list.map(function (g) {
-        return (g.date || "") + " " + (g.venue || "") + " vs " + (g.opponent || "") +
+        return (window.HockeyDates ? HockeyDates.formatTableDate(g.date) : (g.date || "")) + " " + (g.venue || "") + " vs " + (g.opponent || "") +
           " " + (g.score || "") + " " + (g.result || "") +
           (Number(g.gameType) === 1 ? " preseason" : "");
       }).join(" · ") + "</td></tr>";
@@ -127,18 +127,26 @@
       var k = th.getAttribute("data-key");
       if (state.sortKey === k) state.sortDir *= -1;
       else { state.sortKey = k; state.sortDir = NUMERIC[k] ? -1 : 1; }
+      saveTeamFilters();
       render();
     });
   });
   var FILTER_KEY = "hockey-stats.teamFilters";
 
   function saveTeamFilters() {
+    var saved = {
+      filters: state.filters,
+      split: state.split,
+      sortKey: state.sortKey,
+      sortDir: state.sortDir
+    };
     try {
       localStorage.setItem(FILTER_KEY, JSON.stringify({
         filters: state.filters,
         split: state.split
       }));
     } catch (e) { /* private mode */ }
+    if (window.HockeyPrefs && HockeyPrefs.signedIn()) HockeyPrefs.patch("teams", saved);
   }
 
   function restoreTeamFilters() {
@@ -160,7 +168,27 @@
     } catch (e) { /* ignore a bad saved value */ }
   }
 
-  restoreTeamFilters();
+  function applySavedTeamView() {
+    restoreTeamFilters();
+    var remote = window.HockeyPrefs && HockeyPrefs.signedIn() && HockeyPrefs.section("teams");
+    if (remote) {
+      if (remote.filters) {
+        state.filters = remote.filters;
+        document.querySelectorAll("#teams input[data-filter]").forEach(function (inp) {
+          var k = inp.getAttribute("data-filter");
+          inp.value = remote.filters[k] || "";
+        });
+      }
+      if (remote.split && $("split")) {
+        state.split = remote.split;
+        $("split").value = remote.split;
+      }
+      if (remote.sortKey) state.sortKey = remote.sortKey;
+      if (remote.sortDir === 1 || remote.sortDir === -1) state.sortDir = remote.sortDir;
+    } else if (window.HockeyPrefs && HockeyPrefs.signedIn()) {
+      saveTeamFilters();
+    }
+  }
   document.querySelectorAll("#teams input[data-filter]").forEach(function (inp) {
     inp.addEventListener("input", function () {
       state.filters[inp.getAttribute("data-filter")] = inp.value;
@@ -176,7 +204,9 @@
     });
   }
 
-  fetch("/api/teams")
+  function startTeams() {
+    applySavedTeamView();
+    fetch("/api/teams")
     .then(function (r) { return r.json(); })
     .then(function (data) {
       state.rows = data.teams || [];
@@ -198,4 +228,8 @@
       $("teams").querySelector("tbody").innerHTML =
         "<tr><td colspan='" + COLS + "' class='empty'>" + String(err.message || err) + "</td></tr>";
     });
+  }
+
+  if (window.HockeyPrefs) HockeyPrefs.ready.then(startTeams);
+  else startTeams();
 })();

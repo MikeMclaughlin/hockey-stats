@@ -35,7 +35,8 @@
             "<td class='num'>" + r.min + "</td>" +
             "<td class='num'>" + r.total + "</td>" +
             "<td class='num'>" + r.avg + "</td>" +
-            "<td>" + (r.from || "") + " → " + (r.to || "") + "</td>" +
+            "<td>" + (window.HockeyDates ? HockeyDates.formatTableDate(r.from) : (r.from || "")) +
+              " → " + (window.HockeyDates ? HockeyDates.formatTableDate(r.to) : (r.to || "")) + "</td>" +
             "<td>" + r.line + (r.incomplete ? " (incomplete)" : "") + "</td>" +
             "</tr>";
         }).join("")
@@ -102,10 +103,40 @@
       });
   }
 
-  fromUrl();
+  function saveStreakPrefs() {
+    if (!window.HockeyPrefs || !HockeyPrefs.signedIn()) return;
+    HockeyPrefs.patch("streaks", {
+      length: $("length") ? $("length").value : "",
+      minGoals: $("minGoals").value,
+      minAssists: $("minAssists").value,
+      minPoints: $("minPoints").value,
+      minAttempts: $("minAttempts").value,
+      minSog: $("minSog").value,
+      minGoalieSv: $("minGoalieSv") ? $("minGoalieSv").value : "",
+      activeOnly: !!($("activeOnly") && $("activeOnly").checked)
+    });
+  }
+
+  function applyStreakPrefs() {
+    var saved = window.HockeyPrefs && HockeyPrefs.signedIn() && HockeyPrefs.section("streaks");
+    if (!saved || location.search) return;
+    ["length", "minGoals", "minAssists", "minPoints", "minAttempts", "minSog", "minGoalieSv"].forEach(function (k) {
+      if (saved[k] != null && $(k)) $(k).value = saved[k];
+    });
+    if ($("activeOnly")) $("activeOnly").checked = !!saved.activeOnly;
+  }
+
+  function startStreaks() {
+    fromUrl();
+    applyStreakPrefs();
+    load();
+  }
+
   $("controls").addEventListener("submit", function (e) {
     e.preventDefault();
+    saveStreakPrefs();
     load();
   });
-  load();
+  if (window.HockeyPrefs) HockeyPrefs.ready.then(startStreaks);
+  else startStreaks();
 })();
