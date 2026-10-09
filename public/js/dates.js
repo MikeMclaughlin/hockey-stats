@@ -31,7 +31,7 @@
   }
 
   // Date-only values stay on that calendar day. Instants use Eastern time
-  // (America/New_York) and the EST label from the 1.8 display format.
+  // (America/New_York) with a literal EST label.
   function formatTableDate(value) {
     if (value == null || value === "") return "—";
     var s = String(value).trim();

@@ -90,16 +90,41 @@
     $("note").textContent = note;
   }
 
+  function readStreaks(r) {
+    return r.json().then(function (body) {
+      if (!r.ok || (body && body.error)) {
+        throw new Error((body && body.error) || ("HTTP " + r.status));
+      }
+      return body;
+    }, function () {
+      throw new Error(r.ok ? "Invalid response" : ("HTTP " + r.status));
+    });
+  }
+
   function load() {
-    $("meta").textContent = "Loading…";
+    var panels = $("panels");
+    var first = !panels || !panels.children.length;
+    if (first) $("meta").textContent = "Loading…";
+    if (window.HockeyLoading) HockeyLoading.show();
     var q = qs();
     history.replaceState(null, "", "/streaks.html?" + q);
     fetch("/api/streaks?" + q)
-      .then(function (r) { return r.json(); })
+      .then(readStreaks)
       .then(render)
       .catch(function (err) {
+        var message = (err && err.message) || String(err);
         $("meta").textContent = "Error";
-        $("note").textContent = String(err.message || err);
+        $("note").textContent = message;
+        if (first && panels) {
+          panels.textContent = "";
+          var p = document.createElement("p");
+          p.className = "empty";
+          p.textContent = message;
+          panels.appendChild(p);
+        }
+      })
+      .then(function () {
+        if (window.HockeyLoading) HockeyLoading.hide();
       });
   }
 
