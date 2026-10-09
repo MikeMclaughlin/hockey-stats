@@ -1621,7 +1621,10 @@ function teamAbbrevOf(value) {
 function statsRestUrl(gameRows, start, limit) {
   var exp = "seasonId=" + LIVE_STATS_SEASON + " and gameTypeId=2";
   if (!gameRows) exp += " and goals>=1";
-  var sort = "[{\"property\":\"goals\",\"direction\":\"DESC\"}]";
+  // goals alone is not unique, so offset pages skip and repeat rows.
+  var sort = gameRows
+    ? "[{\"property\":\"gameId\",\"direction\":\"ASC\"},{\"property\":\"playerId\",\"direction\":\"ASC\"}]"
+    : "[{\"property\":\"playerId\",\"direction\":\"ASC\"}]";
   return "https://api.nhle.com/stats/rest/en/skater/summary?isAggregate=false&isGame=" +
     (gameRows ? "true" : "false") +
     "&start=" + start + "&limit=" + limit +
@@ -1629,8 +1632,16 @@ function statsRestUrl(gameRows, start, limit) {
     "&cayenneExp=" + encodeURIComponent(exp);
 }
 
+function skaterRowKey(gameRows, row) {
+  if (!row || row.playerId == null) return null;
+  if (!gameRows) return String(row.playerId);
+  if (row.gameId == null) return null;
+  return String(row.playerId) + ":" + String(row.gameId);
+}
+
 async function fetchAllSkaterRows(gameRows) {
   var rows = [];
+  var seen = Object.create(null);
   var start = 0;
   var total = 1;
   var limit = 500;
@@ -1639,17 +1650,56 @@ async function fetchAllSkaterRows(gameRows) {
     var data = (body && body.data) || [];
     var reported = Number(body && body.total);
     total = isFinite(reported) ? reported : start + data.length;
-    rows = rows.concat(data);
+    data.forEach(function (row) {
+      var key = skaterRowKey(gameRows, row);
+      if (!key || seen[key]) return;
+      seen[key] = true;
+      rows.push(row);
+    });
     if (!data.length) break;
     start += data.length;
   }
   return rows;
 }
 
-function cumulativeGoalsOk(seq, goals) {
-  var sum = 0;
-  for (var i = 0; i < seq.length; i++) sum += seq[i];
-  return sum === goals;
+function sumSeq(seq) {
+  var n = 0;
+  for (var i = 0; i < (seq || []).length; i++) n += Number(seq[i]) || 0;
+  return n;
+}
+
+function playerLogMismatches(players) {
+  var out = [];
+  (players || []).forEach(function (p) {
+    var goalSum = sumSeq(p.goalsByGame);
+    var pointSum = sumSeq(p.pointsByGame);
+    var games = (p.goalsByGame || []).length;
+    var pointGames = (p.pointsByGame || []).length;
+    var why = [];
+    if (goalSum !== Number(p.goals)) why.push("goals");
+    if (pointSum !== Number(p.points)) why.push("points");
+    if (games !== Number(p.gp) || pointGames !== Number(p.gp)) why.push("gp");
+    if (why.length) {
+      out.push({
+        id: p.id,
+        name: p.name,
+        why: why.join(","),
+        goals: p.goals,
+        goalSum: goalSum,
+        points: p.points,
+        pointSum: pointSum,
+        gp: p.gp,
+        games: games
+      });
+    }
+  });
+  return out;
+}
+
+function scorersBodyOk(body) {
+  if (!body || body.error || !Array.isArray(body.players) || !body.players.length) return false;
+  if (body.totalsMatch === false) return false;
+  return playerLogMismatches(body.players).length === 0;
 }
 
 var SCORERS_TTL_MS = 6 * 60 * 60 * 1000;
@@ -1712,10 +1762,7 @@ async function buildScorers() {
     var seq = sequencesFor(id);
     var goalSeq = seq.goalSeq;
     var pointSeq = seq.pointSeq;
-    var gp = Number(s.gamesPlayed) || goalSeq.length;
-    if (cumulativeGoalsOk(goalSeq, goals) && goalSeq.length < gp) {
-      while (goalSeq.length < gp) goalSeq.push(0);
-    }
+    var gp = Number(s.gamesPlayed) || 0;
     var assists = Number(s.assists) || 0;
     var points = Number(s.points);
     if (!isFinite(points)) points = goals + assists;
@@ -1760,9 +1807,6 @@ async function buildScorers() {
     if (!isFinite(points)) points = logPoints;
     if (points < 1 && goals < 1) return;
     var gp = seq.goalSeq.length;
-    if (goals >= 1 && cumulativeGoalsOk(seq.goalSeq, goals) && seq.goalSeq.length < gp) {
-      while (seq.goalSeq.length < gp) seq.goalSeq.push(0);
-    }
     var name = skaterName(r);
     if (seq.pointSeq.length && logPoints !== points) {
       mismatches.push({ id: r.id, name: name, stat: "points", summary: logPoints, leader: points });
@@ -1794,44 +1838,111 @@ async function buildScorers() {
     if (p.gp > maxGames) maxGames = p.gp;
     if (p.goalsByGame.length > maxGames) maxGames = p.goalsByGame.length;
   });
+  var logMismatches = playerLogMismatches(players);
+  var totalsMatch = logMismatches.length === 0 && goalScorers > 0;
+  if (!totalsMatch) {
+    console.error("scorers log mismatch", logMismatches.length, logMismatches.slice(0, 8).map(function (m) {
+      return m.name + " " + m.why + " G" + m.goalSum + "/" + m.goals + " P" + m.pointSum + "/" + m.points + " GP" + m.games + "/" + m.gp;
+    }).join("; "));
+  }
   return {
-    ok: true,
+    ok: totalsMatch,
     season: LIVE_STATS_SEASON,
     seasonLabel: formatSeason(LIVE_STATS_SEASON),
     generatedAt: new Date().toISOString(),
     maxGames: maxGames,
     playerCount: goalScorers,
     gameRows: games.length,
+    totalsMatch: totalsMatch,
+    mismatchCount: logMismatches.length,
     totalsMatchLeaders: mismatches.length === 0,
     leaderMismatches: mismatches.slice(0, 12),
-    players: players
+    players: totalsMatch ? players : []
   };
 }
 
-async function scorersPayload() {
-  if (scorersMem.body && Date.now() - scorersMem.at < SCORERS_TTL_MS) return scorersMem.body;
+async function buildScorersChecked() {
+  var last = null;
+  for (var attempt = 0; attempt < 3; attempt++) {
+    if (attempt) await sleep(400);
+    last = await buildScorers();
+    if (last && last.totalsMatch) return last;
+  }
+  return last || {
+    ok: false,
+    error: "Scorer game logs do not add up to season totals",
+    totalsMatch: false,
+    mismatchCount: 0,
+    players: []
+  };
+}
+
+function scorersMismatchError(body) {
+  return {
+    ok: false,
+    error: "Scorer game logs do not add up to season totals",
+    totalsMatch: false,
+    mismatchCount: body && body.mismatchCount || 0,
+    players: []
+  };
+}
+
+async function readGoodScorersBlob() {
   try {
     var stored = await store.readJsonResult(store.KEYS.scorers, null);
-    if (stored && stored.source === "blob" && stored.value && stored.value.generatedAt && stored.value.players) {
-      var age = Date.now() - Date.parse(stored.value.generatedAt);
-      if (isFinite(age) && age >= 0 && age < SCORERS_TTL_MS) {
-        scorersMem = { at: Date.now(), body: stored.value };
-        return stored.value;
-      }
+    if (!stored || (stored.source !== "blob" && stored.source !== "local") || !stored.value) return null;
+    if (!scorersBodyOk(stored.value)) return null;
+    if (stored.value.totalsMatch !== true) {
+      return Object.assign({}, stored.value, { ok: true, totalsMatch: true, mismatchCount: 0 });
     }
-  } catch (e) { /* build without writing */ }
-  var body = await buildScorers();
+    return stored.value;
+  } catch (e) {
+    return null;
+  }
+}
+
+async function scorersPayload() {
+  if (scorersMem.body && scorersBodyOk(scorersMem.body) && Date.now() - scorersMem.at < SCORERS_TTL_MS) {
+    return scorersMem.body;
+  }
+  var stored = await readGoodScorersBlob();
+  if (stored && stored.generatedAt) {
+    var age = Date.now() - Date.parse(stored.generatedAt);
+    if (isFinite(age) && age >= 0 && age < SCORERS_TTL_MS) {
+      scorersMem = { at: Date.now(), body: stored };
+      return stored;
+    }
+  }
+  var body = await buildScorersChecked();
+  if (!body || !body.totalsMatch || !scorersBodyOk(body)) {
+    if (scorersMem.body && scorersBodyOk(scorersMem.body)) return scorersMem.body;
+    if (stored && scorersBodyOk(stored)) {
+      scorersMem = { at: Date.now(), body: stored };
+      return stored;
+    }
+    return scorersMismatchError(body);
+  }
   scorersMem = { at: Date.now(), body: body };
   return body;
 }
 
 async function refreshScorers() {
-  var body = await buildScorers();
+  var body = await buildScorersChecked();
+  if (!body || !body.totalsMatch || !scorersBodyOk(body)) {
+    if (scorersMem.body && scorersBodyOk(scorersMem.body)) {
+      return Object.assign({ writeSkipped: "mismatch" }, scorersMem.body);
+    }
+    var kept = await readGoodScorersBlob();
+    if (kept) return Object.assign({ writeSkipped: "mismatch" }, kept);
+    var err = new Error("Scorer game logs do not add up to season totals");
+    err.mismatchCount = body && body.mismatchCount || 0;
+    throw err;
+  }
   scorersMem = { at: Date.now(), body: body };
   var prev = null;
   try { prev = await store.readJsonResult(store.KEYS.scorers, null); } catch (e) { prev = null; }
   var canSkip = prev && (prev.source === "blob" || prev.source === "local") &&
-    prev.value && scorersSignature(prev.value) === scorersSignature(body);
+    prev.value && scorersBodyOk(prev.value) && scorersSignature(prev.value) === scorersSignature(body);
   if (canSkip) return Object.assign({ writeSkipped: "unchanged" }, prev.value);
   await store.writeJson(store.KEYS.scorers, body);
   return body;
@@ -2194,9 +2305,21 @@ function handleApi(req, res, url) {
   }
   if (pathname === "/api/scorers" && req.method === "GET") {
     scorersPayload()
-      .then(function (body) { sendJson(res, 200, body); })
+      .then(function (body) {
+        if (!body || body.totalsMatch !== true) {
+          sendJson(res, 502, scorersMismatchError(body));
+          return;
+        }
+        sendJson(res, 200, body);
+      })
       .catch(function (err) {
-        sendJson(res, 502, { ok: false, error: String(err.message || err), players: [] });
+        sendJson(res, 502, {
+          ok: false,
+          error: String(err.message || err),
+          totalsMatch: false,
+          mismatchCount: 0,
+          players: []
+        });
       });
     return true;
   }
