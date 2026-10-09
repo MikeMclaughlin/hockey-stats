@@ -20,10 +20,10 @@ var matchupCache = Object.create(null);
 
 function productVersion() {
   try {
-    var parts = String(require("./package.json").version || "1.8.0").split(".");
-    return (parts[0] || "1") + "." + (parts[1] || "8");
+    var parts = String(require("./package.json").version || "1.9.0").split(".");
+    return (parts[0] || "1") + "." + (parts[1] || "9");
   } catch (e) {
-    return "1.8";
+    return "1.9";
   }
 }
 
@@ -36,6 +36,7 @@ function formatSeason(id) {
 }
 
 var LIVE_STATS_SEASON = 20262027;
+var LIVE_BACKTEST_SEASON = "20262027";
 var EARLY_SEASON_GP = 10;
 var statsSeasonMemory = null;
 
@@ -130,7 +131,7 @@ function sleep(ms) {
 
 function httpsGet(urlStr, cb, attempt) {
   attempt = attempt || 1;
-  https.get(urlStr, { headers: { "User-Agent": "hockey-stats/1.8", Accept: "*/*" } }, function (up) {
+  https.get(urlStr, { headers: { "User-Agent": "hockey-stats/1.9", Accept: "*/*" } }, function (up) {
     if (up.statusCode >= 300 && up.statusCode < 400 && up.headers.location) {
       up.resume();
       httpsGet(up.headers.location, cb, attempt);
@@ -171,7 +172,7 @@ function httpsRequest(method, urlStr, options) {
     var u = new URL(urlStr);
     var body = options.body || "";
     var headers = Object.assign({
-      "User-Agent": "hockey-stats/1.8",
+      "User-Agent": "hockey-stats/1.9",
       Accept: "application/json"
     }, options.headers || {});
     if (body) headers["Content-Length"] = Buffer.byteLength(body);
@@ -313,6 +314,28 @@ function mapPool(items, limit, fn) {
   var jobs = [];
   for (var w = 0; w < n; w++) jobs.push(worker());
   return Promise.all(jobs);
+}
+
+function mapPoolValues(items, limit, fn) {
+  var list = items || [];
+  var out = new Array(list.length);
+  var i = 0;
+  var n = Math.max(1, Math.min(limit || 1, list.length || 1));
+  if (!list.length) return Promise.resolve(out);
+  function worker() {
+    if (i >= list.length) return Promise.resolve();
+    var idx = i++;
+    return Promise.resolve(fn(list[idx], idx)).then(function (value) {
+      out[idx] = value;
+      return worker();
+    }, function () {
+      out[idx] = null;
+      return worker();
+    });
+  }
+  var jobs = [];
+  for (var w = 0; w < n; w++) jobs.push(worker());
+  return Promise.all(jobs).then(function () { return out; });
 }
 
 function restDaysBetween(lastDate, currentDate) {
@@ -1305,6 +1328,21 @@ async function runScheduledUpdate() {
     storageError: storageError
   };
   try {
+    var liveBt = await refreshLiveBacktest({ writeStore: true });
+    status.liveBacktest = liveBt;
+  } catch (e) {
+    status.liveBacktestError = String(e.message || e);
+  }
+  try {
+    var scorersBody = await refreshScorers();
+    status.scorers = {
+      players: scorersBody.playerCount || 0,
+      writeSkipped: scorersBody.writeSkipped || null
+    };
+  } catch (e) {
+    status.scorersError = String(e.message || e);
+  }
+  try {
     await store.writeJson(store.KEYS.cronStatus, status);
   } catch (e) {
     status.statusWriteError = String(e.message || e);
@@ -1335,7 +1373,7 @@ async function loadMoneyPuckGames() {
   return all;
 }
 
-var BACKTEST_SEASONS = ["20212022", "20222023", "20232024", "20242025", "20252026"];
+var BACKTEST_SEASONS = ["20212022", "20222023", "20232024", "20242025", "20252026", "20262027"];
 
 function backtestFile(season) {
   return "backtest-" + season + ".json";
@@ -1558,6 +1596,322 @@ async function buildPlayerStreaks(query) {
   return built;
 }
 
+function textOf(value) {
+  if (value == null) return "";
+  if (typeof value === "string") return value;
+  if (typeof value === "object" && value.default) return String(value.default);
+  return String(value);
+}
+
+function skaterName(row) {
+  if (!row) return "Player";
+  if (row.skaterFullName) return String(row.skaterFullName);
+  var first = textOf(row.firstName);
+  var last = textOf(row.lastName);
+  var name = (first + " " + last).trim();
+  return name || "Player";
+}
+
+function teamAbbrevOf(value) {
+  var text = textOf(value);
+  if (!text) return "";
+  return text.split(",")[0].trim();
+}
+
+function statsRestUrl(gameRows, start, limit) {
+  var exp = "seasonId=" + LIVE_STATS_SEASON + " and gameTypeId=2";
+  if (!gameRows) exp += " and goals>=1";
+  var sort = "[{\"property\":\"goals\",\"direction\":\"DESC\"}]";
+  return "https://api.nhle.com/stats/rest/en/skater/summary?isAggregate=false&isGame=" +
+    (gameRows ? "true" : "false") +
+    "&start=" + start + "&limit=" + limit +
+    "&sort=" + encodeURIComponent(sort) +
+    "&cayenneExp=" + encodeURIComponent(exp);
+}
+
+async function fetchAllSkaterRows(gameRows) {
+  var rows = [];
+  var start = 0;
+  var total = 1;
+  var limit = 500;
+  while (start < total && start < 20000) {
+    var body = await getJson(statsRestUrl(gameRows, start, limit));
+    var data = (body && body.data) || [];
+    var reported = Number(body && body.total);
+    total = isFinite(reported) ? reported : start + data.length;
+    rows = rows.concat(data);
+    if (!data.length) break;
+    start += data.length;
+  }
+  return rows;
+}
+
+function cumulativeGoalsOk(seq, goals) {
+  var sum = 0;
+  for (var i = 0; i < seq.length; i++) sum += seq[i];
+  return sum === goals;
+}
+
+var SCORERS_TTL_MS = 6 * 60 * 60 * 1000;
+var scorersMem = { at: 0, body: null };
+
+function scorersSignature(body) {
+  return (body && body.players || []).map(function (p) {
+    return p.id + ":" + p.goals + ":" + p.points + ":" + p.gp + ":" + (p.goalsByGame || []).join(",");
+  }).join("|");
+}
+
+async function buildScorers() {
+  var summary = await fetchAllSkaterRows(false);
+  var games = await fetchAllSkaterRows(true);
+  var leaders = await getJson(
+    "https://api-web.nhle.com/v1/skater-stats-leaders/" + LIVE_STATS_SEASON + "/2?categories=goals,points&limit=25"
+  );
+  var byPlayer = Object.create(null);
+  games.forEach(function (g) {
+    var id = g.playerId;
+    if (id == null) return;
+    if (!byPlayer[id]) byPlayer[id] = [];
+    byPlayer[id].push(g);
+  });
+  Object.keys(byPlayer).forEach(function (id) {
+    byPlayer[id].sort(function (a, b) {
+      var da = String(a.gameDate || "");
+      var db = String(b.gameDate || "");
+      if (da < db) return -1;
+      if (da > db) return 1;
+      return (Number(a.gameId) || 0) - (Number(b.gameId) || 0);
+    });
+  });
+  var leaderGoals = Object.create(null);
+  var leaderPoints = Object.create(null);
+  ((leaders && leaders.goals) || []).forEach(function (r) { leaderGoals[r.id] = Number(r.value); });
+  ((leaders && leaders.points) || []).forEach(function (r) { leaderPoints[r.id] = Number(r.value); });
+  var players = [];
+  var mismatches = [];
+  summary.forEach(function (s) {
+    var goals = Number(s.goals) || 0;
+    if (goals < 1) return;
+    var id = s.playerId;
+    var log = byPlayer[id] || [];
+    var goalSeq = [];
+    var pointSeq = [];
+    var seenGame = Object.create(null);
+    log.forEach(function (g) {
+      var gid = String(g.gameId || g.gameDate || goalSeq.length);
+      if (seenGame[gid]) return;
+      seenGame[gid] = true;
+      var gGoals = Number(g.goals) || 0;
+      var gAssists = Number(g.assists) || 0;
+      goalSeq.push(gGoals);
+      pointSeq.push(gGoals + gAssists);
+    });
+    var gp = Number(s.gamesPlayed) || goalSeq.length;
+    if (cumulativeGoalsOk(goalSeq, goals) && goalSeq.length < gp) {
+      while (goalSeq.length < gp) goalSeq.push(0);
+    }
+    var assists = Number(s.assists) || 0;
+    var points = Number(s.points);
+    if (!isFinite(points)) points = goals + assists;
+    var name = skaterName(s);
+    if (leaderGoals[id] != null && leaderGoals[id] !== goals) {
+      mismatches.push({ id: id, name: name, stat: "goals", summary: goals, leader: leaderGoals[id] });
+    }
+    if (leaderPoints[id] != null && leaderPoints[id] !== points) {
+      mismatches.push({ id: id, name: name, stat: "points", summary: points, leader: leaderPoints[id] });
+    }
+    var gpg = gp ? Math.round((goals / gp) * 100) / 100 : 0;
+    players.push({
+      id: id,
+      name: name,
+      team: teamAbbrevOf(s.teamAbbrevs || s.teamAbbrev),
+      gp: gp,
+      goals: goals,
+      assists: assists,
+      points: points,
+      gpg: gpg,
+      goalsByGame: goalSeq,
+      pointsByGame: pointSeq
+    });
+  });
+  ((leaders && leaders.goals) || []).forEach(function (r) {
+    var found = false;
+    for (var i = 0; i < players.length; i++) {
+      if (Number(players[i].id) === Number(r.id)) { found = true; break; }
+    }
+    if (!found) mismatches.push({ id: r.id, name: skaterName(r), stat: "goals", summary: null, leader: Number(r.value) });
+  });
+  players.sort(function (a, b) {
+    if (b.goals !== a.goals) return b.goals - a.goals;
+    if (b.gpg !== a.gpg) return b.gpg - a.gpg;
+    return a.name < b.name ? -1 : a.name > b.name ? 1 : 0;
+  });
+  var maxGames = 0;
+  players.forEach(function (p) {
+    if (p.gp > maxGames) maxGames = p.gp;
+    if (p.goalsByGame.length > maxGames) maxGames = p.goalsByGame.length;
+  });
+  return {
+    ok: true,
+    season: LIVE_STATS_SEASON,
+    seasonLabel: formatSeason(LIVE_STATS_SEASON),
+    generatedAt: new Date().toISOString(),
+    maxGames: maxGames,
+    playerCount: players.length,
+    gameRows: games.length,
+    totalsMatchLeaders: mismatches.length === 0,
+    leaderMismatches: mismatches.slice(0, 12),
+    players: players
+  };
+}
+
+async function scorersPayload() {
+  if (scorersMem.body && Date.now() - scorersMem.at < SCORERS_TTL_MS) return scorersMem.body;
+  try {
+    var stored = await store.readJsonResult(store.KEYS.scorers, null);
+    if (stored && stored.source === "blob" && stored.value && stored.value.generatedAt && stored.value.players) {
+      var age = Date.now() - Date.parse(stored.value.generatedAt);
+      if (isFinite(age) && age >= 0 && age < SCORERS_TTL_MS) {
+        scorersMem = { at: Date.now(), body: stored.value };
+        return stored.value;
+      }
+    }
+  } catch (e) { /* build without writing */ }
+  var body = await buildScorers();
+  scorersMem = { at: Date.now(), body: body };
+  return body;
+}
+
+async function refreshScorers() {
+  var body = await buildScorers();
+  scorersMem = { at: Date.now(), body: body };
+  var prev = null;
+  try { prev = await store.readJsonResult(store.KEYS.scorers, null); } catch (e) { prev = null; }
+  var canSkip = prev && (prev.source === "blob" || prev.source === "local") &&
+    prev.value && scorersSignature(prev.value) === scorersSignature(body);
+  if (canSkip) return Object.assign({ writeSkipped: "unchanged" }, prev.value);
+  await store.writeJson(store.KEYS.scorers, body);
+  return body;
+}
+
+function liveBacktestLimits() {
+  return [
+    "Regular-season finals for 2026-27. Older seasons stay in their own files. A row is graded once both clubs have five prior games; earlier finals stay pending.",
+    "Shots, expected goals, Corsi (shot attempts), high-danger shots, and special-teams expected goals come from MoneyPuck game logs. A row with no MoneyPuck line leaves those blank.",
+    "Special-teams expected goals are 5-on-4 expected goals for minus 4-on-5 expected goals against.",
+    "No historical moneylines are stored. Favorite means the club with the higher points percentage before the game.",
+    "Arizona is ARI through 2023-24. Utah is UTA from 2024-25.",
+    "Starting goalies were tested from NHL boxscore starters (prior save percentage, at least 3 starts and 30 shots). The factor did not beat the current score model, so it is not applied and rows do not store goalie save percentage. There is no live projected-starter feed. Injuries are not included."
+  ];
+}
+
+async function fetchSeasonFinals(season) {
+  var teams = stats.TEAMS.map(function (t) { return t.abbrev; });
+  var schedules = await mapPoolValues(teams, 6, function (ab) {
+    return getJson("https://api-web.nhle.com/v1/club-schedule-season/" + ab + "/" + season).catch(function () {
+      return { games: [] };
+    });
+  });
+  var games = backtest.collectGames(schedules);
+  games.forEach(function (g) { g.season = String(season); });
+  return games;
+}
+
+async function loadMoneyPuckYear(year) {
+  var teams = stats.TEAMS.map(function (t) { return t.abbrev; });
+  var all = [];
+  var sawRows = false;
+  for (var i = 0; i < teams.length; i++) {
+    var text;
+    try {
+      text = await getText(
+        "https://moneypuck.com/moneypuck/playerData/careers/gameByGame/regular/teams/" + teams[i] + ".csv"
+      );
+    } catch (e) {
+      if (String(e.message || e).indexOf("429") !== -1) break;
+      if (!sawRows) continue;
+      continue;
+    }
+    var rows = backtest.parseTeamGameCsv(text, String(year));
+    if (!sawRows && !rows.length) return [];
+    sawRows = true;
+    all = all.concat(rows);
+    if (i < teams.length - 1) await sleep(200);
+  }
+  return all;
+}
+
+function packLiveBacktest(season, rows, generatedAt) {
+  var list = rows || [];
+  return {
+    season: String(season),
+    generatedAt: generatedAt,
+    source: "Walk-forward NHL club-schedule-season finals plus MoneyPuck team game logs when a line exists.",
+    favoriteMethod: "points-percentage",
+    favoriteLabel: "Higher points percentage before the game. Not a betting line.",
+    modelNote: "Score model constants are the 1.6 formula. No replay change beat winner accuracy by 0.5 points and both errors by 0.02 goals.",
+    limits: liveBacktestLimits(),
+    summary: archive.summarize(list),
+    rows: list
+  };
+}
+
+function backtestSignature(rows) {
+  return (rows || []).map(function (r) {
+    return [
+      r.id, r.projectedLabel, r.actualLabel, r.awayPdo, r.homePdo,
+      r.awayXgf5, r.homeXgf5, r.awayLast5, r.homeLast5, r.graded ? 1 : 0
+    ].join(":");
+  }).join("|");
+}
+
+async function readServedBacktest(season) {
+  if (String(season) === LIVE_BACKTEST_SEASON) {
+    try {
+      var stored = await store.readJsonResult(store.KEYS.liveBacktest, null);
+      if (stored && stored.source === "blob" && stored.value && Array.isArray(stored.value.rows)) {
+        return stored.value;
+      }
+    } catch (e) { /* public file */ }
+  }
+  return readBacktestFile(season);
+}
+
+async function refreshLiveBacktest(opts) {
+  opts = opts || {};
+  var season = LIVE_BACKTEST_SEASON;
+  var games = await fetchSeasonFinals(season);
+  var mpGames = [];
+  try { mpGames = await loadMoneyPuckYear(String(season).slice(0, 4)); } catch (e) { mpGames = []; }
+  var out = backtest.run(games, { minGp: 5, mpGames: mpGames, season: season });
+  var prev = readBacktestFile(season);
+  var generatedAt = new Date().toISOString();
+  var body = packLiveBacktest(season, out.rows, generatedAt);
+  var changed = !prev || backtestSignature(prev.rows) !== backtestSignature(body.rows);
+  if (!changed && prev && prev.generatedAt) body.generatedAt = prev.generatedAt;
+  var appended = 0;
+  if (changed) {
+    var prevIds = Object.create(null);
+    ((prev && prev.rows) || []).forEach(function (r) { prevIds[String(r.id)] = true; });
+    body.rows.forEach(function (r) { if (!prevIds[String(r.id)]) appended += 1; });
+  }
+  if (opts.writePublic) {
+    fs.writeFileSync(backtestPublicPath(season), JSON.stringify(body));
+  }
+  if (opts.writeStore && changed) {
+    await store.writeJson(store.KEYS.liveBacktest, body);
+  }
+  return {
+    ok: true,
+    season: season,
+    finals: games.length,
+    rows: body.rows.length,
+    changed: changed,
+    appended: appended,
+    mp: mpGames.length
+  };
+}
+
 function detectRoute(req, url) {
   var p = (url && url.pathname ? url.pathname : "/").split("?")[0].replace(/\/+$/, "") || "/";
   if (/\.(html|css|js|json|svg|png|ico|map)$/i.test(p)) return p;
@@ -1581,6 +1935,7 @@ function detectRoute(req, url) {
   if (/\.(html|css|js|json|svg|png|ico)(\s|$|\?)/i.test(blob) && blob.indexOf("/api/") === -1) return p;
   var fromApi = blob.indexOf("/api/") !== -1 || /(^|\s)api\//.test(blob);
   if (!fromApi) return p;
+  if (blob.indexOf("/api/scorers") !== -1 || blob.indexOf("api/scorers") !== -1) return "/api/scorers";
   if (blob.indexOf("/api/scores") !== -1 || blob.indexOf("api/scores") !== -1) return "/api/scores";
   if (blob.indexOf("cron") !== -1) return "/api/cron";
   if (blob.indexOf("grade") !== -1) return "/api/estimates/grade";
@@ -1784,6 +2139,14 @@ function handleApi(req, res, url) {
     });
     return true;
   }
+  if (pathname === "/api/scorers" && req.method === "GET") {
+    scorersPayload()
+      .then(function (body) { sendJson(res, 200, body); })
+      .catch(function (err) {
+        sendJson(res, 502, { ok: false, error: String(err.message || err), players: [] });
+      });
+    return true;
+  }
   if (pathname === "/api/scores") {
     var scoreDate = cleanDate(url.searchParams.get("date"));
     loadScoreboard(scoreDate)
@@ -1867,6 +2230,35 @@ function handleApi(req, res, url) {
       return true;
     }
     if (!/^\d{8}$/.test(btSeason)) btSeason = "20252026";
+    if (btSeason === LIVE_BACKTEST_SEASON) {
+      readServedBacktest(btSeason).then(function (cached) {
+        if (cached && Array.isArray(cached.rows)) {
+          sendJson(res, 200, Object.assign({}, cached, {
+            seasons: seasons,
+            season: cached.season || btSeason
+          }));
+          return;
+        }
+        sendJson(res, 200, {
+          season: btSeason,
+          seasons: seasons,
+          rows: [],
+          summary: archive.summarize([]),
+          unavailable: true,
+          message: "No cached backtest for " + formatSeason(btSeason) + " yet."
+        });
+      }).catch(function () {
+        sendJson(res, 200, {
+          season: btSeason,
+          seasons: seasons,
+          rows: [],
+          summary: archive.summarize([]),
+          unavailable: true,
+          message: "No cached backtest for " + formatSeason(btSeason) + " yet."
+        });
+      });
+      return true;
+    }
     var cached = readBacktestFile(btSeason);
     if (cached) {
       cached.seasons = seasons;
@@ -1928,6 +2320,7 @@ function routeKey(pathname) {
   if (p === "/cron" || p === "/api/cron") return "/api/cron";
   if (p === "/seed" || p === "/api/seed") return "/api/seed";
   if (p === "/scores" || p === "/api/scores") return "/api/scores";
+  if (p === "/api/scorers") return "/api/scorers";
   if (p === "/matchups" || p === "/api/matchups") return "/api/matchups";
   if (p === "/backtest" || p === "/api/backtest") return "/api/backtest";
   if (p === "/streaks" || p === "/api/streaks") return "/api/streaks";
@@ -1979,5 +2372,7 @@ if (require.main === module) {
 handler.server = server;
 handler.buildMatchups = buildMatchups;
 handler.runBacktest = runBacktest;
+handler.refreshLiveBacktest = refreshLiveBacktest;
+handler.buildScorers = buildScorers;
 handler.PORT = PORT;
 module.exports = handler;

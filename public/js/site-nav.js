@@ -13,10 +13,11 @@
         link("/", "matchups", "Matchups") +
         link("/teams.html", "teams", "Team Stats") +
         link("/streaks.html", "streaks", "Player Streaks") +
+        link("/scorers.html", "scorers", "Scorers") +
         link("/review.html", "review", "Review") +
         link("/backtest.html", "backtest", "Backtest") +
       "</nav>" +
-      '<span class="app-version" title="App version">v1.8</span>' +
+      '<span class="app-version" title="App version">v1.9</span>' +
       '<div class="auth-slot" id="auth-slot"><a class="auth-btn" href="/api/auth/login">Sign in</a></div>' +
     "</div>"
   );

@@ -7,7 +7,8 @@
     { id: "20222023", label: "2022-23" },
     { id: "20232024", label: "2023-24" },
     { id: "20242025", label: "2024-25" },
-    { id: "20252026", label: "2025-26" }
+    { id: "20252026", label: "2025-26" },
+    { id: "20262027", label: "2026-27" }
   ];
   var state = {
     rows: [],
@@ -128,7 +129,7 @@
     var filtered = rows.length !== state.rows.length;
     $("meta").textContent = filtered
       ? rows.length + " of " + state.rows.length + " games"
-      : rows.length + " graded games";
+      : (s.graded === rows.length ? rows.length + " graded games" : rows.length + " games");
     $("summary").innerHTML =
       '<div class="stat"><b>' + s.total + "</b><span>" + (filtered ? "filtered" : "games") + "</span></div>" +
       '<div class="stat"><b>' + s.graded + "</b><span>graded</span></div>" +
@@ -214,6 +215,14 @@
   }
 
   function loadOne(season) {
+    if (season === "20262027") {
+      return fetch("/api/backtest?season=20262027").then(readJson).then(function (body) {
+        if (body && body.unavailable) throw new Error("unavailable");
+        return body;
+      }).catch(function () {
+        return fetch("/data/backtest-20262027.json").then(readJson);
+      });
+    }
     return fetch("/data/backtest-" + season + ".json").then(readJson).catch(function () {
       return fetch("/api/backtest?season=" + encodeURIComponent(season)).then(readJson);
     });
@@ -235,7 +244,10 @@
           rows: rows,
           limits: limits,
           favoriteMethod: "points-percentage",
-          generatedAt: (parts[0] && parts[0].generatedAt) || null,
+          generatedAt: parts.reduce(function (latest, p) {
+            if (p && p.generatedAt && (!latest || p.generatedAt > latest)) return p.generatedAt;
+            return latest;
+          }, null),
           source: "2021-22 through 2025-26 regular season."
         };
       });
@@ -269,12 +281,20 @@
       return;
     }
     if ($("stamp")) {
-      $("stamp").textContent = d.generatedAt
-        ? "Cached snapshot " + d.generatedAt + ". "
+      var stamp = d.generatedAt && window.HockeyDates
+        ? HockeyDates.formatTableDate(d.generatedAt)
+        : (d.generatedAt || "");
+      $("stamp").textContent = stamp
+        ? "Cached snapshot " + stamp + ". "
         : "Cached snapshot. ";
     }
     if ($("limits")) {
-      var bits = d.limits || [];
+      var bits = (d.limits || []).slice();
+      if ((d.season || selectedSeason()) === "all") {
+        bits = bits.map(function (line) {
+          return String(line).replace("2021-22 through 2025-26", "2021-22 through 2026-27");
+        });
+      }
       if (d.modelNote) bits = bits.concat([d.modelNote]);
       $("limits").textContent = bits.join(" ");
     }
@@ -337,10 +357,14 @@
     applyBacktestPrefs();
     var bootSeason = ($("season") && $("season").value) || new URLSearchParams(location.search).get("season") || "all";
     if ($("season")) $("season").value = bootSeason;
+    if (window.HockeyLoading) HockeyLoading.show();
     loadData(bootSeason)
       .then(applyPayload)
       .catch(function (err) {
         $("meta").textContent = String(err);
+      })
+      .then(function () {
+        if (window.HockeyLoading) HockeyLoading.hide();
       });
   }
 
@@ -350,9 +374,12 @@
       var q = new URLSearchParams(location.search);
       q.set("season", id);
       history.replaceState(null, "", "/backtest.html?" + q.toString());
-      $("meta").textContent = "Loading…";
+      if (!state.rows.length) $("meta").textContent = "Loading…";
+      if (window.HockeyLoading) HockeyLoading.show();
       loadData(id).then(applyPayload).catch(function (err) {
         $("meta").textContent = String(err);
+      }).then(function () {
+        if (window.HockeyLoading) HockeyLoading.hide();
       });
       saveBacktestPrefs();
     });

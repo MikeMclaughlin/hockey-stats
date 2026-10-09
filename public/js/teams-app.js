@@ -206,15 +206,18 @@
 
   function startTeams() {
     applySavedTeamView();
+    if (window.HockeyLoading) HockeyLoading.show();
     fetch("/api/teams")
     .then(function (r) { return r.json(); })
     .then(function (data) {
       state.rows = data.teams || [];
       state.preseasonLabel = data.preseasonLabel || "2026-27 preseason";
+      var through = data.throughDate || "";
+      if (through && window.HockeyDates) through = HockeyDates.formatTableDate(through);
       $("meta").textContent = state.rows.length + " teams" +
         (data.statsSeasonLabel ? " · stats " + data.statsSeasonLabel : "") +
         (data.scoreboardSeasonLabel ? " · scoreboard " + data.scoreboardSeasonLabel : "") +
-        (data.throughDate ? " · last-five through " + data.throughDate : "") +
+        (through ? " · last-five through " + through : "") +
         (data.formTypes && data.formTypes.length === 1 ? " · regular season form" : " · includes preseason form");
       var note = $("note");
       if (note) {
@@ -225,8 +228,19 @@
     })
     .catch(function (err) {
       $("meta").textContent = "Error";
-      $("teams").querySelector("tbody").innerHTML =
-        "<tr><td colspan='" + COLS + "' class='empty'>" + String(err.message || err) + "</td></tr>";
+      var note = $("note");
+      if (state.rows.length) {
+        if (note) {
+          note.textContent = String(err.message || err);
+          note.classList.remove("hidden");
+        }
+      } else {
+        $("teams").querySelector("tbody").innerHTML =
+          "<tr><td colspan='" + COLS + "' class='empty'>" + String(err.message || err) + "</td></tr>";
+      }
+    })
+    .then(function () {
+      if (window.HockeyLoading) HockeyLoading.hide();
     });
   }
 

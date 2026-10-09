@@ -24,7 +24,9 @@
     matchupArchive: "matchup-archive-20262027.json",
     cronStatus: "cron-status.json",
     statsSeason: "stats-season.json",
-    odds: "odds.json"
+    odds: "odds.json",
+    scorers: "scorers-20262027.json",
+    liveBacktest: "backtest-20262027.json"
   };
 
   var lastWrite = { at: null, name: null, error: null };

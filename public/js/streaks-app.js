@@ -91,7 +91,10 @@
   }
 
   function load() {
-    $("meta").textContent = "Loading…";
+    var panels = $("panels");
+    var first = !panels || !panels.children.length;
+    if (first) $("meta").textContent = "Loading…";
+    if (window.HockeyLoading) HockeyLoading.show();
     var q = qs();
     history.replaceState(null, "", "/streaks.html?" + q);
     fetch("/api/streaks?" + q)
@@ -100,6 +103,9 @@
       .catch(function (err) {
         $("meta").textContent = "Error";
         $("note").textContent = String(err.message || err);
+      })
+      .then(function () {
+        if (window.HockeyLoading) HockeyLoading.hide();
       });
   }
 

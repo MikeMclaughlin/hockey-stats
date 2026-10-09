@@ -18,7 +18,7 @@ var ROOT = path.join(__dirname, "..");
 var OUT = path.join(ROOT, "public", "data");
 var CACHE = "/tmp/hs17";
 var SEASONS = ["20212022", "20222023", "20232024", "20242025", "20252026"];
-var UA = "hockey-stats/1.8";
+var UA = "hockey-stats/1.9";
 
 function ensure(dir) { fs.mkdirSync(dir, { recursive: true }); }
 

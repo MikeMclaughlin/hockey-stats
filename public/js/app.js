@@ -391,8 +391,10 @@
     state.data = data;
     var scoreLabel = data.scoreboardSeasonLabel || "";
     var statsLabel = data.statsSeasonLabel || "";
+    var slate = data.currentDate || "";
+    if (slate && window.HockeyDates) slate = HockeyDates.formatTableDate(slate);
     $("meta").textContent =
-      (data.currentDate || "") +
+      slate +
       (scoreLabel ? " · scoreboard " + scoreLabel : "") +
       (statsLabel ? " · stats " + statsLabel : "") +
       " · " + (data.matchupCount || 0) + " games";
@@ -444,7 +446,8 @@
     if (date) q.set("date", date);
     else q.delete("date");
     var s = q.toString();
-    location.search = s ? "?" + s : "";
+    history.pushState(null, "", s ? "/?" + s : "/");
+    load(false);
   }
 
   function anyLive() {
@@ -519,13 +522,25 @@
   }
 
   function load(refresh) {
-    $("meta").textContent = "Loading…";
+    if (!state.data) $("meta").textContent = "Loading…";
+    if (window.HockeyLoading) HockeyLoading.show();
     fetch(boardQuery(refresh))
       .then(function (r) { return r.json(); })
       .then(render)
       .catch(function (err) {
         $("meta").textContent = "Could not load matchups";
-        $("cards").innerHTML = '<div class="empty">' + String(err) + "</div>";
+        var note = $("note");
+        if (state.data) {
+          if (note) {
+            note.textContent = String(err);
+            note.classList.remove("hidden");
+          }
+        } else {
+          $("cards").innerHTML = '<div class="empty">' + String(err) + "</div>";
+        }
+      })
+      .then(function () {
+        if (window.HockeyLoading) HockeyLoading.hide();
       });
   }
 
@@ -596,6 +611,7 @@
   if (prevBtn) prevBtn.addEventListener("click", function () { if (prevBtn.dataset.date) goDate(prevBtn.dataset.date); });
   if (nextBtn) nextBtn.addEventListener("click", function () { if (nextBtn.dataset.date) goDate(nextBtn.dataset.date); });
   if (todayBtn) todayBtn.addEventListener("click", function () { goDate(""); });
+  window.addEventListener("popstate", function () { load(false); });
   if (window.HockeyPrefs) HockeyPrefs.ready.then(startBoard);
   else startBoard();
 })();

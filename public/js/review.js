@@ -200,12 +200,24 @@
   }
 
   function load() {
+    if (!state.rows.length) $("meta").textContent = "Loading…";
+    if (window.HockeyLoading) HockeyLoading.show();
     fetch("/api/estimates?grade=1")
       .then(function (r) { return r.json(); })
       .then(render)
       .catch(function (err) {
         $("meta").textContent = "Could not load estimates";
-        $("summary").textContent = String(err);
+        if (!state.rows.length) $("summary").textContent = String(err);
+        else {
+          var warn = $("storage-note");
+          if (warn) {
+            warn.textContent = String(err);
+            warn.classList.remove("hidden");
+          }
+        }
+      })
+      .then(function () {
+        if (window.HockeyLoading) HockeyLoading.hide();
       });
   }
 
@@ -226,7 +238,8 @@
   });
 
   $("grade").addEventListener("click", function () {
-    $("meta").textContent = "Grading…";
+    if (!state.rows.length) $("meta").textContent = "Grading…";
+    if (window.HockeyLoading) HockeyLoading.show();
     fetch("/api/estimates/grade", { method: "POST" })
       .then(function (r) {
         return r.json().then(function (body) {
@@ -239,6 +252,9 @@
       })
       .catch(function (err) {
         $("meta").textContent = String(err);
+      })
+      .then(function () {
+        if (window.HockeyLoading) HockeyLoading.hide();
       });
   });
 
