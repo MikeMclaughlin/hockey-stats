@@ -1665,7 +1665,7 @@ async function buildScorers() {
   var summary = await fetchAllSkaterRows(false);
   var games = await fetchAllSkaterRows(true);
   var leaders = await getJson(
-    "https://api-web.nhle.com/v1/skater-stats-leaders/" + LIVE_STATS_SEASON + "/2?categories=goals,points&limit=25"
+    "https://api-web.nhle.com/v1/skater-stats-leaders/" + LIVE_STATS_SEASON + "/2?categories=goals,points&limit=40"
   );
   var byPlayer = Object.create(null);
   games.forEach(function (g) {
@@ -1687,12 +1687,7 @@ async function buildScorers() {
   var leaderPoints = Object.create(null);
   ((leaders && leaders.goals) || []).forEach(function (r) { leaderGoals[r.id] = Number(r.value); });
   ((leaders && leaders.points) || []).forEach(function (r) { leaderPoints[r.id] = Number(r.value); });
-  var players = [];
-  var mismatches = [];
-  summary.forEach(function (s) {
-    var goals = Number(s.goals) || 0;
-    if (goals < 1) return;
-    var id = s.playerId;
+  function sequencesFor(id) {
     var log = byPlayer[id] || [];
     var goalSeq = [];
     var pointSeq = [];
@@ -1706,6 +1701,17 @@ async function buildScorers() {
       goalSeq.push(gGoals);
       pointSeq.push(gGoals + gAssists);
     });
+    return { goalSeq: goalSeq, pointSeq: pointSeq };
+  }
+  var players = [];
+  var mismatches = [];
+  summary.forEach(function (s) {
+    var goals = Number(s.goals) || 0;
+    if (goals < 1) return;
+    var id = s.playerId;
+    var seq = sequencesFor(id);
+    var goalSeq = seq.goalSeq;
+    var pointSeq = seq.pointSeq;
     var gp = Number(s.gamesPlayed) || goalSeq.length;
     if (cumulativeGoalsOk(goalSeq, goals) && goalSeq.length < gp) {
       while (goalSeq.length < gp) goalSeq.push(0);
@@ -1741,13 +1747,50 @@ async function buildScorers() {
     }
     if (!found) mismatches.push({ id: r.id, name: skaterName(r), stat: "goals", summary: null, leader: Number(r.value) });
   });
+  var have = Object.create(null);
+  players.forEach(function (p) { have[String(p.id)] = true; });
+  ((leaders && leaders.points) || []).forEach(function (r) {
+    if (r == null || r.id == null || have[String(r.id)]) return;
+    var seq = sequencesFor(r.id);
+    var goals = 0;
+    var logPoints = 0;
+    for (var i = 0; i < seq.goalSeq.length; i++) goals += seq.goalSeq[i];
+    for (var j = 0; j < seq.pointSeq.length; j++) logPoints += seq.pointSeq[j];
+    var points = Number(r.value);
+    if (!isFinite(points)) points = logPoints;
+    if (points < 1 && goals < 1) return;
+    var gp = seq.goalSeq.length;
+    if (goals >= 1 && cumulativeGoalsOk(seq.goalSeq, goals) && seq.goalSeq.length < gp) {
+      while (seq.goalSeq.length < gp) seq.goalSeq.push(0);
+    }
+    var name = skaterName(r);
+    if (seq.pointSeq.length && logPoints !== points) {
+      mismatches.push({ id: r.id, name: name, stat: "points", summary: logPoints, leader: points });
+    }
+    players.push({
+      id: r.id,
+      name: name,
+      team: teamAbbrevOf(r.teamAbbrev),
+      gp: gp,
+      goals: goals,
+      assists: Math.max(0, points - goals),
+      points: points,
+      gpg: gp ? Math.round((goals / gp) * 100) / 100 : 0,
+      goalsByGame: seq.goalSeq,
+      pointsByGame: seq.pointSeq
+    });
+    have[String(r.id)] = true;
+  });
   players.sort(function (a, b) {
     if (b.goals !== a.goals) return b.goals - a.goals;
     if (b.gpg !== a.gpg) return b.gpg - a.gpg;
     return a.name < b.name ? -1 : a.name > b.name ? 1 : 0;
   });
   var maxGames = 0;
+  var goalScorers = 0;
   players.forEach(function (p) {
+    if ((Number(p.goals) || 0) < 1) return;
+    goalScorers += 1;
     if (p.gp > maxGames) maxGames = p.gp;
     if (p.goalsByGame.length > maxGames) maxGames = p.goalsByGame.length;
   });
@@ -1757,7 +1800,7 @@ async function buildScorers() {
     seasonLabel: formatSeason(LIVE_STATS_SEASON),
     generatedAt: new Date().toISOString(),
     maxGames: maxGames,
-    playerCount: players.length,
+    playerCount: goalScorers,
     gameRows: games.length,
     totalsMatchLeaders: mismatches.length === 0,
     leaderMismatches: mismatches.slice(0, 12),
@@ -1884,7 +1927,17 @@ async function refreshLiveBacktest(opts) {
   var mpGames = [];
   try { mpGames = await loadMoneyPuckYear(String(season).slice(0, 4)); } catch (e) { mpGames = []; }
   var out = backtest.run(games, { minGp: 5, mpGames: mpGames, season: season });
-  var prev = readBacktestFile(season);
+  var prev = null;
+  if (opts.writeStore) {
+    try {
+      var storedPrev = await store.readJsonResult(store.KEYS.liveBacktest, null);
+      if (storedPrev && storedPrev.source === "blob" && storedPrev.value && Array.isArray(storedPrev.value.rows)) {
+        prev = storedPrev.value;
+      }
+    } catch (e) { prev = null; }
+  } else {
+    prev = readBacktestFile(season);
+  }
   var generatedAt = new Date().toISOString();
   var body = packLiveBacktest(season, out.rows, generatedAt);
   var changed = !prev || backtestSignature(prev.rows) !== backtestSignature(body.rows);

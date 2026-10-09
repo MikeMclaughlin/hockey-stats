@@ -323,6 +323,7 @@
         id: g.id,
         season: g.season || opts.season || null,
         gameDate: g.gameDate,
+        startTimeUTC: g.startTimeUTC || null,
         awayAbbrev: g.awayAbbrev,
         homeAbbrev: g.homeAbbrev,
         projectedAway: proj.away,

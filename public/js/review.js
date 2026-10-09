@@ -12,12 +12,23 @@
     return "Pending";
   }
 
+  function whenOf(r) {
+    return r.startTimeUTC || r.gameDate || "";
+  }
+
+  function dateLabel(r) {
+    var raw = whenOf(r);
+    if (window.HockeyDates) return HockeyDates.formatTableDate(raw);
+    return raw || "—";
+  }
+
   function rowValue(r, key) {
     if (key === "verdict") return HockeyArchive.verdict(r);
     if (key === "winnerCorrect") {
       if (!r.graded) return 0;
       return r.winnerCorrect ? 1 : -1;
     }
+    if (key === "gameDate") return whenOf(r);
     var v = r[key];
     return v == null ? "" : v;
   }
@@ -135,7 +146,7 @@
         : "";
       return (
         "<tr" + (differs ? " class='differ'" : "") + ">" +
-          "<td>" + (window.HockeyDates ? HockeyDates.formatTableDate(r.gameDate) : (r.gameDate || "—")) + "</td>" +
+          "<td>" + dateLabel(r) + "</td>" +
           "<td>" + (r.awayAbbrev || "") + "</td>" +
           "<td>" + (r.homeAbbrev || "") + "</td>" +
           "<td class='num'>" + (r.projectedLabel || "—") + lockNote + "</td>" +
@@ -156,16 +167,30 @@
     });
   }
 
-  function render(payload) {
-    state.payload = payload || {};
-    if (payload && payload.error && !(payload.estimates && payload.estimates.length)) {
-      $("meta").textContent = payload.error;
-      var warn = $("storage-note");
-      if (warn) {
-        warn.textContent = payload.error;
-        warn.classList.remove("hidden");
+  function showLoadError(message) {
+    $("meta").textContent = "Could not load estimates";
+    var warn = $("storage-note");
+    if (warn) {
+      warn.textContent = message;
+      warn.classList.remove("hidden");
+    }
+    if (!state.rows.length) {
+      $("summary").textContent = message;
+      var tbody = document.querySelector("#review tbody");
+      if (tbody) {
+        tbody.innerHTML = "<tr><td colspan='10' class='empty'></td></tr>";
+        tbody.querySelector(".empty").textContent = message;
       }
     }
+  }
+
+  function render(payload) {
+    if (payload && payload.error) {
+      showLoadError(String(payload.error));
+      return;
+    }
+    payload = payload || {};
+    state.payload = payload;
     state.rows = payload.estimates || [];
     state.asOf = payload.asOf || state.asOf;
     var extra = "";
@@ -199,22 +224,25 @@
     });
   }
 
+  function readEstimates(r) {
+    return r.json().then(function (body) {
+      if (!r.ok || (body && body.error)) {
+        throw new Error((body && body.error) || ("HTTP " + r.status));
+      }
+      return body;
+    }, function () {
+      throw new Error(r.ok ? "Invalid response" : ("HTTP " + r.status));
+    });
+  }
+
   function load() {
     if (!state.rows.length) $("meta").textContent = "Loading…";
     if (window.HockeyLoading) HockeyLoading.show();
     fetch("/api/estimates?grade=1")
-      .then(function (r) { return r.json(); })
+      .then(readEstimates)
       .then(render)
       .catch(function (err) {
-        $("meta").textContent = "Could not load estimates";
-        if (!state.rows.length) $("summary").textContent = String(err);
-        else {
-          var warn = $("storage-note");
-          if (warn) {
-            warn.textContent = String(err);
-            warn.classList.remove("hidden");
-          }
-        }
+        showLoadError((err && err.message) || String(err));
       })
       .then(function () {
         if (window.HockeyLoading) HockeyLoading.hide();
@@ -247,11 +275,20 @@
             $("meta").textContent = "Manual grading needs an admin sign-in. Opening this page still grades the finals.";
             return;
           }
+          if (!r.ok || (body && body.error)) {
+            throw new Error((body && body.error) || ("HTTP " + r.status));
+          }
           render(body);
+        }, function () {
+          if (r.status === 401 || r.status === 403) {
+            $("meta").textContent = "Manual grading needs an admin sign-in. Opening this page still grades the finals.";
+            return;
+          }
+          throw new Error(r.ok ? "Invalid response" : ("HTTP " + r.status));
         });
       })
       .catch(function (err) {
-        $("meta").textContent = String(err);
+        showLoadError((err && err.message) || String(err));
       })
       .then(function () {
         if (window.HockeyLoading) HockeyLoading.hide();

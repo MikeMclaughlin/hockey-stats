@@ -120,12 +120,19 @@
       if (p.cum.length > maxG) maxG = p.cum.length;
       p.cum.forEach(function (y) { if (y > maxY) maxY = y; });
     });
+    function xTrue(game) {
+      var span = Math.max(1, maxG - 1);
+      return pad.l + ((game - 1) / span) * (width - pad.l - pad.r);
+    }
     function xAt(game, index) {
       var n = prepared.length || 1;
-      var jitter = (index - (n - 1) / 2) * 0.14;
-      var x = game + jitter;
-      var span = Math.max(1, maxG - 1);
-      return pad.l + ((x - 1) / span) * (width - pad.l - pad.r);
+      var jitter = n <= 1 ? 0 : ((index / (n - 1)) - 0.5) * 8;
+      var x = xTrue(game) + jitter;
+      var left = pad.l;
+      var right = width - pad.r;
+      if (x < left) x = left;
+      if (x > right) x = right;
+      return x;
     }
     function yAt(y) {
       return pad.t + (1 - y / maxY) * (height - pad.t - pad.b);
@@ -140,9 +147,13 @@
     }
     var xStep = maxG <= 16 ? 1 : Math.ceil(maxG / 10);
     for (var g = 1; g <= maxG; g += xStep) {
-      var xx = xAt(g, (prepared.length - 1) / 2);
+      var xx = xTrue(g);
       parts.push('<text x="' + xx + '" y="' + (height - 8) + '" text-anchor="middle" font-size="12" fill="#5a6d80">' + g + "</text>");
     }
+    var plotW = width - pad.l - pad.r;
+    var plotH = height - pad.t - pad.b;
+    parts.push('<clipPath id="scorer-plot"><rect x="' + pad.l + '" y="' + pad.t + '" width="' + plotW + '" height="' + plotH + '"></rect></clipPath>');
+    parts.push('<g clip-path="url(#scorer-plot)">');
     prepared.forEach(function (p, index) {
       if (!p.cum.length) return;
       var d = p.cum.map(function (y, i) {
@@ -150,6 +161,7 @@
       }).join(" ");
       parts.push('<path d="' + d + '" fill="none" stroke="' + p.color + '" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"></path>');
     });
+    parts.push("</g>");
     svg.innerHTML = parts.join("");
     var legend = $("legend");
     if (legend) {
@@ -175,7 +187,9 @@
 
   function renderTable() {
     var payload = state.payload || {};
-    var players = (payload.players || []).slice().sort(compare);
+    var players = (payload.players || []).filter(function (p) {
+      return (Number(p.goals) || 0) >= 1;
+    }).slice().sort(compare);
     var maxGames = payload.maxGames || 0;
     var head = $("scorer-head");
     var body = $("scorer-body");
@@ -190,13 +204,13 @@
       var games = "";
       for (var i = 0; i < maxGames; i++) games += cell(seq[i] || 0, i < seq.length);
       var gpg = p.gp ? (p.goals / p.gp).toFixed(2) : "0.00";
-      return "<tr><td class='sticky'></td><td class='team'></td><td class='num'>" + (p.gp || 0) + "</td>" +
+      return "<tr><td class='sticky'></td><td class='scorer-team'></td><td class='num'>" + (p.gp || 0) + "</td>" +
         games + "<td class='num'>" + p.goals + "</td><td class='num'>" + gpg + "</td></tr>";
     }).join("");
     var rows = body.querySelectorAll("tr");
     players.forEach(function (p, i) {
       rows[i].querySelector(".sticky").textContent = p.name;
-      rows[i].querySelector(".team").textContent = p.team || "";
+      rows[i].querySelector(".scorer-team").textContent = p.team || "";
     });
     head.querySelectorAll("th").forEach(function (th) {
       th.classList.remove("sort-asc", "sort-desc");

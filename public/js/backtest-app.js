@@ -52,16 +52,26 @@
     return "Pending";
   }
 
+  function whenOf(r) {
+    return r.startTimeUTC || r.gameDate || "";
+  }
+
+  function dateLabel(r) {
+    var raw = whenOf(r);
+    return window.HockeyDates ? HockeyDates.formatTableDate(raw) : raw;
+  }
+
   function rowValue(r, key) {
     if (key === "verdict") return verdictOf(r);
     if (key === "totalErr") return r.totalErr == null ? 99 : r.totalErr;
+    if (key === "gameDate") return whenOf(r);
     return r[key] == null ? "" : r[key];
   }
 
   function displayOf(r) {
     var v = verdictOf(r);
     return {
-      gameDate: window.HockeyDates ? HockeyDates.formatTableDate(r.gameDate) : (r.gameDate || ""),
+      gameDate: dateLabel(r),
       awayAbbrev: r.awayAbbrev,
       homeAbbrev: r.homeAbbrev,
       projectedLabel: r.projectedLabel,
@@ -155,7 +165,7 @@
     document.querySelector("#bt tbody").innerHTML = empty || rows.map(function (r) {
       var v = verdictOf(r);
       return "<tr>" +
-        "<td>" + (window.HockeyDates ? HockeyDates.formatTableDate(r.gameDate) : (r.gameDate || "")) + "</td>" +
+        "<td>" + dateLabel(r) + "</td>" +
         "<td>" + r.awayAbbrev + "</td>" +
         "<td>" + r.homeAbbrev + "</td>" +
         "<td class='num'>" + r.projectedLabel + "</td>" +

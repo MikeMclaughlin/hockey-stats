@@ -521,22 +521,36 @@
     scoreTimer = setInterval(refreshScores, SCORE_POLL_MS);
   }
 
+  function readBoard(r) {
+    return r.json().then(function (body) {
+      var failed = !r.ok || (body && body.error);
+      if (failed) throw new Error((body && body.error) || ("HTTP " + r.status));
+      return body;
+    }, function () {
+      throw new Error(r.ok ? "Invalid response" : ("HTTP " + r.status));
+    });
+  }
+
   function load(refresh) {
     if (!state.data) $("meta").textContent = "Loading…";
     if (window.HockeyLoading) HockeyLoading.show();
     fetch(boardQuery(refresh))
-      .then(function (r) { return r.json(); })
+      .then(readBoard)
       .then(render)
       .catch(function (err) {
+        var message = (err && err.message) || String(err);
         $("meta").textContent = "Could not load matchups";
         var note = $("note");
         if (state.data) {
           if (note) {
-            note.textContent = String(err);
+            note.textContent = message;
             note.classList.remove("hidden");
           }
-        } else {
-          $("cards").innerHTML = '<div class="empty">' + String(err) + "</div>";
+        } else if (note) {
+          note.textContent = message;
+          note.classList.remove("hidden");
+          $("cards").innerHTML = '<div class="empty"></div>';
+          $("cards").querySelector(".empty").textContent = message;
         }
       })
       .then(function () {
