@@ -2184,7 +2184,7 @@ async function refreshScorers() {
 
 function liveBacktestLimits() {
   return [
-    "Regular-season finals for 2026-27. Older seasons stay in their own files. A row is graded once both clubs have five prior games; earlier finals stay pending.",
+    "Regular-season finals for 2026-27. Older seasons stay in their own files. A row with a final score is graded. Both clubs still need five prior games before the sample matches the fitted backtest; earlier finals stay in the file and are marked as a short sample.",
     "Shots, expected goals, Corsi (shot attempts), high-danger shots, and special-teams expected goals come from MoneyPuck game logs. A row with no MoneyPuck line leaves those blank.",
     "Special-teams expected goals are 5-on-4 expected goals for minus 4-on-5 expected goals against.",
     "No historical moneylines are stored. Favorite means the club with the higher points percentage before the game.",

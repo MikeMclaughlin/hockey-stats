@@ -37,6 +37,21 @@
     return v == null ? "—" : Number(v).toFixed(1) + "%";
   }
 
+  function gradeFinished(row) {
+    if (!row || row.graded) return row;
+    if (row.actualAway == null || row.actualHome == null) return row;
+    if (row.projectedAway == null || row.projectedHome == null) return row;
+    if (window.HockeyArchive && HockeyArchive.applyResult) {
+      HockeyArchive.applyResult(row, row.actualAway, row.actualHome, row.gameState || "OFF");
+    }
+    if (row.totalErr == null) {
+      row.awayErr = Math.abs(Number(row.projectedAway) - Number(row.actualAway));
+      row.homeErr = Math.abs(Number(row.projectedHome) - Number(row.actualHome));
+      row.totalErr = row.awayErr + row.homeErr;
+    }
+    return row;
+  }
+
   function verdictOf(r) {
     if (HockeyArchive && HockeyArchive.verdict) return HockeyArchive.verdict(r);
     if (!r.graded) return "pending";
@@ -234,47 +249,70 @@
       ], slots);
   }
 
-  function paintModel(rows) {
-    var note = $("model-note");
-    if (!note || !window.HockeyEdgeModel) return;
-    var graded = rows.filter(function (r) { return r.graded && r.actualAway !== r.actualHome; });
+  var TRAIN_SEASONS = { "20212022": 1, "20222023": 1, "20232024": 1, "20242025": 1 };
+  var HELD_SEASONS = { "20252026": 1, "20262027": 1 };
+
+  function scorePair(rows) {
     var n = 0;
-    var right = 0;
+    var fresh = 0;
+    var old = 0;
     var hiN = 0;
     var hiR = 0;
-    var oldN = 0;
-    var oldR = 0;
-    graded.forEach(function (r) {
+    rows.forEach(function (r) {
+      if (!r.graded || r.actualAway == null || r.actualHome == null || r.actualAway === r.actualHome) return;
+      if (r.edgeTossUp || !r.edgeAbbrev) return;
       var model = HockeyEdgeModel.fromBacktestRow(r);
       var homeWon = r.actualHome > r.actualAway;
       var ok = (model.pick === "home") === homeWon;
+      var oldRight = edgeWasRight(r);
+      if (oldRight == null) return;
       n += 1;
-      if (ok) right += 1;
+      if (ok) fresh += 1;
+      if (oldRight) old += 1;
       if (model.pickPct >= 65) {
         hiN += 1;
         if (ok) hiR += 1;
       }
-      var oldRight = edgeWasRight(r);
-      if (oldRight != null) {
-        oldN += 1;
-        if (oldRight) oldR += 1;
-      }
     });
-    var v = HockeyEdgeModel.VALIDATION;
-    var coefs = HockeyEdgeModel.coefficients().map(function (c) {
-      return c.label + " " + c.weight.toFixed(3);
-    }).join("; ");
+    return { n: n, fresh: fresh, old: old, hiN: hiN, hiR: hiR };
+  }
+
+  function paintModel(rows) {
+    var note = $("model-note");
+    if (!note || !window.HockeyEdgeModel) return;
     function pct(hit, total) {
       if (!total) return "—";
       return (Math.round((1000 * hit) / total) / 10) + "% (" + hit + " of " + total + ")";
     }
-    note.textContent =
-      "New win chance " + pct(right, n) + " on this view. At 65% or higher, before a last-five xG downgrade, " +
-      pct(hiR, hiN) + ". Old Edge rule " + pct(oldR, oldN) +
-      " (55% on a firm pick, 65% only when the stored Edge score reached 1.75; these files do not keep that score, so the old chance shown on a row is 55% unless the row has a score). " +
-      "Fit on 2021-22 through 2024-25. 2025-26 validation: " + v.pickPct + "% (" + v.picksRight + " of " + v.games +
-      "), and " + v.confidentPct + "% (" + v.confidentRight + " of " + v.confidentGames + ") at 65% or higher. Standardized coefficients: " +
-      coefs + ".";
+    function line(title, pair) {
+      return title + " new " + pct(pair.fresh, pair.n) + " and previous rule " + pct(pair.old, pair.n) +
+        " on the same " + pair.n + " games (a final, a winner, and a firm previous-rule pick). At 65% or higher on those games, " +
+        pct(pair.hiR, pair.hiN) + ".";
+    }
+    var heldRows = rows.filter(function (r) { return HELD_SEASONS[String(r.season)]; });
+    var trainRows = rows.filter(function (r) { return TRAIN_SEASONS[String(r.season)]; });
+    var parts = [];
+    if (heldRows.length && trainRows.length) {
+      parts.push(line("Held-out 2025-26 and 2026-27:", scorePair(heldRows)));
+      parts.push(line("In-sample 2021-22 through 2024-25 (the fit seasons):", scorePair(trainRows)));
+      parts.push("The all-seasons list mixes those two. The in-sample rate is not a validation.");
+    } else if (trainRows.length) {
+      parts.push(line("In-sample fit seasons:", scorePair(trainRows)));
+      parts.push("These seasons were used to fit the model. This is not a held-out check.");
+    } else {
+      parts.push(line("Held-out:", scorePair(heldRows.length ? heldRows : rows)));
+    }
+    var v = HockeyEdgeModel.VALIDATION;
+    var coefs = HockeyEdgeModel.coefficients().map(function (c) {
+      return c.label + " " + c.weight.toFixed(3);
+    }).join("; ");
+    parts.push(
+      "Fit on 2021-22 through 2024-25. 2025-26 validation at the fit: " + v.pickPct + "% (" + v.picksRight + " of " + v.games +
+      "), and " + v.confidentPct + "% (" + v.confidentRight + " of " + v.confidentGames +
+      ") at 65% or higher. A missing feature is left out, not read as zero, and each feature is capped at 2.5 training standard deviations. Standardized coefficients: " +
+      coefs + "."
+    );
+    note.textContent = parts.join(" ");
   }
 
   function render() {
@@ -399,7 +437,7 @@
       return;
     }
     paintSeasons(d);
-    state.rows = d.rows || [];
+    state.rows = (d.rows || []).map(gradeFinished);
     var label = "";
     (d.seasons || []).forEach(function (s) {
       if (s.id === (d.season || selectedSeason())) label = s.label || s.id;
@@ -428,9 +466,17 @@
     }
     if ($("limits")) {
       var bits = (d.limits || []).slice();
-      if ((d.season || selectedSeason()) === "all") {
+      bits = bits.map(function (line) {
+        return String(line)
+          .replace("2021-22 through 2025-26", "2021-22 through 2026-27")
+          .replace(
+            "A row is graded once both clubs have five prior games; earlier finals stay pending.",
+            "A row with a final score is graded. Both clubs still need five prior games before the sample matches the fitted backtest; earlier finals stay in the file and are marked as a short sample."
+          );
+      });
+      if ((d.season || selectedSeason()) !== "all") {
         bits = bits.map(function (line) {
-          return String(line).replace("2021-22 through 2025-26", "2021-22 through 2026-27");
+          return String(line).replace("2021-22 through 2026-27", "2021-22 through 2025-26");
         });
       }
       if (d.modelNote) bits = bits.concat([d.modelNote]);

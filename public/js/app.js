@@ -152,10 +152,6 @@
   var SCORE_POLL_MS = 90000;
   var scoreTimer = null;
 
-  function edgeProbTitle() {
-    return "Toss-up when the absolute Edge score is under 0.25. The Edge side is 55% until that score reaches 1.75, then 65%. Market is the no-vig moneyline.";
-  }
-
   function scoreInner(m) {
     var s = m.scoreboard || {};
     if (s.away == null || s.home == null || !(s.live || s.final)) return "";
@@ -516,6 +512,7 @@
 
   function render(data) {
     state.data = data;
+    rememberBoard(data);
     var scoreLabel = data.scoreboardSeasonLabel || "";
     var statsLabel = data.statsSeasonLabel || "";
     var slate = data.currentDate || "";
@@ -658,15 +655,38 @@
     });
   }
 
+  function boardCacheKey() {
+    var q = new URLSearchParams(location.search);
+    return "hs-board:" + (q.get("date") || "now");
+  }
+
+  function rememberBoard(data) {
+    try {
+      if (!data || !data.matchups || !data.matchups.length) return;
+      sessionStorage.setItem(boardCacheKey(), JSON.stringify(data));
+    } catch (e) { /* private mode or a full store */ }
+  }
+
+  function recallBoard() {
+    try {
+      var raw = sessionStorage.getItem(boardCacheKey());
+      if (!raw) return null;
+      var data = JSON.parse(raw);
+      if (!data || !data.matchups || !data.matchups.length) return null;
+      return data;
+    } catch (e) {
+      return null;
+    }
+  }
+
   function load(refresh) {
     if (!state.data) $("meta").textContent = "Loading…";
-    if (window.HockeyLoading) HockeyLoading.show();
+    if (window.HockeyLoading && !state.data) HockeyLoading.show();
     fetch(boardQuery(refresh))
       .then(readBoard)
       .then(render)
       .catch(function (err) {
         var message = (err && err.message) || String(err);
-        $("meta").textContent = "Could not load matchups";
         var note = $("note");
         if (state.data) {
           if (note) {
@@ -674,6 +694,7 @@
             note.classList.remove("hidden");
           }
         } else if (note) {
+          $("meta").textContent = "Could not load matchups";
           note.textContent = message;
           note.classList.remove("hidden");
           $("cards").innerHTML = '<div class="empty"></div>';
@@ -753,7 +774,7 @@
     });
   }
 
-  function startBoard() {
+  function applySavedSort() {
     var q = new URLSearchParams(location.search);
     if (window.HockeyPrefs && HockeyPrefs.signedIn()) {
       var saved = HockeyPrefs.section("matchups");
@@ -764,6 +785,16 @@
     }
     fillSortControl();
     syncSortControl();
+    if (state.data) {
+      renderCards(visibleRows());
+      renderTable();
+    }
+  }
+
+  function startBoard() {
+    var cached = recallBoard();
+    if (cached) render(cached);
+    applySavedSort();
     load(false);
   }
 
@@ -777,6 +808,12 @@
   if (nextBtn) nextBtn.addEventListener("click", function () { if (nextBtn.dataset.date) goDate(nextBtn.dataset.date); });
   if (todayBtn) todayBtn.addEventListener("click", function () { goDate(""); });
   window.addEventListener("popstate", function () { load(false); });
-  if (window.HockeyPrefs) HockeyPrefs.ready.then(startBoard);
-  else startBoard();
+  window.addEventListener("pageshow", function (e) {
+    if (!e.persisted || state.data) return;
+    var cached = recallBoard();
+    if (cached) render(cached);
+    load(false);
+  });
+  startBoard();
+  if (window.HockeyPrefs) HockeyPrefs.ready.then(applySavedSort);
 })();

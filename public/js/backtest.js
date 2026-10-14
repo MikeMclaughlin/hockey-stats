@@ -166,7 +166,7 @@
 
   function last5Avg(st) {
     var last = (st.gds || []).slice(-5);
-    if (!last.length) return 0;
+    if (!last.length) return null;
     return stats.round(last.reduce(function (s, n) { return s + n; }, 0) / last.length, 2);
   }
 
@@ -389,7 +389,7 @@
         notes: buildNotes(g, ast, hst, proj),
         skipped: !ready
       };
-      if (ready) {
+      if (g.actualAway != null && g.actualHome != null) {
         archive.applyResult(row, g.actualAway, g.actualHome, "OFF");
         row.awayErr = Math.abs(proj.away - g.actualAway);
         row.homeErr = Math.abs(proj.home - g.actualHome);
@@ -411,7 +411,7 @@
     var mae = 0;
     graded.forEach(function (r) { mae += r.totalErr; });
     sum.maeGoals = graded.length ? stats.round(mae / graded.length, 2) : null;
-    sum.skipped = rows.length - graded.length;
+    sum.skipped = rows.filter(function (r) { return r.skipped; }).length;
     sum.games = rows.length;
     return { season: String((opts && opts.season) || "20252026"), rows: rows, summary: sum };
   }

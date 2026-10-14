@@ -36,7 +36,11 @@
     projMargin: "Projected margin, home minus away"
   };
 
+  // null and "" are missing. Number(null) is 0, which would treat a
+  // blank xG share, PDO, or save percentage as a real zero and blow the
+  // logit up early in the season.
   function num(v) {
+    if (v == null || v === "") return null;
     var n = Number(v);
     return isFinite(n) ? n : null;
   }
@@ -67,11 +71,18 @@
     ];
   }
 
+  // Each standardized feature is capped at ±2.5 training standard
+  // deviations. A one-game rate can sit further out than the 2021-25 fit.
+  // 2.5 keeps 2026-27 under 90% and moves two 2025-26 picks.
+  var CAP_SD = 2.5;
+
   function homeWinProbability(input) {
     var raw = rawFeatures(input);
     var z = 0;
     for (var j = 0; j < WEIGHTS.length; j++) {
       var x = j === 0 ? 1 : (raw[j] - MEAN[j]) / SD[j];
+      if (j > 0 && x > CAP_SD) x = CAP_SD;
+      if (j > 0 && x < -CAP_SD) x = -CAP_SD;
       z += WEIGHTS[j] * x;
     }
     return sigmoid(z);
@@ -179,8 +190,12 @@
     var labelBefore = label;
     var pickX = num(pick === "home" ? input.homeLast5Xg : input.awayLast5Xg);
     var oppX = num(pick === "home" ? input.awayLast5Xg : input.homeLast5Xg);
-    var downgraded = pickX != null && oppX != null && pickX < oppX;
-    if (downgraded) label = downgrade(label);
+    var downgraded = false;
+    if (pickX != null && oppX != null && pickX < oppX) {
+      var dropped = downgrade(label);
+      downgraded = dropped !== label;
+      label = dropped;
+    }
     var xgSide = last5Side(input);
     var projSide = projectedSide(input);
     var pickB2B = pick === "home" ? !!input.homeB2B : !!input.awayB2B;

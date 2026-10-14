@@ -120,8 +120,9 @@
       var mr = 0;
       var hiN = 0;
       var hiR = 0;
-      var oldN = 0;
-      var oldR = 0;
+      var sameN = 0;
+      var sameNew = 0;
+      var sameOld = 0;
       var newAgree = { n: 0, w: 0 };
       var newDisagree = { n: 0, w: 0 };
       graded.forEach(function (r) {
@@ -137,19 +138,21 @@
           if (ok) hiR += 1;
         }
         if (r.edgePickWon === true || r.edgePickWon === false) {
-          oldN += 1;
-          if (r.edgePickWon) oldR += 1;
-        }
-        if (r.marketSide && r.marketSide !== "even" && !r.edgeTossUpView) {
-          var bucket = (model.pick === r.marketSide) ? newAgree : newDisagree;
-          bucket.n += 1;
-          if (ok) bucket.w += 1;
+          sameN += 1;
+          if (ok) sameNew += 1;
+          if (r.edgePickWon) sameOld += 1;
+          if (r.marketSide && r.marketSide !== "even" && !r.edgeTossUpView) {
+            var bucket = (model.pick === r.marketSide) ? newAgree : newDisagree;
+            bucket.n += 1;
+            if (ok) bucket.w += 1;
+          }
         }
       });
       if (mn) {
-        modelLine = " New model " + rate(mr, mn) +
+        modelLine = " New model on every joined final " + rate(mr, mn) +
+          ". On the same games as the old Edge rule " + rate(sameNew, sameN) +
+          " new and " + rate(sameOld, sameN) + " old" +
           ". New model at 65% or higher " + rate(hiR, hiN) +
-          ". Old Edge rule " + rate(oldR, oldN) +
           ". New model agreed with the market and won " + rate(newAgree.w, newAgree.n) +
           ". New model disagreed and won " + rate(newDisagree.w, newDisagree.n) + ".";
       }
