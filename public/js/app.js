@@ -170,11 +170,7 @@
   function labelTag(model) {
     if (!model) return "";
     var cls = model.label === "Confident" ? "confident" : model.label === "Toss-up" ? "toss" : "lean";
-    var title = model.label + " — calibrated win chance " + model.pickPct + "%.";
-    if (model.label === "Confident") title = "Confident at 65% or more. Calibrated win chance " + model.pickPct + "%.";
-    else if (model.label === "Lean") title = "Lean, from 55% up to 65%. Calibrated win chance " + model.pickPct + "%.";
-    else title = "Toss-up, under 55%. Calibrated win chance " + model.pickPct + "%.";
-    if (model.downgraded) title += " Dropped one step because the pick's last-five xG share is below the opponent. The side was not flipped.";
+    var title = HockeyEdgeModel.labelTitle(model);
     if (model.confidentPick && model.label === "Confident") {
       title += " Confident pick: the Edge, the projected winner, and last-five xG share agree, and the pick is not on a back-to-back against a rested opponent.";
     }

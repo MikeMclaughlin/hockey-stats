@@ -104,6 +104,29 @@
     return "Toss-up";
   }
 
+  // A last-5 xG downgrade keeps the win chance and changes the word.
+  // Quote a band only when the chance actually sits in it.
+  function labelTitle(model) {
+    model = model || {};
+    var pct = num(model.pickPct);
+    var chance = "Calibrated win chance " + (pct == null ? "—" : pct) + "%.";
+    if (model.downgraded && model.labelBefore && model.labelBefore !== model.label) {
+      return "Lowered from " + model.labelBefore + " to " + model.label +
+        " because the pick's last-5 xG share is below the opponent. " +
+        chance + " The side was not flipped.";
+    }
+    if (model.label === "Confident" && pct != null && pct >= 65) {
+      return "Confident at 65% or more. " + chance;
+    }
+    if (model.label === "Lean" && pct != null && pct >= 55 && pct < 65) {
+      return "Lean, from 55% up to 65%. " + chance;
+    }
+    if (model.label === "Toss-up" && pct != null && pct < 55) {
+      return "Toss-up, under 55%. " + chance;
+    }
+    return (model.label || "Pick") + ". " + chance;
+  }
+
   function sideName(side, input) {
     if (side === "away") return input.awayAbbrev || "Away";
     return input.homeAbbrev || "Home";
@@ -300,6 +323,7 @@
     homeWinProbability: homeWinProbability,
     oldPickPct: oldPickPct,
     assess: assess,
+    labelTitle: labelTitle,
     fromBacktestRow: fromBacktestRow,
     fromMatchup: fromMatchup,
     coefficients: coefficients
