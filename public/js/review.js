@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var state = { rows: [], sortKey: "gameDate", sortDir: 1, asOf: null };
+  var state = { rows: [], sortKey: "gameDate", sortDir: 1, asOf: null, backtestById: null };
 
   function $(id) { return document.getElementById(id); }
 
@@ -106,13 +106,64 @@
     var same = both.filter(function (r) { return r.edgeAgreesFavorite; }).length;
     var ou = graded.filter(function (r) { return r.ouHit === true || r.ouHit === false; });
     var ouHits = ou.filter(function (r) { return r.ouHit; }).length;
+    var agree = both.filter(function (r) { return r.edgeAgreesFavorite === true; });
+    var disagree = both.filter(function (r) { return r.edgeAgreesFavorite === false; });
+    var agreeWins = agree.filter(function (r) { return r.edgePickWon; }).length;
+    var disagreeWins = disagree.filter(function (r) { return r.edgePickWon; }).length;
+    function rate(hit, total) {
+      if (!total) return "—";
+      return hit + " of " + total + " (" + (Math.round((1000 * hit) / total) / 10) + "%)";
+    }
+    var modelLine = "";
+    if (window.HockeyEdgeModel && state.backtestById) {
+      var mn = 0;
+      var mr = 0;
+      var hiN = 0;
+      var hiR = 0;
+      var oldN = 0;
+      var oldR = 0;
+      var newAgree = { n: 0, w: 0 };
+      var newDisagree = { n: 0, w: 0 };
+      graded.forEach(function (r) {
+        var bt = state.backtestById[String(r.id)];
+        if (!bt || bt.actualAway === bt.actualHome) return;
+        var model = HockeyEdgeModel.fromBacktestRow(bt);
+        var homeWon = bt.actualHome > bt.actualAway;
+        var ok = (model.pick === "home") === homeWon;
+        mn += 1;
+        if (ok) mr += 1;
+        if (model.pickPct >= 65) {
+          hiN += 1;
+          if (ok) hiR += 1;
+        }
+        if (r.edgePickWon === true || r.edgePickWon === false) {
+          oldN += 1;
+          if (r.edgePickWon) oldR += 1;
+        }
+        if (r.marketSide && r.marketSide !== "even" && !r.edgeTossUpView) {
+          var bucket = (model.pick === r.marketSide) ? newAgree : newDisagree;
+          bucket.n += 1;
+          if (ok) bucket.w += 1;
+        }
+      });
+      if (mn) {
+        modelLine = " New model " + rate(mr, mn) +
+          ". New model at 65% or higher " + rate(hiR, hiN) +
+          ". Old Edge rule " + rate(oldR, oldN) +
+          ". New model agreed with the market and won " + rate(newAgree.w, newAgree.n) +
+          ". New model disagreed and won " + rate(newDisagree.w, newDisagree.n) + ".";
+      }
+    }
     box.innerHTML =
       "Edge pick won " + pickWins + " of " + picks.length +
       ". Market favorite won " + favWins + " of " + favs.length +
+      ". Agreed with the market and won " + rate(agreeWins, agree.length) +
+      ". Disagreed and won " + rate(disagreeWins, disagree.length) +
       ". Same side on " + same + " of " + both.length +
       ". Over/under hit " + ouHits + " of " + ou.length +
       ". " + noOdds + " graded game" + (noOdds === 1 ? "" : "s") + " had no saved odds" +
-      ". " + toss + " toss-up" + (toss === 1 ? "" : "s") + " excluded from the Edge pick.";
+      ". " + toss + " toss-up" + (toss === 1 ? "" : "s") + " excluded from the Edge pick." +
+      modelLine;
   }
 
   function renderSummary(sum, extra) {
@@ -151,7 +202,7 @@
           "<td>" + (r.homeAbbrev || "") + "</td>" +
           "<td class='num'>" + (r.projectedLabel || "—") + lockNote + "</td>" +
           "<td class='num'>" + (r.liveLabel || "—") + (r.liveMatchesLock ? " =" : "") + "</td>" +
-          "<td class='num'>" + (r.actualLabel || "—") + "</td>" +
+          "<td class='num'>" + (r.actualLabel || "—") + chanceNote(r) + "</td>" +
           "<td><span class='mark " + v + "'>" + verdictLabel(v) + "</span></td>" +
           "<td>" + (!r.graded ? "—" : r.winnerCorrect ? "Yes" : "No") + "</td>" +
           "<td class='num'>" + (r.graded && r.totalGoalsError != null ? r.totalGoalsError : "—") + "</td>" +
@@ -165,6 +216,23 @@
         th.classList.add(state.sortDir === 1 ? "sort-asc" : "sort-desc");
       }
     });
+  }
+
+  function chanceNote(r) {
+    if (!window.HockeyEdgeModel) return "";
+    var old = HockeyEdgeModel.oldPickPct({
+      score: r.edgeScoreView,
+      winner: r.edgeWinnerView,
+      tossUp: r.edgeTossUpView
+    });
+    var bt = state.backtestById && state.backtestById[String(r.id)];
+    var model = bt ? HockeyEdgeModel.fromBacktestRow(bt) : null;
+    var bits = [];
+    if (model) bits.push("New " + model.pickAbbrev + " " + model.pickPct + "% " + model.label);
+    if (old != null) bits.push("Old " + old + "%");
+    else if (r.edgeTossUpView) bits.push("Old toss-up");
+    if (!bits.length) return "";
+    return "<div class='edge-meta'>" + bits.join(" · ") + "</div>";
   }
 
   function showLoadError(message) {
@@ -235,12 +303,27 @@
     });
   }
 
+  function loadBacktestIndex() {
+    return fetch("/api/backtest?season=20262027")
+      .then(function (r) { return r.json(); })
+      .then(function (body) {
+        var map = {};
+        ((body && body.rows) || []).forEach(function (row) { map[String(row.id)] = row; });
+        state.backtestById = map;
+      })
+      .catch(function () {
+        if (!state.backtestById) state.backtestById = {};
+      });
+  }
+
   function load() {
     if (!state.rows.length) $("meta").textContent = "Loading…";
     if (window.HockeyLoading) HockeyLoading.show();
-    fetch("/api/estimates?grade=1")
-      .then(readEstimates)
-      .then(render)
+    Promise.all([
+      fetch("/api/estimates?grade=1").then(readEstimates),
+      loadBacktestIndex()
+    ])
+      .then(function (parts) { render(parts[0]); })
       .catch(function (err) {
         showLoadError((err && err.message) || String(err));
       })

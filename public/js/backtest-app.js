@@ -147,6 +147,134 @@
       '<div class="stat"><b>' + (s.winnerPct == null ? "—" : s.winnerPct + "%") + "</b><span>winner</span></div>" +
       '<div class="stat"><b>' + (s.meanTotalGoalsError == null ? "—" : s.meanTotalGoalsError) + "</b><span>total goals error</span></div>" +
       '<div class="stat"><b>' + (s.meanMarginError == null ? "—" : s.meanMarginError) + "</b><span>margin error</span></div>";
+    paintModel(rows);
+    paintEdgeSplits(rows);
+  }
+
+  function etParts(iso) {
+    var d = new Date(iso);
+    if (!isFinite(d.getTime())) return null;
+    var fmt = new Intl.DateTimeFormat("en-US", {
+      timeZone: "America/New_York",
+      weekday: "short",
+      hour: "2-digit",
+      hourCycle: "h23"
+    });
+    var map = {};
+    fmt.formatToParts(d).forEach(function (p) { map[p.type] = p.value; });
+    return { weekday: map.weekday, hour: Number(map.hour) };
+  }
+
+  function calendarWeekday(ymd) {
+    var d = new Date(String(ymd).slice(0, 10) + "T12:00:00Z");
+    if (!isFinite(d.getTime())) return null;
+    return ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][d.getUTCDay()];
+  }
+
+  function edgeChanceCell(r) {
+    var bits = (r.edgeAbbrev || "—") + (r.edgeTossUp ? " toss up" : "");
+    if (!window.HockeyEdgeModel || !r.graded) return bits;
+    var model = HockeyEdgeModel.fromBacktestRow(r);
+    var oldPct = model.oldPct == null ? "toss-up" : model.oldPct + "%";
+    return bits + "<div class='edge-meta'>New " + model.pickAbbrev + " " + model.pickPct +
+      "% " + model.label + "</div><div class='edge-meta'>Old " + oldPct + "</div>";
+  }
+
+  function edgeWasRight(r) {
+    if (!r.graded || r.edgeTossUp || !r.edgeAbbrev) return null;
+    if (r.actualAway == null || r.actualHome == null || r.actualAway === r.actualHome) return null;
+    var winner = r.actualAway > r.actualHome ? r.awayAbbrev : r.homeAbbrev;
+    return r.edgeAbbrev === winner;
+  }
+
+  function bump(map, key, right) {
+    if (!key) return;
+    if (!map[key]) map[key] = { w: 0, l: 0 };
+    if (right) map[key].w += 1;
+    else map[key].l += 1;
+  }
+
+  function splitTable(title, order, map) {
+    var body = order.map(function (key) {
+      var cell = map[key] || { w: 0, l: 0 };
+      var n = cell.w + cell.l;
+      var pct = n ? (Math.round((1000 * cell.w) / n) / 10) + "%" : "—";
+      return "<tr><td>" + key + "</td><td class='num'>" + cell.w + "–" + cell.l + "</td><td class='num'>" + pct + "</td></tr>";
+    }).join("");
+    return "<div><h3>" + title + "</h3><table><thead><tr><th>Group</th><th class='num'>W–L</th><th class='num'>Win%</th></tr></thead><tbody>" +
+      body + "</tbody></table></div>";
+  }
+
+  function paintEdgeSplits(rows) {
+    var box = $("edge-splits");
+    if (!box) return;
+    var days = {};
+    var slots = {};
+    rows.forEach(function (r) {
+      var right = edgeWasRight(r);
+      if (right == null) return;
+      var when = r.startTimeUTC ? etParts(r.startTimeUTC) : null;
+      var day = when ? when.weekday : calendarWeekday(r.gameDate);
+      bump(days, day, right);
+      var slot = "No start time";
+      if (when && isFinite(when.hour)) {
+        if (when.hour < 17) slot = "Afternoon (before 5pm ET)";
+        else if (when.hour < 21) slot = "Early (5–8:59pm ET)";
+        else slot = "Late (9pm ET or later)";
+      }
+      bump(slots, slot, right);
+    });
+    box.innerHTML =
+      splitTable("Edge pick by day (ET)", ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"], days) +
+      splitTable("Edge pick by start time (ET)", [
+        "Afternoon (before 5pm ET)",
+        "Early (5–8:59pm ET)",
+        "Late (9pm ET or later)",
+        "No start time"
+      ], slots);
+  }
+
+  function paintModel(rows) {
+    var note = $("model-note");
+    if (!note || !window.HockeyEdgeModel) return;
+    var graded = rows.filter(function (r) { return r.graded && r.actualAway !== r.actualHome; });
+    var n = 0;
+    var right = 0;
+    var hiN = 0;
+    var hiR = 0;
+    var oldN = 0;
+    var oldR = 0;
+    graded.forEach(function (r) {
+      var model = HockeyEdgeModel.fromBacktestRow(r);
+      var homeWon = r.actualHome > r.actualAway;
+      var ok = (model.pick === "home") === homeWon;
+      n += 1;
+      if (ok) right += 1;
+      if (model.pickPct >= 65) {
+        hiN += 1;
+        if (ok) hiR += 1;
+      }
+      var oldRight = edgeWasRight(r);
+      if (oldRight != null) {
+        oldN += 1;
+        if (oldRight) oldR += 1;
+      }
+    });
+    var v = HockeyEdgeModel.VALIDATION;
+    var coefs = HockeyEdgeModel.coefficients().map(function (c) {
+      return c.label + " " + c.weight.toFixed(3);
+    }).join("; ");
+    function pct(hit, total) {
+      if (!total) return "—";
+      return (Math.round((1000 * hit) / total) / 10) + "% (" + hit + " of " + total + ")";
+    }
+    note.textContent =
+      "New win chance " + pct(right, n) + " on this view. At 65% or higher, before a last-five xG downgrade, " +
+      pct(hiR, hiN) + ". Old Edge rule " + pct(oldR, oldN) +
+      " (55% on a firm pick, 65% only when the stored Edge score reached 1.75; these files do not keep that score, so the old chance shown on a row is 55% unless the row has a score). " +
+      "Fit on 2021-22 through 2024-25. 2025-26 validation: " + v.pickPct + "% (" + v.picksRight + " of " + v.games +
+      "), and " + v.confidentPct + "% (" + v.confidentRight + " of " + v.confidentGames + ") at 65% or higher. Standardized coefficients: " +
+      coefs + ".";
   }
 
   function render() {
@@ -179,7 +307,7 @@
         "<td class='num'>" + pct(r.homeLast5Sv) + "</td>" +
         "<td class='num'>" + pct(r.awayXgf5) + "</td>" +
         "<td class='num'>" + pct(r.homeXgf5) + "</td>" +
-        "<td>" + (r.edgeAbbrev || "—") + (r.edgeTossUp ? " toss up" : "") + "</td>" +
+        "<td>" + edgeChanceCell(r) + "</td>" +
         "<td>" + (r.edgeRole || "—") + "</td>" +
         "<td class='notes'>" + (r.notes || "—") + "</td>" +
         "</tr>";

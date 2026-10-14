@@ -325,13 +325,12 @@ main {
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  gap: 0.35rem;
-  padding: 0.7rem 1rem;
+  gap: 0.45rem;
+  padding: 0.85rem 1rem 0.7rem;
   background: #f7fafc;
   border-bottom: 1px solid var(--line);
-  font-size: 0.9rem;
-  color: var(--muted);
-  min-height: 220px;
+  font-size: 0.92rem;
+  color: var(--ink);
 }
 .card-head .head-top {
   display: flex;
@@ -901,4 +900,137 @@ button.user-menu-btn:focus-visible {
 }
 #scorers td.g-blank {
   background: transparent;
+}
+.card-kicker {
+  margin: 0.15rem 0 0;
+  color: var(--muted);
+  font-size: 0.84rem;
+}
+.card-teams h3 {
+  margin: 0;
+  font-size: 1.05rem;
+  line-height: 1.25;
+}
+.card-row {
+  margin: 0;
+  line-height: 1.35;
+}
+.pick-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+.pick-label {
+  display: inline-block;
+  border-radius: 999px;
+  padding: 0.15rem 0.55rem;
+  background: #e7eef6;
+  color: var(--ink);
+  font-size: 0.78rem;
+  font-weight: 650;
+}
+.pick-label.confident {
+  background: var(--edge);
+  color: #fff;
+}
+.pick-label.toss {
+  background: #eef1f4;
+  color: var(--muted);
+}
+.card-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+.signal-chip {
+  display: inline-block;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 0.12rem 0.5rem;
+  background: #fff;
+  color: var(--ink);
+  font-size: 0.75rem;
+  font-weight: 650;
+}
+.signal-chip.strong {
+  border-color: #1d4e89;
+}
+.card-details {
+  padding: 0 1rem 0.85rem;
+  color: var(--ink);
+}
+.card-details summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-weight: 650;
+  padding: 0.45rem 0;
+}
+.detail-list {
+  display: grid;
+  grid-template-columns: 9.5rem 1fr;
+  gap: 0.2rem 0.6rem;
+  margin: 0.3rem 0 0.5rem;
+  font-size: 0.86rem;
+}
+.detail-list dt {
+  color: var(--muted);
+}
+.detail-list dd {
+  margin: 0;
+}
+.early-note {
+  margin: 0.35rem 0;
+  font-size: 0.86rem;
+  color: var(--muted);
+}
+.streak-chart {
+  display: inline-block;
+  min-width: 8rem;
+}
+.streak-svg {
+  display: block;
+  overflow: visible;
+}
+.streak-bar {
+  fill: #1d6fe8;
+}
+.streak-tick,
+.streak-val {
+  font-size: 10px;
+  font-family: "Segoe UI", system-ui, sans-serif;
+  fill: #5a6d80;
+}
+.streak-val.in {
+  fill: #fff;
+  font-weight: 700;
+}
+.streak-grid {
+  stroke: #d5e0ec;
+  stroke-width: 1;
+}
+.streak-range {
+  margin-top: 0.15rem;
+  color: var(--muted);
+  font-size: 0.75rem;
+  letter-spacing: 0.01em;
+}
+.edge-splits {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+  gap: 0.8rem;
+  margin: 0.8rem 0 1rem;
+}
+.edge-splits table {
+  width: 100%;
+}
+.model-note {
+  margin: 0.4rem 0 0.8rem;
+  color: var(--muted);
+  font-size: 0.86rem;
+}
+.sort-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
 }

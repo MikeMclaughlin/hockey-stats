@@ -17,13 +17,15 @@ var ROOT = __dirname;
 var PORT = Number(process.env.PORT || 3080);
 var CACHE_MS = 5 * 60 * 1000;
 var matchupCache = Object.create(null);
+var periodGoalMemory = { season: null, games: {} };
+var xgLogMemory = Object.create(null);
 
 function productVersion() {
   try {
-    var parts = String(require("./package.json").version || "1.9.0").split(".");
-    return (parts[0] || "1") + "." + (parts[1] || "9");
+    var parts = String(require("./package.json").version || "2.0.0").split(".");
+    return (parts[0] || "2") + "." + (parts[1] || "0");
   } catch (e) {
-    return "1.9";
+    return "2.0";
   }
 }
 
@@ -172,7 +174,7 @@ function httpsRequest(method, urlStr, options) {
     var u = new URL(urlStr);
     var body = options.body || "";
     var headers = Object.assign({
-      "User-Agent": "hockey-stats/1.9",
+      "User-Agent": "hockey-stats/2.0",
       Accept: "application/json"
     }, options.headers || {});
     if (body) headers["Content-Length"] = Buffer.byteLength(body);
@@ -827,7 +829,12 @@ async function buildMatchups(date) {
   });
 
   await applyOddsSnapshots(matchups, liveOdds);
+  var xgYear = mpSeasonYear(statsSeason);
+  await mapPool(abbrevs, 4, function (ab) { return loadTeamXgLog(ab, xgYear); });
   matchups.forEach(function (m) {
+    var before = m.gameDate || score.currentDate;
+    m.away.last5XgfPct = last5XgShare(xgLogMemory[xgYear + ":" + m.away.abbrev], m.away.abbrev, before);
+    m.home.last5XgfPct = last5XgShare(xgLogMemory[xgYear + ":" + m.home.abbrev], m.home.abbrev, before);
     var market = stats.marketSide(m.odds);
     m.marketSide = market;
     m.marketDisagree = !!(market && market !== "even" && m.edge && m.edge.winner && m.edge.winner !== market);
@@ -1423,6 +1430,223 @@ function shiftDate(iso, days) {
   return d.toISOString().slice(0, 10);
 }
 
+function sumPeriods(side) {
+  side = side || {};
+  return (side.p1 || 0) + (side.p2 || 0) + (side.p3 || 0) + (side.ot || 0);
+}
+
+function tallyPlayByPlay(pbp) {
+  pbp = pbp || {};
+  var awayId = pbp.awayTeam && pbp.awayTeam.id;
+  var homeId = pbp.homeTeam && pbp.homeTeam.id;
+  var away = { p1: 0, p2: 0, p3: 0, ot: 0 };
+  var home = { p1: 0, p2: 0, p3: 0, ot: 0 };
+  (pbp.plays || []).forEach(function (play) {
+    if (!play || play.typeDescKey !== "goal") return;
+    var pd = play.periodDescriptor || {};
+    var type = String(pd.periodType || "").toUpperCase();
+    var bucket = null;
+    if (type === "REG" && Number(pd.number) === 1) bucket = "p1";
+    else if (type === "REG" && Number(pd.number) === 2) bucket = "p2";
+    else if (type === "REG" && Number(pd.number) === 3) bucket = "p3";
+    else if (type === "OT") bucket = "ot";
+    else return;
+    var owner = play.details && play.details.eventOwnerTeamId;
+    var side = owner === awayId ? away : owner === homeId ? home : null;
+    if (side && bucket) side[bucket] += 1;
+  });
+  return {
+    awayAbbrev: pbp.awayTeam && pbp.awayTeam.abbrev,
+    homeAbbrev: pbp.homeTeam && pbp.homeTeam.abbrev,
+    away: away,
+    home: home
+  };
+}
+
+function periodGameOk(tally, game) {
+  if (!tally || !tally.awayAbbrev || !tally.homeAbbrev) return false;
+  var as = Number(game.awayTeam && game.awayTeam.score);
+  var hs = Number(game.homeTeam && game.homeTeam.score);
+  if (!isFinite(as) || !isFinite(hs)) return false;
+  var a = sumPeriods(tally.away);
+  var h = sumPeriods(tally.home);
+  if (a === as && h === hs) return true;
+  var pt = String((game.gameOutcome && game.gameOutcome.lastPeriodType) || "").toUpperCase();
+  if (pt === "SO") {
+    if (as === a + 1 && hs === h) return true;
+    if (hs === h + 1 && as === a) return true;
+  }
+  return false;
+}
+
+function finalsForPeriodGoals(schedMap) {
+  var byId = Object.create(null);
+  Object.keys(schedMap || {}).forEach(function (ab) {
+    (schedMap[ab] || []).forEach(function (g) {
+      if (!g || !g.id || Number(g.gameType) !== 2 || !isFinalState(g.gameState)) return;
+      if (!g.awayTeam || !g.homeTeam) return;
+      byId[String(g.id)] = g;
+    });
+  });
+  return Object.keys(byId).sort(function (a, b) { return Number(a) - Number(b); }).map(function (id) {
+    return byId[id];
+  });
+}
+
+async function ensurePeriodGoals(schedMap, statsSeason) {
+  var season = String(statsSeason);
+  if (periodGoalMemory.season !== season) {
+    periodGoalMemory = { season: season, games: {} };
+    try {
+      var stored = await store.readJson(store.KEYS.periodGoals, null);
+      if (stored && String(stored.season) === season && stored.games && typeof stored.games === "object") {
+        periodGoalMemory.games = stored.games;
+      }
+    } catch (e) { /* keep the empty memory cache */ }
+  }
+  var games = finalsForPeriodGoals(schedMap);
+  var missing = games.filter(function (g) { return !periodGoalMemory.games[String(g.id)]; });
+  var batch = missing.slice(0, 160);
+  var added = 0;
+  await mapPool(batch, 6, function (g) {
+    return getJson("https://api-web.nhle.com/v1/gamecenter/" + g.id + "/play-by-play").then(function (pbp) {
+      var tally = tallyPlayByPlay(pbp);
+      if (!periodGameOk(tally, g)) return;
+      periodGoalMemory.games[String(g.id)] = {
+        id: g.id,
+        awayAbbrev: tally.awayAbbrev,
+        homeAbbrev: tally.homeAbbrev,
+        away: tally.away,
+        home: tally.home
+      };
+      added += 1;
+    }).catch(function () {});
+  });
+  var byTeam = Object.create(null);
+  games.forEach(function (g) {
+    var saved = periodGoalMemory.games[String(g.id)];
+    if (!saved) return;
+    [[saved.awayAbbrev, saved.away], [saved.homeAbbrev, saved.home]].forEach(function (part) {
+      var ab = part[0];
+      var goals = part[1];
+      if (!ab || !goals) return;
+      if (!byTeam[ab]) byTeam[ab] = { p1: 0, p2: 0, p3: 0, ot: 0, games: 0 };
+      byTeam[ab].p1 += goals.p1 || 0;
+      byTeam[ab].p2 += goals.p2 || 0;
+      byTeam[ab].p3 += goals.p3 || 0;
+      byTeam[ab].ot += goals.ot || 0;
+      byTeam[ab].games += 1;
+    });
+  });
+  var have = games.filter(function (g) { return !!periodGoalMemory.games[String(g.id)]; }).length;
+  var schedule = Object.create(null);
+  games.forEach(function (g) {
+    var away = g.awayTeam || {};
+    var home = g.homeTeam || {};
+    var pt = String((g.gameOutcome && g.gameOutcome.lastPeriodType) || "").toUpperCase();
+    function add(ab, score, won) {
+      if (!ab) return;
+      if (!schedule[ab]) schedule[ab] = { gf: 0, games: 0 };
+      var gf = Number(score) || 0;
+      if (pt === "SO" && won) gf -= 1;
+      schedule[ab].gf += gf;
+      schedule[ab].games += 1;
+    }
+    var as = Number(away.score);
+    var hs = Number(home.score);
+    add(away.abbrev, as, as > hs);
+    add(home.abbrev, hs, hs > as);
+  });
+  return {
+    byTeam: byTeam,
+    schedule: schedule,
+    complete: games.length > 0 && have === games.length,
+    expected: games.length,
+    have: have,
+    added: added
+  };
+}
+
+function attachPeriodGoals(rows, report) {
+  var mismatch = [];
+  (rows || []).forEach(function (row) {
+    var tot = report && report.byTeam && report.byTeam[row.abbrev];
+    var sched = report && report.schedule && report.schedule[row.abbrev];
+    var played = sched ? sched.games : 0;
+    if (!played) {
+      row.goalsP1 = 0;
+      row.goalsP2 = 0;
+      row.goalsP3 = 0;
+      row.goalsOt = 0;
+      return;
+    }
+    var sum = tot ? tot.p1 + tot.p2 + tot.p3 + tot.ot : null;
+    var match = !!(report && report.complete && tot && sum === sched.gf && tot.games === played);
+    if (report && report.complete && !match) mismatch.push(row.abbrev + " " + sum + " vs " + (sched && sched.gf));
+    row.goalsP1 = match ? tot.p1 : null;
+    row.goalsP2 = match ? tot.p2 : null;
+    row.goalsP3 = match ? tot.p3 : null;
+    row.goalsOt = match ? tot.ot : null;
+  });
+  var totalsMatch = !!(report && report.complete && !mismatch.length);
+  if (totalsMatch || (report && report.added)) {
+    var body = {
+      season: periodGoalMemory.season,
+      games: periodGoalMemory.games,
+      totalsMatch: totalsMatch,
+      checkedAt: new Date().toISOString()
+    };
+    if (totalsMatch) {
+      store.writeJson(store.KEYS.periodGoals, body).catch(function () {});
+    }
+  }
+  return { totalsMatch: totalsMatch, mismatch: mismatch, have: report && report.have, expected: report && report.expected };
+}
+
+function isoDay(value) {
+  var s = String(value || "");
+  if (/^\d{8}$/.test(s)) return s.slice(0, 4) + "-" + s.slice(4, 6) + "-" + s.slice(6, 8);
+  return s.slice(0, 10);
+}
+
+function last5XgShare(rows, abbrev, beforeDate) {
+  var cutoff = isoDay(beforeDate);
+  var list = (rows || []).filter(function (r) {
+    return r && r.team === abbrev && r.gameDate && (!cutoff || isoDay(r.gameDate) < cutoff);
+  });
+  list.sort(function (a, b) {
+    return isoDay(a.gameDate).localeCompare(isoDay(b.gameDate)) || (Number(a.gameId) - Number(b.gameId));
+  });
+  var last = list.slice(-5);
+  var f = 0;
+  var a = 0;
+  var n = 0;
+  last.forEach(function (r) {
+    var xf = r.xgf5 != null ? r.xgf5 : r.xgf;
+    var xa = r.xga5 != null ? r.xga5 : r.xga;
+    if (xf == null && xa == null) return;
+    f += Number(xf) || 0;
+    a += Number(xa) || 0;
+    n += 1;
+  });
+  if (!n || f + a <= 0) return null;
+  return Math.round((1000 * f) / (f + a)) / 10;
+}
+
+async function loadTeamXgLog(abbrev, year) {
+  var key = String(year) + ":" + abbrev;
+  if (Object.prototype.hasOwnProperty.call(xgLogMemory, key)) return xgLogMemory[key];
+  try {
+    var text = await getText(
+      "https://moneypuck.com/moneypuck/playerData/careers/gameByGame/regular/teams/" + abbrev + ".csv"
+    );
+    xgLogMemory[key] = backtest.parseTeamGameCsv(text, String(year));
+  } catch (e) {
+    xgLogMemory[key] = [];
+  }
+  return xgLogMemory[key];
+}
+
 async function buildTeamStats() {
   var score = await getJson("https://api-web.nhle.com/v1/score/now");
   var standings = await getJson("https://api-web.nhle.com/v1/standings/now");
@@ -1491,7 +1715,16 @@ async function buildTeamStats() {
     rows.push(row);
   });
   rows.sort(function (a, b) { return (b.wins || 0) - (a.wins || 0); });
+  var periodReport = { byTeam: {}, schedule: {}, complete: false, have: 0, expected: 0, added: 0 };
+  try { periodReport = await ensurePeriodGoals(schedMap, statsSeason); } catch (e) { periodReport.error = String(e.message || e); }
+  var periodCheck = attachPeriodGoals(rows, periodReport);
   var seasons = seasonMeta(seasonId, statsSeason, standingsSnapshot(standings, statsSeason).maxGp);
+  if (!periodCheck.totalsMatch && periodCheck.expected) {
+    var periodNote = periodCheck.mismatch && periodCheck.mismatch.length
+      ? "Period goals were withheld because they did not add up to team goals."
+      : "Period goals cover " + periodCheck.have + " of " + periodCheck.expected + " finals.";
+    seasons.note = seasons.note ? seasons.note + " " + periodNote : periodNote;
+  }
   return {
     generatedAt: new Date().toISOString(),
     seasonId: statsSeason,
@@ -1506,6 +1739,7 @@ async function buildTeamStats() {
     preseasonLabel: formatSeason(statsSeason) + " preseason",
     formTypes: types,
     throughDate: latest || null,
+    periodGoals: periodCheck,
     teams: rows
   };
 }
@@ -2014,7 +2248,9 @@ function backtestSignature(rows) {
   return (rows || []).map(function (r) {
     return [
       r.id, r.projectedLabel, r.actualLabel, r.awayPdo, r.homePdo,
-      r.awayXgf5, r.homeXgf5, r.awayLast5, r.homeLast5, r.graded ? 1 : 0
+      r.awayXgf5, r.homeXgf5, r.awayLast5, r.homeLast5, r.graded ? 1 : 0,
+      r.awayPtsPct == null ? "" : r.awayPtsPct,
+      r.openingAwayMl == null ? "" : r.openingAwayMl
     ].join(":");
   }).join("|");
 }
@@ -2038,6 +2274,8 @@ async function refreshLiveBacktest(opts) {
   var mpGames = [];
   try { mpGames = await loadMoneyPuckYear(String(season).slice(0, 4)); } catch (e) { mpGames = []; }
   var out = backtest.run(games, { minGp: 5, mpGames: mpGames, season: season });
+  var oddsStore = { byId: {} };
+  try { oddsStore = await store.readJson(store.KEYS.odds, { byId: {} }); } catch (e) { oddsStore = { byId: {} }; }
   var prev = null;
   if (opts.writeStore) {
     try {
@@ -2050,6 +2288,24 @@ async function refreshLiveBacktest(opts) {
     prev = readBacktestFile(season);
   }
   var generatedAt = new Date().toISOString();
+  var prevById = Object.create(null);
+  ((prev && prev.rows) || []).forEach(function (r) { prevById[String(r.id)] = r; });
+  (out.rows || []).forEach(function (r) {
+    var earlier = prevById[String(r.id)];
+    if (earlier && earlier.openingAwayMl != null) {
+      r.openingAwayMl = earlier.openingAwayMl;
+      r.openingHomeMl = earlier.openingHomeMl;
+      r.openingTotal = earlier.openingTotal != null ? earlier.openingTotal : null;
+      return;
+    }
+    var saved = oddsStore.byId && oddsStore.byId[String(r.id)];
+    var lines = saved ? archive.oddsLines(saved) : null;
+    if (lines && lines.awayMl != null && lines.homeMl != null) {
+      r.openingAwayMl = lines.awayMl;
+      r.openingHomeMl = lines.homeMl;
+      r.openingTotal = lines.total;
+    }
+  });
   var body = packLiveBacktest(season, out.rows, generatedAt);
   var changed = !prev || backtestSignature(prev.rows) !== backtestSignature(body.rows);
   if (!changed && prev && prev.generatedAt) body.generatedAt = prev.generatedAt;

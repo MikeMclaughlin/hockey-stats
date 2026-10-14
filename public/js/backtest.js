@@ -40,7 +40,7 @@
       xgf: 0, xga: 0, xgf5: 0, xga5: 0,
       hdf: 0, hda: 0, cf: 0, ca: 0, ppXgf: 0, pkXga: 0,
       hasMp: false,
-      gds: [], svLog: [], results: [], dates: [],
+      gds: [], svLog: [], xg5Log: [], results: [], dates: [],
       lastDate: null, w: 0, l: 0, otl: 0
     };
   }
@@ -152,6 +152,18 @@
     return notes.join(" · ");
   }
 
+  function last5XgFromState(st) {
+    var last = (st.xg5Log || []).slice(-5);
+    var f = 0;
+    var a = 0;
+    last.forEach(function (g) {
+      f += g.f || 0;
+      a += g.a || 0;
+    });
+    if (!last.length || f + a <= 0) return null;
+    return stats.round((100 * f) / (f + a), 1);
+  }
+
   function last5Avg(st) {
     var last = (st.gds || []).slice(-5);
     if (!last.length) return 0;
@@ -163,7 +175,8 @@
       last5AvgGd: last5Avg(st),
       pdo: (st.sf > 0 && st.sa > 0) ? stats.pdoFromShots(st.gf, st.ga, st.sf, st.sa) : null,
       xgfPct5v5: (st.xgf5 + st.xga5) > 0 ? stats.sogShare(st.xgf5, st.xga5) : null,
-      last5SvPct: stats.last5SavePct(st.svLog)
+      last5SvPct: stats.last5SavePct(st.svLog),
+      last5Xgf: last5XgFromState(st)
     };
   }
 
@@ -216,6 +229,12 @@
     if (extra.pkXga) st.pkXga += extra.pkXga;
     if (extra.sf || extra.xgf5 || extra.xgf) st.hasMp = true;
     if (extra.sa) st.svLog.push({ sa: extra.sa, ga: extra.ga != null ? extra.ga : ga });
+    if (extra.xgf5 != null || extra.xga5 != null || extra.xgf != null || extra.xga != null) {
+      st.xg5Log.push({
+        f: extra.xgf5 != null ? extra.xgf5 : (extra.xgf || 0),
+        a: extra.xga5 != null ? extra.xga5 : (extra.xga || 0)
+      });
+    }
     st.gds.push(gf - ga);
     st.results.push(winKind);
     if (extra.date) {
@@ -340,6 +359,27 @@
         homeXgf5: homeSnap.xgfPct5v5,
         awayLast5Sv: awaySnap.last5SvPct,
         homeLast5Sv: homeSnap.last5SvPct,
+        awayLast5Xgf: awaySnap.last5Xgf,
+        homeLast5Xgf: homeSnap.last5Xgf,
+        awayPtsPct: awayProfile.ptsPct,
+        homePtsPct: homeProfile.ptsPct,
+        awayGd: awayProfile.goalDiff,
+        homeGd: homeProfile.goalDiff,
+        awaySog: awayProfile.sogShare,
+        homeSog: homeProfile.sogShare,
+        awayXgDiff: awayProfile.gfMinusXg,
+        homeXgDiff: homeProfile.gfMinusXg,
+        awayCf: awayProfile.cfPct,
+        homeCf: homeProfile.cfPct,
+        awayHdcf: awayProfile.hdcfPct,
+        homeHdcf: homeProfile.hdcfPct,
+        awayStXg: awayProfile.stXg,
+        homeStXg: homeProfile.stXg,
+        awayRest: awayProfile.restDays,
+        homeRest: homeProfile.restDays,
+        openingAwayMl: null,
+        openingHomeMl: null,
+        openingTotal: null,
         awayB2B: awayRest === 1,
         homeB2B: homeRest === 1,
         edgeAbbrev: edge.winner === "away" ? g.awayAbbrev : g.homeAbbrev,
