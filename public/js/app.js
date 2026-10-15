@@ -303,23 +303,23 @@
     var fmtNum = function (v) { return v == null || v === "" ? "—" : String(v); };
     var fmtPct = function (v) { return v == null ? "—" : v + "%"; };
     var rows = [
-      ["Record", a.record, h.record, fmtNum],
-      ["PDO", a.pdo, h.pdo, fmtNum],
-      ["Last five GD", a.last5AvgGd, h.last5AvgGd, fmtNum],
-      ["Last five SV%", a.last5SvPct, h.last5SvPct, fmtPct],
-      ["Last five xG share", a.last5XgfPct, h.last5XgfPct, fmtPct],
-      ["SOG share", a.sogShare, h.sogShare, fmtPct],
-      ["GF vs xGF", a.gfMinusXg, h.gfMinusXg, fmtNum],
-      ["Corsi", a.cfPct, h.cfPct, fmtPct],
-      ["High danger", a.hdcfPct, h.hdcfPct, fmtPct],
-      ["Even-strength xG", a.xgfPct5v5, h.xgfPct5v5, fmtPct],
-      ["Special-teams xG", a.stXg, h.stXg, fmtNum],
-      ["Points %", a.ptsPct, h.ptsPct, fmtNum]
+      ["Record", a.record, h.record, fmtNum, "Season record: wins, losses, and overtime losses."],
+      ["PDO", a.pdo, h.pdo, fmtNum, "PDO: shooting percentage plus save percentage from shots on goal. 100 is league-normal; much higher is finishing or save luck."],
+      ["Last five GD", a.last5AvgGd, h.last5AvgGd, fmtNum, "Average goal differential, goals for minus goals against, over this team’s last five completed games."],
+      ["Last five SV%", a.last5SvPct, h.last5SvPct, fmtPct, "Save percentage over the last five games: shots against minus goals against, divided by shots against."],
+      ["Last five xG share", a.last5XgfPct, h.last5XgfPct, fmtPct, "Expected-goals share over the last five games: expected goals for divided by expected goals for plus against."],
+      ["SOG share", a.sogShare, h.sogShare, fmtPct, "Shots on goal for divided by shots for plus shots against. Above 50% means they take more shots than they allow."],
+      ["GF vs xGF", a.gfMinusXg, h.gfMinusXg, fmtNum, "Actual goals for minus expected goals for. Positive means they have outscored their shot quality."],
+      ["Corsi", a.cfPct, h.cfPct, fmtPct, "Corsi for percentage: shot attempts for divided by shot attempts for plus against, all situations."],
+      ["High danger", a.hdcfPct, h.hdcfPct, fmtPct, "High-danger chances for divided by high-danger chances for plus against."],
+      ["Even-strength xG", a.xgfPct5v5, h.xgfPct5v5, fmtPct, "Even-strength expected-goals share: 5-on-5 expected goals for divided by expected goals for plus against."],
+      ["Special-teams xG", a.stXg, h.stXg, fmtNum, "Special-teams expected-goal differential: power-play expected goals minus shorthanded expected goals against."],
+      ["Points %", a.ptsPct, h.ptsPct, fmtNum, "Points percentage: points earned divided by points available."]
     ];
     var list = rows.map(function (row) {
-      return "<dt>" + esc(row[0]) + "</dt><dd>" +
-        esc(a.abbrev + " " + row[3](row[1]) + " · " + h.abbrev + " " + row[3](row[2])) +
-        "</dd>";
+      return "<tr><th scope=\"row\" title=\"" + esc(row[4]) + "\">" + esc(row[0]) + "</th>" +
+        "<td class=\"num\">" + esc(row[3](row[1])) + "</td>" +
+        "<td class=\"num\">" + esc(row[3](row[2])) + "</td></tr>";
     }).join("");
     var early = model && model.earlySeason
       ? '<p class="early-note">Early season, lower confidence</p>'
@@ -331,7 +331,11 @@
       ? '<p class="early-note">Previous rule ' + model.oldPct + "%.</p>"
       : "";
     return (
-      "<dl class='detail-list'>" + list + "</dl>" +
+      "<table class=\"detail-stats\"><thead><tr>" +
+        "<th scope=\"col\">Stat</th>" +
+        "<th scope=\"col\" class=\"num\">" + esc(a.abbrev) + "</th>" +
+        "<th scope=\"col\" class=\"num\">" + esc(h.abbrev) + "</th>" +
+      "</tr></thead><tbody>" + list + "</tbody></table>" +
       early + confident + old +
       oddsLine(m) +
       '<p class="result-line" data-result="' + m.id + '">' + resultInner(m) + "</p>" +

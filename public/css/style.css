@@ -1012,18 +1012,35 @@ button.user-menu-btn:focus-visible {
   font-weight: 650;
   padding: 0.45rem 0;
 }
-.detail-list {
-  display: grid;
-  grid-template-columns: 9.5rem 1fr;
-  gap: 0.2rem 0.6rem;
-  margin: 0.3rem 0 0.5rem;
+.detail-stats {
+  table-layout: fixed;
+  width: 100%;
+  margin: 0.35rem 0 0.55rem;
   font-size: 0.86rem;
 }
-.detail-list dt {
-  color: var(--muted);
+.detail-stats th,
+.detail-stats td {
+  padding: 0.42rem 0.5rem;
+  white-space: normal;
+  cursor: default;
+  vertical-align: baseline;
 }
-.detail-list dd {
-  margin: 0;
+.detail-stats thead th {
+  font-weight: 750;
+  color: var(--ink);
+  background: #f4f7fb;
+}
+.detail-stats tbody th {
+  font-weight: 650;
+  color: var(--muted);
+  text-align: left;
+}
+.detail-stats .num {
+  width: 27%;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  color: var(--ink);
 }
 .early-note {
   margin: 0.35rem 0;
