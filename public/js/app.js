@@ -357,8 +357,22 @@
       return (
         '<article class="card" id="game-' + m.id + '">' +
           '<div class="card-head">' +
+            '<div class="sides">' +
+              '<div class="col">' +
+                '<div class="team away">' +
+                  (m.away.logo ? '<img src="' + esc(m.away.logo) + '" alt="">' : "") +
+                  "<div><h3>" + esc(m.away.name) + "</h3>" + recordLine(m.away) + "</div>" +
+                "</div>" +
+              "</div>" +
+              '<div class="vs">@</div>' +
+              '<div class="col">' +
+                '<div class="team home">' +
+                  (m.home.logo ? '<img src="' + esc(m.home.logo) + '" alt="">' : "") +
+                  "<div><h3>" + esc(m.home.name) + "</h3>" + recordLine(m.home) + "</div>" +
+                "</div>" +
+              "</div>" +
+            "</div>" +
             '<div class="card-teams">' +
-              "<h3>" + esc(m.away.name) + " at " + esc(m.home.name) + "</h3>" +
               '<p class="card-kicker">' + esc(fmtTime(m.startTimeUTC)) +
                 (m.gameTypeLabel ? " · " + esc(m.gameTypeLabel) : "") + "</p>" +
             "</div>" +
