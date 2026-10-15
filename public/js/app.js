@@ -308,7 +308,9 @@
     root.innerHTML = matchups.map(function (m) {
       var model = modelOf(m);
       var proj = m.projected || HockeyStats.estimateScore(m.away, m.home);
-      var why = m.why || HockeyStats.explainEdge(m.edge, m.away, m.home);
+      var why = model && (model.pick === "away" || model.pick === "home")
+        ? HockeyStats.explainEdge(m.edge, m.away, m.home, model.pick)
+        : (m.why || HockeyStats.explainEdge(m.edge, m.away, m.home));
       return (
         '<article class="card" id="game-' + m.id + '">' +
           '<div class="card-head">' +

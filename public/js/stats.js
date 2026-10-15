@@ -353,10 +353,14 @@
 
   /**
    * Plain-language reason the edge team leads this matchup.
+   * side, when "away" or "home", is the Edge badge team. The clauses
+   * then describe that team. Omit side to keep the older winner.
    */
-  function explainEdge(edge, away, home) {
-    var pick = edge && edge.winner === "away" ? away : home;
-    var other = pick === away ? home : away;
+  function explainEdge(edge, away, home, side) {
+    var named = side === "away" || side === "home";
+    var pickSide = named ? side : (edge && edge.winner === "away" ? "away" : "home");
+    var pick = pickSide === "away" ? away : home;
+    var other = pickSide === "away" ? home : away;
     var bits = [];
     if (pick && other && pick.xgfPct5v5 != null && other.xgfPct5v5 != null) {
       bits.push("even-strength expected-goals share " + pick.xgfPct5v5 + "% to " + other.xgfPct5v5 + "%");
@@ -365,7 +369,7 @@
     if (other && other.b2b && pick && !pick.b2b) bits.push("the other side played last night");
     if (pick && pick.pdo != null && pick.pdo > 102) bits.push("a high shooting-plus-save figure that may regress");
     var name = pick && pick.name ? pick.name : "The home team";
-    if (!edge || edge.winner === "even") {
+    if (!named && (!edge || edge.winner === "even")) {
       return name + " is the lean on home ice" + (bits[0] ? " (" + bits[0] + ")" : "") + ".";
     }
     return name + " is the pick: " + bits.join("; ") + ".";
