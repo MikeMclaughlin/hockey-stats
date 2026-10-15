@@ -17,7 +17,7 @@
         link("/review.html", "review", "Review") +
         link("/backtest.html", "backtest", "Backtest") +
       "</nav>" +
-      '<span class="app-version" title="App version">v2.0</span>' +
+      '<span class="app-version" title="App version">v2.0.1</span>' +
       '<div class="auth-slot" id="auth-slot"><a class="auth-btn" href="/api/auth/login">Sign in</a></div>' +
     "</div>"
   );

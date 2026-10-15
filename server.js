@@ -6,6 +6,7 @@ var fs = require("fs");
 var path = require("path");
 var { URL } = require("url");
 var stats = require("./public/js/stats.js");
+var edgeModel = require("./public/js/edge-model.js");
 var archive = require("./public/js/archive.js");
 var backtest = require("./public/js/backtest.js");
 var store = require("./public/js/store.js");
@@ -22,10 +23,10 @@ var xgLogMemory = Object.create(null);
 
 function productVersion() {
   try {
-    var parts = String(require("./package.json").version || "2.0.0").split(".");
-    return (parts[0] || "2") + "." + (parts[1] || "0");
+    var parts = String(require("./package.json").version || "2.0.1").split(".");
+    return (parts[0] || "2") + "." + (parts[1] || "0") + "." + (parts[2] || "0");
   } catch (e) {
-    return "2.0";
+    return "2.0.1";
   }
 }
 
@@ -813,7 +814,13 @@ async function buildMatchups(date) {
       edge: edge,
       edgeTeam: winnerTeam ? winnerTeam.abbrev : "EVEN",
       edgeName: winnerTeam ? winnerTeam.name : "Even matchup",
-      why: stats.explainEdge(edge, away, home),
+      why: stats.explainEdge(edge, away, home, edgeModel.fromMatchup({
+        away: away,
+        home: home,
+        projected: projected,
+        edge: edge,
+        gameDate: g.gameDate || score.currentDate
+      }).pick),
       projected: projected,
       odds: odds,
       marketSide: market,

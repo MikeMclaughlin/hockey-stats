@@ -1,7 +1,8 @@
 (function () {
   "use strict";
 
-  var state = { data: null, sortKey: "pdo", sortDir: -1, filters: {} };
+  var state = { data: null, sortKey: "pdo", sortDir: -1, filters: {}, cardsExpanded: false };
+  var CARDS_KEY = "hs-cards-expanded";
 
   var SORT_FIELDS = [
     ["pdo", "PDO gap"],
@@ -160,6 +161,24 @@
     return '<span class="score-num">' + num + "</span>" + status;
   }
 
+  function cardScoreInner(m) {
+    var s = m.scoreboard || {};
+    if (s.away == null || s.home == null || !(s.live || s.final)) return "";
+    var num = esc(m.away.abbrev) + " " + s.away + " – " + s.home + " " + esc(m.home.abbrev);
+    var label = "Final";
+    var tail = "";
+    if (s.final) {
+      var status = s.status ? String(s.status) : "Final";
+      if (status.indexOf("Final") === 0) label = status;
+      else tail = status;
+    } else {
+      label = "Live";
+      if (s.status) tail = String(s.status);
+    }
+    return '<span class="score-num">' + esc(label) + ": " + num + "</span>" +
+      (tail ? '<span class="score-status">' + esc(tail) + "</span>" : "");
+  }
+
   function edgeBadge(m) {
     var model = modelOf(m);
     var abbrev = model ? model.pickAbbrev : (m.edgeTeam || "");
@@ -169,12 +188,14 @@
 
   function labelTag(model) {
     if (!model) return "";
-    var cls = model.label === "Confident" ? "confident" : model.label === "Toss-up" ? "toss" : "lean";
+    var cls = "badge";
+    if (model.label === "Toss-up") cls += " toss";
+    else if (model.label !== "Confident") cls += " even";
     var title = HockeyEdgeModel.labelTitle(model);
     if (model.confidentPick && model.label === "Confident") {
       title += " Confident pick: the Edge, the projected winner, and last-five xG share agree, and the pick is not on a back-to-back against a rested opponent.";
     }
-    return '<span class="pick-label ' + cls + '" title="' + esc(title) + '">' + esc(model.label) + "</span>";
+    return '<span class="' + cls + '" title="' + esc(title) + '">' + esc(model.label) + "</span>";
   }
 
   function edgeProbLine(m) {
@@ -190,9 +211,9 @@
 
   function chipRow(model) {
     if (!model || !model.chips || !model.chips.length) return "";
-    return '<div class="card-chips">' + model.chips.map(function (chip) {
-      return '<span class="signal-chip' + (chip.strong ? " strong" : "") + '" title="' + esc(chip.title) + '">' + esc(chip.text) + "</span>";
-    }).join("") + "</div>";
+    return model.chips.map(function (chip) {
+      return '<span class="badge' + (chip.strong ? "" : " even") + '" title="' + esc(chip.title) + '">' + esc(chip.text) + "</span>";
+    }).join("");
   }
 
   function performanceOf(m) {
@@ -278,51 +299,6 @@
     );
   }
 
-  function detailBlock(m, model) {
-    var a = m.away || {};
-    var h = m.home || {};
-    var fmtNum = function (v) { return v == null || v === "" ? "—" : String(v); };
-    var fmtPct = function (v) { return v == null ? "—" : v + "%"; };
-    var rows = [
-      ["Record", a.record, h.record, fmtNum],
-      ["PDO", a.pdo, h.pdo, fmtNum],
-      ["Last five GD", a.last5AvgGd, h.last5AvgGd, fmtNum],
-      ["Last five SV%", a.last5SvPct, h.last5SvPct, fmtPct],
-      ["Last five xG share", a.last5XgfPct, h.last5XgfPct, fmtPct],
-      ["SOG share", a.sogShare, h.sogShare, fmtPct],
-      ["GF vs xGF", a.gfMinusXg, h.gfMinusXg, fmtNum],
-      ["Corsi", a.cfPct, h.cfPct, fmtPct],
-      ["High danger", a.hdcfPct, h.hdcfPct, fmtPct],
-      ["Even-strength xG", a.xgfPct5v5, h.xgfPct5v5, fmtPct],
-      ["Special-teams xG", a.stXg, h.stXg, fmtNum],
-      ["Points %", a.ptsPct, h.ptsPct, fmtNum]
-    ];
-    var list = rows.map(function (row) {
-      return "<dt>" + esc(row[0]) + "</dt><dd>" +
-        esc(a.abbrev + " " + row[3](row[1]) + " · " + h.abbrev + " " + row[3](row[2])) +
-        "</dd>";
-    }).join("");
-    var early = model && model.earlySeason
-      ? '<p class="early-note">Early season, lower confidence</p>'
-      : "";
-    var confident = model && model.confidentPick
-      ? '<p class="early-note">Confident pick: Edge, projected winner, and last-five xG share agree, and the pick is not on a back-to-back against a rested opponent.</p>'
-      : "";
-    var old = model && model.oldPct != null
-      ? '<p class="early-note">Previous rule ' + model.oldPct + "%.</p>"
-      : "";
-    return (
-      "<dl class='detail-list'>" + list + "</dl>" +
-      early + confident + old +
-      '<p class="score-line" data-score="' + m.id + '">' + scoreInner(m) + "</p>" +
-      oddsLine(m) +
-      '<p class="result-line" data-result="' + m.id + '">' + resultInner(m) + "</p>" +
-      '<p class="why">' + (m.why || HockeyStats.explainEdge(m.edge, m.away, m.home)) + "</p>" +
-      notesLine(m) +
-      marketFlag(m)
-    );
-  }
-
   function renderCards(matchups) {
     var root = $("cards");
     if (!matchups.length) {
@@ -332,23 +308,53 @@
     root.innerHTML = matchups.map(function (m) {
       var model = modelOf(m);
       var proj = m.projected || HockeyStats.estimateScore(m.away, m.home);
+      var why = model && (model.pick === "away" || model.pick === "home")
+        ? HockeyStats.explainEdge(m.edge, m.away, m.home, model.pick)
+        : (m.why || HockeyStats.explainEdge(m.edge, m.away, m.home));
       return (
         '<article class="card" id="game-' + m.id + '">' +
           '<div class="card-head">' +
-            '<div class="card-teams">' +
-              "<h3>" + esc(m.away.name) + " at " + esc(m.home.name) + "</h3>" +
-              '<p class="card-kicker">' + esc(fmtTime(m.startTimeUTC)) +
-                (m.gameTypeLabel ? " · " + esc(m.gameTypeLabel) : "") + "</p>" +
+            '<div class="head-top">' +
+              "<span>" + esc(fmtTime(m.startTimeUTC)) +
+                (m.gameTypeLabel ? " · " + esc(m.gameTypeLabel) : "") + "</span>" +
+              '<span class="proj">Est. ' + esc(m.away.abbrev) + " " + proj.away + " – " + proj.home + " " + esc(m.home.abbrev) + "</span>" +
+              '<span class="score-line" data-score="' + m.id + '">' + cardScoreInner(m) + "</span>" +
+              edgeBadge(m) +
+              labelTag(model) +
+              edgeProbLine(m) +
+              chipRow(model) +
+              marketFlag(m) +
             "</div>" +
-            '<p class="card-row proj">Est. ' + esc(m.away.abbrev) + " " + proj.away + " – " + proj.home + " " + esc(m.home.abbrev) + "</p>" +
-            '<div class="card-row pick-row">' + edgeBadge(m) + labelTag(model) + "</div>" +
-            '<p class="card-row">' + edgeProbLine(m) + "</p>" +
-            chipRow(model) +
+            oddsLine(m) +
+            '<p class="result-line" data-result="' + m.id + '">' + resultInner(m) + "</p>" +
+            '<p class="why">' + esc(why) + "</p>" +
           "</div>" +
-          '<details class="card-details">' +
-            "<summary>Details</summary>" +
-            detailBlock(m, model) +
+          '<div class="sides">' +
+            '<div class="col">' +
+              '<div class="team away">' +
+                (m.away.logo ? '<img src="' + esc(m.away.logo) + '" alt="">' : "") +
+                "<div><h3>" + esc(m.away.name) + "</h3>" + recordLine(m.away) + "</div>" +
+              "</div>" +
+              teamPills(m.away) +
+            "</div>" +
+            '<div class="vs">@</div>' +
+            '<div class="col">' +
+              '<div class="team home">' +
+                (m.home.logo ? '<img src="' + esc(m.home.logo) + '" alt="">' : "") +
+                "<div><h3>" + esc(m.home.name) + "</h3>" + recordLine(m.home) + "</div>" +
+              "</div>" +
+              teamPills(m.home) +
+            "</div>" +
+          "</div>" +
+          '<details class="more-stats"' + (state.cardsExpanded ? " open" : "") + ">" +
+            "<summary>Average goal differential, actual versus expected goals, shot-attempt share, high-danger chances, and expected goals</summary>" +
+            '<div class="sides more-sides">' +
+              '<div class="col">' + extraPills(m.away) + "</div>" +
+              '<div class="vs"></div>' +
+              '<div class="col">' + extraPills(m.home) + "</div>" +
+            "</div>" +
           "</details>" +
+          notesLine(m) +
         "</article>"
       );
     }).join("");
@@ -542,6 +548,7 @@
     renderCards(visibleRows());
     renderTable();
     syncSortControl();
+    syncCardsButton();
     armScores();
     document.querySelectorAll("#board tbody tr[data-game]").forEach(function (tr) {
       tr.style.cursor = "pointer";
@@ -579,7 +586,7 @@
   function paintScores() {
     ((state.data && state.data.matchups) || []).forEach(function (m) {
       document.querySelectorAll('[data-score="' + m.id + '"]').forEach(function (el) {
-        el.innerHTML = scoreInner(m);
+        el.innerHTML = el.classList.contains("score-cell") ? scoreInner(m) : cardScoreInner(m);
       });
       document.querySelectorAll('[data-result="' + m.id + '"]').forEach(function (el) {
         el.textContent = resultInner(m);
@@ -677,7 +684,7 @@
 
   function load(refresh) {
     if (!state.data) $("meta").textContent = "Loading…";
-    if (window.HockeyLoading && !state.data) HockeyLoading.show();
+    if (window.HockeyLoading) HockeyLoading.show();
     fetch(boardQuery(refresh))
       .then(readBoard)
       .then(render)
@@ -762,12 +769,38 @@
     if (q.get("dir")) state.sortDir = Number(q.get("dir")) || 1;
   })();
 
+  function readStoredCards() {
+    try { return sessionStorage.getItem(CARDS_KEY) === "1"; }
+    catch (e) { return false; }
+  }
+
+  function writeStoredCards(open) {
+    try { sessionStorage.setItem(CARDS_KEY, open ? "1" : "0"); }
+    catch (e) {}
+  }
+
+  function syncCardsButton() {
+    var btn = $("cards-toggle");
+    if (btn) btn.textContent = state.cardsExpanded ? "Collapse all" : "Expand all";
+  }
+
   function saveBoardPrefs() {
     if (!window.HockeyPrefs) return;
     HockeyPrefs.patch("matchups", {
       sortKey: state.sortKey,
-      sortDir: state.sortDir
+      sortDir: state.sortDir,
+      cardsExpanded: !!state.cardsExpanded
     });
+  }
+
+  function setCardsExpanded(open) {
+    state.cardsExpanded = !!open;
+    document.querySelectorAll("#cards details.more-stats").forEach(function (el) {
+      el.open = state.cardsExpanded;
+    });
+    syncCardsButton();
+    writeStoredCards(state.cardsExpanded);
+    saveBoardPrefs();
   }
 
   function applySavedSort() {
@@ -777,10 +810,15 @@
       if (saved) {
         if (!q.get("sort") && saved.sortKey) state.sortKey = saved.sortKey;
         if (!q.get("dir") && (saved.sortDir === 1 || saved.sortDir === -1)) state.sortDir = saved.sortDir;
+        if (saved.cardsExpanded) {
+          state.cardsExpanded = true;
+          writeStoredCards(true);
+        }
       }
     }
     fillSortControl();
     syncSortControl();
+    syncCardsButton();
     if (state.data) {
       renderCards(visibleRows());
       renderTable();
@@ -788,6 +826,8 @@
   }
 
   function startBoard() {
+    state.cardsExpanded = readStoredCards();
+    syncCardsButton();
     var cached = recallBoard();
     if (cached) render(cached);
     applySavedSort();
@@ -795,6 +835,8 @@
   }
 
   $("refresh").addEventListener("click", function () { load(true); });
+  var cardsBtn = $("cards-toggle");
+  if (cardsBtn) cardsBtn.addEventListener("click", function () { setCardsExpanded(!state.cardsExpanded); });
   var dirBtn = $("sort-dir");
   if (dirBtn) dirBtn.addEventListener("click", function () { applySort(state.sortKey, state.sortDir * -1); });
   var prevBtn = $("prev-date");
