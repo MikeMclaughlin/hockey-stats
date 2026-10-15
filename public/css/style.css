@@ -612,6 +612,9 @@ select#range {
   font-size: 0.64rem;
   font-weight: 700;
 }
+#board tr.filters input {
+  min-width: 0;
+}
 #board .edge-meta,
 #board .score-status {
   font-size: 0.62rem;
@@ -695,14 +698,6 @@ footer {
     flex: 0 0 auto;
     width: 100%;
   }
-  #board th,
-  #board td {
-    font-size: 0.5rem;
-    padding: 0.16rem 0.05rem;
-  }
-  #board th {
-    font-size: 0.46rem;
-  }
   .sides {
     grid-template-columns: 1fr;
   }
@@ -716,6 +711,43 @@ footer {
   .why {
     margin-left: 0.85rem;
     margin-right: 0.85rem;
+  }
+}
+/* Nineteen columns cannot fit a phone or a narrow tablet. Scroll the board
+   instead of crushing words and clipping the filter boxes. */
+@media (max-width: 1100px) {
+  .table-wrap.fit {
+    overflow-x: auto;
+  }
+  #board {
+    table-layout: auto;
+    width: max-content;
+    min-width: 100%;
+  }
+  #board th,
+  #board td {
+    white-space: nowrap;
+    overflow-wrap: normal;
+    word-break: normal;
+    min-width: 4.75rem;
+    padding: 0.4rem 0.55rem;
+    font-size: 0.8rem;
+    line-height: 1.25;
+  }
+  #board th {
+    font-size: 0.75rem;
+  }
+  #board .edge-meta,
+  #board .score-status {
+    font-size: 0.72rem;
+  }
+  #board tr.filters th {
+    min-width: 6rem;
+  }
+  #board tr.filters input {
+    width: 5.6rem;
+    min-width: 5.6rem;
+    font-size: 0.8rem;
   }
 }
 main {
