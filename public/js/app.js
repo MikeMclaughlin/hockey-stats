@@ -679,7 +679,7 @@
 
   function load(refresh) {
     if (!state.data) $("meta").textContent = "Loading…";
-    if (window.HockeyLoading && !state.data) HockeyLoading.show();
+    if (window.HockeyLoading) HockeyLoading.show();
     fetch(boardQuery(refresh))
       .then(readBoard)
       .then(render)
