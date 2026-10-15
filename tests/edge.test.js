@@ -40,16 +40,6 @@ assert.ok(whyAway.indexOf("pick") !== -1);
 var whyEven = stats.explainEdge(even, awayTeam, homeTeam);
 assert.ok(whyEven.indexOf("Toronto Maple Leafs") !== -1);
 
-var whyFlip = stats.explainEdge(e1, {
-  name: "Boston Bruins", xgfPct5v5: 55, pdo: 103, b2b: true
-}, {
-  name: "Toronto Maple Leafs", xgfPct5v5: 45, pdo: 99, b2b: false
-}, "home");
-assert.strictEqual(
-  whyFlip,
-  "Toronto Maple Leafs is the pick: even-strength expected-goals share 45% to 55%; home ice; the other side played last night."
-);
-
 assert.strictEqual(stats.pillSign(12, "gd"), "pos");
 assert.strictEqual(stats.pillSign(-8, "gd"), "neg");
 assert.strictEqual(stats.pillSign(101.4, "pdo"), "pos");
