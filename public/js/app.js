@@ -303,23 +303,32 @@
     var fmtNum = function (v) { return v == null || v === "" ? "—" : String(v); };
     var fmtPct = function (v) { return v == null ? "—" : v + "%"; };
     var rows = [
-      ["Record", a.record, h.record, fmtNum, "Season record: wins, losses, and overtime losses."],
-      ["PDO", a.pdo, h.pdo, fmtNum, "PDO: shooting percentage plus save percentage from shots on goal. 100 is league-normal; much higher is finishing or save luck."],
-      ["Last five GD", a.last5AvgGd, h.last5AvgGd, fmtNum, "Average goal differential, goals for minus goals against, over this team’s last five completed games."],
-      ["Last five SV%", a.last5SvPct, h.last5SvPct, fmtPct, "Save percentage over the last five games: shots against minus goals against, divided by shots against."],
-      ["Last five xG share", a.last5XgfPct, h.last5XgfPct, fmtPct, "Expected-goals share over the last five games: expected goals for divided by expected goals for plus against."],
-      ["SOG share", a.sogShare, h.sogShare, fmtPct, "Shots on goal for divided by shots for plus shots against. Above 50% means they take more shots than they allow."],
-      ["GF vs xGF", a.gfMinusXg, h.gfMinusXg, fmtNum, "Actual goals for minus expected goals for. Positive means they have outscored their shot quality."],
-      ["Corsi", a.cfPct, h.cfPct, fmtPct, "Corsi for percentage: shot attempts for divided by shot attempts for plus against, all situations."],
-      ["High danger", a.hdcfPct, h.hdcfPct, fmtPct, "High-danger chances for divided by high-danger chances for plus against."],
-      ["Even-strength xG", a.xgfPct5v5, h.xgfPct5v5, fmtPct, "Even-strength expected-goals share: 5-on-5 expected goals for divided by expected goals for plus against."],
-      ["Special-teams xG", a.stXg, h.stXg, fmtNum, "Special-teams expected-goal differential: power-play expected goals minus shorthanded expected goals against."],
-      ["Points %", a.ptsPct, h.ptsPct, fmtNum, "Points percentage: points earned divided by points available."]
+      ["Record", a.record, h.record, fmtNum, "Season record: wins, losses, and overtime losses.", null, null],
+      ["PDO", a.pdo, h.pdo, fmtNum, PILL_TITLES.pdo, "pdo", "pdo"],
+      ["Last five GD", a.last5AvgGd, h.last5AvgGd, fmtNum, PILL_TITLES.last5, "last5", "last5"],
+      ["Last five SV%", a.last5SvPct, h.last5SvPct, fmtPct, PILL_TITLES.last5Sv, "last5Sv", "last5Sv"],
+      ["Last five xG share", a.last5XgfPct, h.last5XgfPct, fmtPct, "Expected-goals share over the last five games: expected goals for divided by expected goals for plus against.", "xgf5v5", null],
+      ["SOG share", a.sogShare, h.sogShare, fmtPct, PILL_TITLES.sogShare, "sogShare", "sogShare"],
+      ["GF vs xGF", a.gfMinusXg, h.gfMinusXg, fmtNum, PILL_TITLES.xgDiff, "xgDiff", null],
+      ["Corsi", a.cfPct, h.cfPct, fmtPct, PILL_TITLES.cf, "cf", null],
+      ["High danger", a.hdcfPct, h.hdcfPct, fmtPct, PILL_TITLES.hdcf, "hdcf", null],
+      ["Even-strength xG", a.xgfPct5v5, h.xgfPct5v5, fmtPct, PILL_TITLES.xgf5v5, "xgf5v5", null],
+      ["Special-teams xG", a.stXg, h.stXg, fmtNum, PILL_TITLES.stXg, "stXg", null],
+      ["Points %", a.ptsPct, h.ptsPct, fmtNum, "Points percentage: points earned divided by points available.", null, null]
     ];
+    var statCell = function (team, value, fmt, kind, title, preKey) {
+      var sign = kind && window.HockeyStats ? (HockeyStats.pillSign(value, kind) || "") : "";
+      var tip = title || "";
+      if (preKey && team.preseason && team.preseason[preKey] && tip) {
+        tip += " " + ((state.data && state.data.preseasonLabel) || "2026-27 preseason") + ".";
+      }
+      return "<td class=\"num" + (sign ? " " + sign : "") + "\"" +
+        (tip ? " title=\"" + esc(tip) + "\"" : "") + ">" + esc(fmt(value)) + "</td>";
+    };
     var list = rows.map(function (row) {
       return "<tr><th scope=\"row\" title=\"" + esc(row[4]) + "\">" + esc(row[0]) + "</th>" +
-        "<td class=\"num\">" + esc(row[3](row[1])) + "</td>" +
-        "<td class=\"num\">" + esc(row[3](row[2])) + "</td></tr>";
+        statCell(a, row[1], row[3], row[5], row[4], row[6]) +
+        statCell(h, row[2], row[3], row[5], row[4], row[6]) + "</tr>";
     }).join("");
     var early = model && model.earlySeason
       ? '<p class="early-note">Early season, lower confidence</p>'

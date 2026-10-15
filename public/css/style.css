@@ -1065,6 +1065,16 @@ button.user-menu-btn:focus-visible {
   white-space: nowrap;
   color: var(--ink);
 }
+.detail-stats td.pos {
+  background: #e6f6ea;
+}
+.detail-stats td.neg {
+  background: #fde8ec;
+  color: #c62828;
+}
+.detail-stats td.even {
+  background: #f4f6f8;
+}
 .early-note {
   margin: 0.35rem 0;
   font-size: 0.86rem;
