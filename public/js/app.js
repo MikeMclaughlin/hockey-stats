@@ -161,6 +161,24 @@
     return '<span class="score-num">' + num + "</span>" + status;
   }
 
+  function cardScoreInner(m) {
+    var s = m.scoreboard || {};
+    if (s.away == null || s.home == null || !(s.live || s.final)) return "";
+    var num = esc(m.away.abbrev) + " " + s.away + " – " + s.home + " " + esc(m.home.abbrev);
+    var label = "Final";
+    var tail = "";
+    if (s.final) {
+      var status = s.status ? String(s.status) : "Final";
+      if (status.indexOf("Final") === 0) label = status;
+      else tail = status;
+    } else {
+      label = "Live";
+      if (s.status) tail = String(s.status);
+    }
+    return '<span class="score-label">' + esc(label) + ':</span> <span class="score-num">' + num + "</span>" +
+      (tail ? '<span class="score-status">' + esc(tail) + "</span>" : "");
+  }
+
   function edgeBadge(m) {
     var model = modelOf(m);
     var abbrev = model ? model.pickAbbrev : (m.edgeTeam || "");
@@ -315,7 +333,6 @@
     return (
       "<dl class='detail-list'>" + list + "</dl>" +
       early + confident + old +
-      '<p class="score-line" data-score="' + m.id + '">' + scoreInner(m) + "</p>" +
       oddsLine(m) +
       '<p class="result-line" data-result="' + m.id + '">' + resultInner(m) + "</p>" +
       '<p class="why">' + (m.why || HockeyStats.explainEdge(m.edge, m.away, m.home)) + "</p>" +
@@ -345,6 +362,7 @@
             '<div class="card-row pick-row">' + edgeBadge(m) + labelTag(model) + "</div>" +
             '<p class="card-row">' + edgeProbLine(m) + "</p>" +
             chipRow(model) +
+            '<p class="card-row score-line card-score' + ((m.scoreboard && m.scoreboard.live) ? " live" : "") + '" data-score="' + m.id + '">' + cardScoreInner(m) + "</p>" +
           "</div>" +
           '<details class="card-details"' + (state.cardsExpanded ? " open" : "") + ">" +
             "<summary>Details</summary>" +
@@ -581,7 +599,12 @@
   function paintScores() {
     ((state.data && state.data.matchups) || []).forEach(function (m) {
       document.querySelectorAll('[data-score="' + m.id + '"]').forEach(function (el) {
-        el.innerHTML = scoreInner(m);
+        if (el.classList.contains("card-score")) {
+          el.innerHTML = cardScoreInner(m);
+          el.classList.toggle("live", !!(m.scoreboard && m.scoreboard.live));
+        } else {
+          el.innerHTML = scoreInner(m);
+        }
       });
       document.querySelectorAll('[data-result="' + m.id + '"]').forEach(function (el) {
         el.textContent = resultInner(m);
