@@ -137,6 +137,14 @@
     return "<div>" + t.record + (t.preseason && t.preseason.record ? " " + preMark(true) : "") + "</div>";
   }
 
+  function edgeDetail(e) {
+    if (!e || e.measured == null || e.totalMeasures == null) return "";
+    var low = !!e.lowData;
+    var text = "based on " + e.measured + " of " + e.totalMeasures + " stats";
+    if (low) text += " · low data";
+    return "<span class=\"edge-meta" + (low ? " low" : "") + "\">" + text + "</span>";
+  }
+
   function modelOf(m) {
     if (!window.HockeyEdgeModel) return null;
     return HockeyEdgeModel.fromMatchup(m);
@@ -175,7 +183,7 @@
       label = "Live";
       if (s.status) tail = String(s.status);
     }
-    return '<span class="score-label">' + esc(label) + ':</span> <span class="score-num">' + num + "</span>" +
+    return '<span class="score-num">' + esc(label) + ": " + num + "</span>" +
       (tail ? '<span class="score-status">' + esc(tail) + "</span>" : "");
   }
 
@@ -188,12 +196,14 @@
 
   function labelTag(model) {
     if (!model) return "";
-    var cls = model.label === "Confident" ? "confident" : model.label === "Toss-up" ? "toss" : "lean";
+    var cls = "badge";
+    if (model.label === "Toss-up") cls += " toss";
+    else if (model.label !== "Confident") cls += " even";
     var title = HockeyEdgeModel.labelTitle(model);
     if (model.confidentPick && model.label === "Confident") {
       title += " Confident pick: the Edge, the projected winner, and last-five xG share agree, and the pick is not on a back-to-back against a rested opponent.";
     }
-    return '<span class="pick-label ' + cls + '" title="' + esc(title) + '">' + esc(model.label) + "</span>";
+    return '<span class="' + cls + '" title="' + esc(title) + '">' + esc(model.label) + "</span>";
   }
 
   function edgeProbLine(m) {
@@ -209,9 +219,9 @@
 
   function chipRow(model) {
     if (!model || !model.chips || !model.chips.length) return "";
-    return '<div class="card-chips">' + model.chips.map(function (chip) {
-      return '<span class="signal-chip' + (chip.strong ? " strong" : "") + '" title="' + esc(chip.title) + '">' + esc(chip.text) + "</span>";
-    }).join("") + "</div>";
+    return model.chips.map(function (chip) {
+      return '<span class="badge' + (chip.strong ? "" : " even") + '" title="' + esc(chip.title) + '">' + esc(chip.text) + "</span>";
+    }).join("");
   }
 
   function performanceOf(m) {
@@ -297,63 +307,6 @@
     );
   }
 
-  function detailBlock(m, model) {
-    var a = m.away || {};
-    var h = m.home || {};
-    var fmtNum = function (v) { return v == null || v === "" ? "—" : String(v); };
-    var fmtPct = function (v) { return v == null ? "—" : v + "%"; };
-    var rows = [
-      ["Record", a.record, h.record, fmtNum, "Season record: wins, losses, and overtime losses.", null, null],
-      ["PDO", a.pdo, h.pdo, fmtNum, PILL_TITLES.pdo, "pdo", "pdo"],
-      ["Last five GD", a.last5AvgGd, h.last5AvgGd, fmtNum, PILL_TITLES.last5, "last5", "last5"],
-      ["Last five SV%", a.last5SvPct, h.last5SvPct, fmtPct, PILL_TITLES.last5Sv, "last5Sv", "last5Sv"],
-      ["Last five xG share", a.last5XgfPct, h.last5XgfPct, fmtPct, "Expected-goals share over the last five games: expected goals for divided by expected goals for plus against.", "xgf5v5", null],
-      ["SOG share", a.sogShare, h.sogShare, fmtPct, PILL_TITLES.sogShare, "sogShare", "sogShare"],
-      ["GF vs xGF", a.gfMinusXg, h.gfMinusXg, fmtNum, PILL_TITLES.xgDiff, "xgDiff", null],
-      ["Corsi", a.cfPct, h.cfPct, fmtPct, PILL_TITLES.cf, "cf", null],
-      ["High danger", a.hdcfPct, h.hdcfPct, fmtPct, PILL_TITLES.hdcf, "hdcf", null],
-      ["Even-strength xG", a.xgfPct5v5, h.xgfPct5v5, fmtPct, PILL_TITLES.xgf5v5, "xgf5v5", null],
-      ["Special-teams xG", a.stXg, h.stXg, fmtNum, PILL_TITLES.stXg, "stXg", null],
-      ["Points %", a.ptsPct, h.ptsPct, fmtNum, "Points percentage: points earned divided by points available.", null, null]
-    ];
-    var statCell = function (team, value, fmt, kind, title, preKey) {
-      var sign = kind && window.HockeyStats ? (HockeyStats.pillSign(value, kind) || "") : "";
-      var tip = title || "";
-      if (preKey && team.preseason && team.preseason[preKey] && tip) {
-        tip += " " + ((state.data && state.data.preseasonLabel) || "2026-27 preseason") + ".";
-      }
-      return "<td class=\"num" + (sign ? " " + sign : "") + "\"" +
-        (tip ? " title=\"" + esc(tip) + "\"" : "") + ">" + esc(fmt(value)) + "</td>";
-    };
-    var list = rows.map(function (row) {
-      return "<tr><th scope=\"row\" title=\"" + esc(row[4]) + "\">" + esc(row[0]) + "</th>" +
-        statCell(a, row[1], row[3], row[5], row[4], row[6]) +
-        statCell(h, row[2], row[3], row[5], row[4], row[6]) + "</tr>";
-    }).join("");
-    var early = model && model.earlySeason
-      ? '<p class="early-note">Early season, lower confidence</p>'
-      : "";
-    var confident = model && model.confidentPick
-      ? '<p class="early-note">Confident pick: Edge, projected winner, and last-five xG share agree, and the pick is not on a back-to-back against a rested opponent.</p>'
-      : "";
-    var old = model && model.oldPct != null
-      ? '<p class="early-note">Previous rule ' + model.oldPct + "%.</p>"
-      : "";
-    return (
-      "<table class=\"detail-stats\"><thead><tr>" +
-        "<th scope=\"col\">Stat</th>" +
-        "<th scope=\"col\" class=\"num\">" + esc(a.abbrev) + "</th>" +
-        "<th scope=\"col\" class=\"num\">" + esc(h.abbrev) + "</th>" +
-      "</tr></thead><tbody>" + list + "</tbody></table>" +
-      early + confident + old +
-      oddsLine(m) +
-      '<p class="result-line" data-result="' + m.id + '">' + resultInner(m) + "</p>" +
-      '<p class="why">' + (m.why || HockeyStats.explainEdge(m.edge, m.away, m.home)) + "</p>" +
-      notesLine(m) +
-      marketFlag(m)
-    );
-  }
-
   function renderCards(matchups) {
     var root = $("cards");
     if (!matchups.length) {
@@ -363,38 +316,52 @@
     root.innerHTML = matchups.map(function (m) {
       var model = modelOf(m);
       var proj = m.projected || HockeyStats.estimateScore(m.away, m.home);
+      var why = m.why || HockeyStats.explainEdge(m.edge, m.away, m.home);
       return (
         '<article class="card" id="game-' + m.id + '">' +
           '<div class="card-head">' +
-            '<div class="sides">' +
-              '<div class="col">' +
-                '<div class="team away">' +
-                  (m.away.logo ? '<img src="' + esc(m.away.logo) + '" alt="">' : "") +
-                  "<div><h3>" + esc(m.away.name) + "</h3>" + recordLine(m.away) + "</div>" +
-                "</div>" +
-              "</div>" +
-              '<div class="vs">@</div>' +
-              '<div class="col">' +
-                '<div class="team home">' +
-                  (m.home.logo ? '<img src="' + esc(m.home.logo) + '" alt="">' : "") +
-                  "<div><h3>" + esc(m.home.name) + "</h3>" + recordLine(m.home) + "</div>" +
-                "</div>" +
-              "</div>" +
+            '<div class="head-top">' +
+              "<span>" + esc(fmtTime(m.startTimeUTC)) +
+                (m.gameTypeLabel ? " · " + esc(m.gameTypeLabel) : "") + "</span>" +
+              '<span class="proj">Est. ' + esc(m.away.abbrev) + " " + proj.away + " – " + proj.home + " " + esc(m.home.abbrev) + "</span>" +
+              '<span class="score-line" data-score="' + m.id + '">' + cardScoreInner(m) + "</span>" +
+              edgeBadge(m) +
+              labelTag(model) +
+              edgeProbLine(m) +
+              chipRow(model) +
+              edgeDetail(m.edge) +
+              marketFlag(m) +
             "</div>" +
-            '<div class="card-teams">' +
-              '<p class="card-kicker">' + esc(fmtTime(m.startTimeUTC)) +
-                (m.gameTypeLabel ? " · " + esc(m.gameTypeLabel) : "") + "</p>" +
-            "</div>" +
-            '<p class="card-row proj">Est. ' + esc(m.away.abbrev) + " " + proj.away + " – " + proj.home + " " + esc(m.home.abbrev) + "</p>" +
-            '<div class="card-row pick-row">' + edgeBadge(m) + labelTag(model) + "</div>" +
-            '<p class="card-row">' + edgeProbLine(m) + "</p>" +
-            chipRow(model) +
-            '<p class="card-row score-line card-score' + ((m.scoreboard && m.scoreboard.live) ? " live" : "") + '" data-score="' + m.id + '">' + cardScoreInner(m) + "</p>" +
+            oddsLine(m) +
+            '<p class="result-line" data-result="' + m.id + '">' + resultInner(m) + "</p>" +
+            '<p class="why">' + esc(why) + "</p>" +
           "</div>" +
-          '<details class="card-details"' + (state.cardsExpanded ? " open" : "") + ">" +
-            "<summary>Details</summary>" +
-            detailBlock(m, model) +
+          '<div class="sides">' +
+            '<div class="col">' +
+              '<div class="team away">' +
+                (m.away.logo ? '<img src="' + esc(m.away.logo) + '" alt="">' : "") +
+                "<div><h3>" + esc(m.away.name) + "</h3>" + recordLine(m.away) + "</div>" +
+              "</div>" +
+              teamPills(m.away) +
+            "</div>" +
+            '<div class="vs">@</div>' +
+            '<div class="col">' +
+              '<div class="team home">' +
+                (m.home.logo ? '<img src="' + esc(m.home.logo) + '" alt="">' : "") +
+                "<div><h3>" + esc(m.home.name) + "</h3>" + recordLine(m.home) + "</div>" +
+              "</div>" +
+              teamPills(m.home) +
+            "</div>" +
+          "</div>" +
+          '<details class="more-stats"' + (state.cardsExpanded ? " open" : "") + ">" +
+            "<summary>Average goal differential, actual versus expected goals, shot-attempt share, high-danger chances, and expected goals</summary>" +
+            '<div class="sides more-sides">' +
+              '<div class="col">' + extraPills(m.away) + "</div>" +
+              '<div class="vs"></div>' +
+              '<div class="col">' + extraPills(m.home) + "</div>" +
+            "</div>" +
           "</details>" +
+          notesLine(m) +
         "</article>"
       );
     }).join("");
@@ -626,12 +593,7 @@
   function paintScores() {
     ((state.data && state.data.matchups) || []).forEach(function (m) {
       document.querySelectorAll('[data-score="' + m.id + '"]').forEach(function (el) {
-        if (el.classList.contains("card-score")) {
-          el.innerHTML = cardScoreInner(m);
-          el.classList.toggle("live", !!(m.scoreboard && m.scoreboard.live));
-        } else {
-          el.innerHTML = scoreInner(m);
-        }
+        el.innerHTML = el.classList.contains("score-cell") ? scoreInner(m) : cardScoreInner(m);
       });
       document.querySelectorAll('[data-result="' + m.id + '"]').forEach(function (el) {
         el.textContent = resultInner(m);
@@ -840,7 +802,7 @@
 
   function setCardsExpanded(open) {
     state.cardsExpanded = !!open;
-    document.querySelectorAll("#cards details.card-details").forEach(function (el) {
+    document.querySelectorAll("#cards details.more-stats").forEach(function (el) {
       el.open = state.cardsExpanded;
     });
     syncCardsButton();
