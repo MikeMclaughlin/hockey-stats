@@ -155,7 +155,10 @@
       avg: Math.round((total / window.length) * 100) / 100,
       from: window[window.length - 1].gameDate,
       to: window[0].gameDate,
-      line: window.map(function (g) { return g[field]; }).join(", ")
+      line: window.map(function (g) { return g[field]; }).join(", "),
+      games: window.slice().reverse().map(function (g) {
+        return { value: g[field], date: g.gameDate };
+      })
     };
   }
 

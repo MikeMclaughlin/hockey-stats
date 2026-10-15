@@ -37,22 +37,26 @@
         <table id="teams">
           <thead>
             <tr>
-              <th data-key="abbrev">Team</th>
-              <th data-key="wins" class="num">W</th>
-              <th data-key="losses" class="num">L</th>
-              <th data-key="otl" class="num">OTL</th>
-              <th data-key="ptsPct" class="num">Points percentage</th>
-              <th data-key="goalDiff" class="num">Goal differential</th>
-              <th data-key="sogGp" class="num">SOG/GP</th>
-              <th data-key="sogaGp" class="num">SOGA/GP</th>
-              <th data-key="l5w" class="num">L5 W</th>
-              <th data-key="l5l" class="num">L5 L</th>
-              <th data-key="l5ot" class="num">L5 OT</th>
-              <th data-key="l5gfGp" class="num">L5 GF/GP</th>
-              <th data-key="l5gaGp" class="num">L5 GA/GP</th>
-              <th data-key="pdo" class="num">PDO</th>
-              <th data-key="l5pdo" class="num">Last 5 PDO</th>
-              <th data-key="b2bWinPct" class="num">B2B win %</th>
+              <th data-key="abbrev" title="Team abbreviation. Click to sort." aria-label="Team abbreviation. Click to sort.">Team</th>
+              <th data-key="wins" class="num" title="Wins. Click to sort." aria-label="Wins. Click to sort.">W</th>
+              <th data-key="losses" class="num" title="Losses. Click to sort." aria-label="Losses. Click to sort.">L</th>
+              <th data-key="otl" class="num" title="Overtime losses. Click to sort." aria-label="Overtime losses. Click to sort.">OTL</th>
+              <th data-key="ptsPct" class="num" title="Points percentage. Click to sort." aria-label="Points percentage. Click to sort.">Points percentage</th>
+              <th data-key="goalDiff" class="num" title="Goal differential, goals for minus goals against. Click to sort." aria-label="Goal differential, goals for minus goals against. Click to sort.">Goal differential</th>
+              <th data-key="goalsP1" class="num" title="Goals scored in the first period this season. Click to sort." aria-label="Goals scored in the first period this season. Click to sort.">1st</th>
+              <th data-key="goalsP2" class="num" title="Goals scored in the second period this season. Click to sort." aria-label="Goals scored in the second period this season. Click to sort.">2nd</th>
+              <th data-key="goalsP3" class="num" title="Goals scored in the third period this season. Click to sort." aria-label="Goals scored in the third period this season. Click to sort.">3rd</th>
+              <th data-key="goalsOt" class="num" title="Goals scored in overtime this season. Click to sort." aria-label="Goals scored in overtime this season. Click to sort.">OT</th>
+              <th data-key="sogGp" class="num" title="Shots on goal per game. Click to sort." aria-label="Shots on goal per game. Click to sort.">SOG/GP</th>
+              <th data-key="sogaGp" class="num" title="Shots on goal against per game. Click to sort." aria-label="Shots on goal against per game. Click to sort.">SOGA/GP</th>
+              <th data-key="l5w" class="num" title="Wins in the last five games. Click to sort." aria-label="Wins in the last five games. Click to sort.">L5 W</th>
+              <th data-key="l5l" class="num" title="Losses in the last five games. Click to sort." aria-label="Losses in the last five games. Click to sort.">L5 L</th>
+              <th data-key="l5ot" class="num" title="Overtime losses in the last five games. Click to sort." aria-label="Overtime losses in the last five games. Click to sort.">L5 OT</th>
+              <th data-key="l5gfGp" class="num" title="Goals for per game over the last five games. Click to sort." aria-label="Goals for per game over the last five games. Click to sort.">L5 GF/GP</th>
+              <th data-key="l5gaGp" class="num" title="Goals against per game over the last five games. Click to sort." aria-label="Goals against per game over the last five games. Click to sort.">L5 GA/GP</th>
+              <th data-key="pdo" class="num" title="PDO, shooting percentage plus save percentage. Click to sort." aria-label="PDO, shooting percentage plus save percentage. Click to sort.">PDO</th>
+              <th data-key="l5pdo" class="num" title="PDO over the last five games. Click to sort." aria-label="PDO over the last five games. Click to sort.">Last 5 PDO</th>
+              <th data-key="b2bWinPct" class="num" title="Win percentage in back-to-back second games. Click to sort." aria-label="Win percentage in back-to-back second games. Click to sort.">B2B win %</th>
             </tr>
             <tr class="filters">
               <th><input data-filter="abbrev" placeholder="TOR"></th>
@@ -61,6 +65,10 @@
               <th><input data-filter="otl" placeholder=""></th>
               <th><input data-filter="ptsPct" placeholder=""></th>
               <th><input data-filter="goalDiff" placeholder=""></th>
+              <th><input data-filter="goalsP1" placeholder=">=5"></th>
+              <th><input data-filter="goalsP2" placeholder=""></th>
+              <th><input data-filter="goalsP3" placeholder=""></th>
+              <th><input data-filter="goalsOt" placeholder=""></th>
               <th><input data-filter="sogGp" placeholder=">=30"></th>
               <th><input data-filter="sogaGp" placeholder=""></th>
               <th><input data-filter="l5w" placeholder=">=3"></th>
@@ -79,7 +87,7 @@
     </section>
   </main>
   <footer>
-    <span>v1.9</span>
+    <span>v2.0</span>
   </footer>
   <script src="/js/dates.js"></script>
   <script src="/js/prefs.js"></script>

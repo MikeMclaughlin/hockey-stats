@@ -46,16 +46,16 @@
         <table id="review">
           <thead>
             <tr>
-              <th data-key="gameDate">Date</th>
-              <th data-key="awayAbbrev">Away</th>
-              <th data-key="homeAbbrev">Home</th>
-              <th data-key="projectedLabel">Locked estimate</th>
-              <th data-key="liveLabel">Current model</th>
-              <th data-key="actualLabel">Final</th>
-              <th data-key="verdict">Result</th>
-              <th data-key="winnerCorrect">Winner</th>
-              <th data-key="totalGoalsError" class="num">Total error</th>
-              <th data-key="marginError" class="num">Margin error</th>
+              <th data-key="gameDate" title="Game date and start time in Eastern Time. Click to sort." aria-label="Game date and start time in Eastern Time. Click to sort.">Date</th>
+              <th data-key="awayAbbrev" title="Away team. Click to sort." aria-label="Away team. Click to sort.">Away</th>
+              <th data-key="homeAbbrev" title="Home team. Click to sort." aria-label="Home team. Click to sort.">Home</th>
+              <th data-key="projectedLabel" title="Locked score estimate. Click to sort." aria-label="Locked score estimate. Click to sort.">Locked estimate</th>
+              <th data-key="liveLabel" title="Current score model. Click to sort." aria-label="Current score model. Click to sort.">Current model</th>
+              <th data-key="actualLabel" title="Final score. Click to sort." aria-label="Final score. Click to sort.">Final</th>
+              <th data-key="verdict" title="Exact, winner only, or miss. Click to sort." aria-label="Exact, winner only, or miss. Click to sort.">Result</th>
+              <th data-key="winnerCorrect" title="Whether the locked estimate picked the winner. Click to sort." aria-label="Whether the locked estimate picked the winner. Click to sort.">Winner</th>
+              <th data-key="totalGoalsError" class="num" title="Absolute error in total goals. Click to sort." aria-label="Absolute error in total goals. Click to sort.">Total error</th>
+              <th data-key="marginError" class="num" title="Absolute error in goal margin. Click to sort." aria-label="Absolute error in goal margin. Click to sort.">Margin error</th>
             </tr>
           </thead>
           <tbody></tbody>
@@ -73,19 +73,20 @@
         <li><strong>Total error</strong> — absolute difference between projected total goals and actual total goals.</li>
         <li><strong>Margin error</strong> — absolute difference between the projected goal margin (away minus home) and the actual margin.</li>
         <li><strong>Range</strong> — 2026-27 so far, or the last 7 days ending on the NHL scoreboard date. Counts use graded games in that range only. If none are graded, the accuracy line says no graded games yet.</li>
-        <li><strong>Edge vs market</strong> — the saved Edge pick (or the pick rebuilt from saved pre-game stats) against the saved moneyline favorite, and the locked total against the saved over/under. A toss-up (|Edge score| under 0.25) is not a firm pick. Games with neither a moneyline nor a total are left out and counted on their own.</li>
+        <li><strong>Edge vs market</strong> — the saved Edge pick (or the pick rebuilt from saved pre-game stats) against the saved moneyline favorite, and the locked total against the saved over/under. The card’s Toss-up label means the logistic win chance is under 55%. The previous Edge rule still leaves its own toss-up out of the firm-pick rate. Games with neither a moneyline nor a total are left out and counted on their own.</li>
         <li><strong>Lock</strong> — the estimate updates when the model changes until puck drop (start time). After that it stays put, even if the live projection moves. Review shows the locked score beside the current model. A row marked “locked ≠ live” was frozen earlier (for example on Sep 10) and the model has since moved.</li>
       </ul>
     </section>
   </main>
   <footer>
-    <span>v1.9</span>
+    <span>v2.0</span>
   </footer>
   <script src="/js/dates.js"></script>
   <script src="/js/prefs.js"></script>
   <script src="/js/loading.js"></script>
   <script src="/js/stats.js"></script>
   <script src="/js/archive.js"></script>
+  <script src="/js/edge-model.js"></script>
   <script src="/js/review.js"></script>
 </body>
 </html>

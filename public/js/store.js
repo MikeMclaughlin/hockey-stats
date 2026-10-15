@@ -26,7 +26,8 @@
     statsSeason: "stats-season.json",
     odds: "odds.json",
     scorers: "scorers-20262027.json",
-    liveBacktest: "backtest-20262027.json"
+    liveBacktest: "backtest-20262027.json",
+    periodGoals: "period-goals.json"
   };
 
   var lastWrite = { at: null, name: null, error: null };

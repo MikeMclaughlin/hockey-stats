@@ -23,6 +23,59 @@
     });
   }
 
+  function dateText(value) {
+    if (window.HockeyDates) return HockeyDates.formatTableDate(value);
+    return value || "";
+  }
+
+  function lineChart(row) {
+    var games = row.games;
+    if (!games || !games.length) {
+      var parts = String(row.line || "").split(",").map(function (s) { return s.trim(); }).filter(Boolean);
+      games = parts.map(function (value) { return { value: value, date: "" }; });
+    }
+    if (!games.length) return "";
+    var values = games.map(function (g) { return Number(g.value); }).map(function (n) { return isFinite(n) ? n : 0; });
+    var peak = Math.max.apply(null, values.concat([1]));
+    var yMax = Math.max(1, Math.ceil(peak - 1e-9));
+    var ticks = [];
+    if (yMax <= 6) {
+      for (var t = 0; t <= yMax; t++) ticks.push(t);
+    } else {
+      ticks = [0, Math.round(yMax / 2), yMax];
+    }
+    var barSlot = 28;
+    var padL = 22;
+    var padT = 6;
+    var plotH = 78;
+    var width = padL + 8 + games.length * barSlot;
+    var height = padT + plotH;
+    var barW = 18;
+    var parts = [];
+    parts.push("<svg class='streak-svg' width='" + width + "' height='" + height + "' viewBox='0 0 " + width + " " + height + "' role='img' aria-label='Games " + values.join(", ") + "'>");
+    ticks.forEach(function (tick) {
+      var y = padT + plotH - (tick / yMax) * plotH;
+      parts.push("<text class='streak-tick' x='16' y='" + (y + 3) + "' text-anchor='end'>" + tick + "</text>");
+      parts.push("<line class='streak-grid' x1='" + padL + "' y1='" + y + "' x2='" + (width - 4) + "' y2='" + y + "'></line>");
+    });
+    games.forEach(function (g, i) {
+      var value = values[i];
+      var h = Math.max(0, (value / yMax) * plotH);
+      var x = padL + i * barSlot + (barSlot - barW) / 2;
+      var y = padT + plotH - h;
+      parts.push("<rect class='streak-bar' x='" + x + "' y='" + y + "' width='" + barW + "' height='" + h + "' rx='2'></rect>");
+      var label = String(g.value);
+      var inside = h >= 14;
+      var ty = inside ? y + h / 2 + 4 : Math.max(10, y - 3);
+      parts.push("<text class='streak-val" + (inside ? " in" : "") + "' x='" + (x + barW / 2) + "' y='" + ty + "' text-anchor='middle'>" + label + "</text>");
+    });
+    parts.push("</svg>");
+    var from = games[0].date || row.from;
+    var to = games[games.length - 1].date || row.to;
+    var range = dateText(from) + " → " + dateText(to);
+    return "<div class='streak-chart'>" + parts.join("") + "<div class='streak-range'>" + range + "</div></div>";
+  }
+
   function tableHtml(block) {
     var rows = block.rows || [];
     var body = rows.length
@@ -35,9 +88,8 @@
             "<td class='num'>" + r.min + "</td>" +
             "<td class='num'>" + r.total + "</td>" +
             "<td class='num'>" + r.avg + "</td>" +
-            "<td>" + (window.HockeyDates ? HockeyDates.formatTableDate(r.from) : (r.from || "")) +
-              " → " + (window.HockeyDates ? HockeyDates.formatTableDate(r.to) : (r.to || "")) + "</td>" +
-            "<td>" + r.line + (r.incomplete ? " (incomplete)" : "") + "</td>" +
+            "<td>" + dateText(r.from) + " → " + dateText(r.to) + "</td>" +
+            "<td class='line-cell'>" + lineChart(r) + "</td>" +
             "</tr>";
         }).join("")
       : "<tr><td colspan='9' class='empty'>" + (block.emptyHint || "No players meet this streak.") + "</td></tr>";

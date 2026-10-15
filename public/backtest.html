@@ -55,31 +55,33 @@
         </select>
       </label>
     </div>
-    <p class="note" id="fav-note">Favorite is the club with the higher points percentage before the game. Historical moneylines are not in this file, so this is a standings proxy, not a betting line. A toss up is not a firm pick and is left out of both filters.</p>
+    <p class="note" id="fav-note">Favorite is the club with the higher points percentage before the game. Historical moneylines are not in this file, so this is a standings proxy, not a betting line. The previous Edge rule leaves its toss-up out of the favorite and underdog filters. The Toss-up label on a win chance means that chance is under 55%.</p>
     <section id="summary" class="summary"></section>
+    <p id="model-note" class="model-note"></p>
+    <section id="edge-splits" class="edge-splits"></section>
     <section class="board">
       <h2>Graded games <small id="shown" class="meta"></small></h2>
       <div class="table-wrap">
         <table id="bt">
           <thead>
             <tr>
-              <th data-key="gameDate">Date</th>
-              <th data-key="awayAbbrev">Away</th>
-              <th data-key="homeAbbrev">Home</th>
-              <th data-key="projectedLabel">Estimate</th>
-              <th data-key="actualLabel">Final</th>
-              <th data-key="verdict">Result</th>
-              <th data-key="awayPdo" class="num">Away PDO</th>
-              <th data-key="homePdo" class="num">Home PDO</th>
-              <th data-key="awayLast5" class="num">Away L5 GD</th>
-              <th data-key="homeLast5" class="num">Home L5 GD</th>
-              <th data-key="awayLast5Sv" class="num">Away L5 SV%</th>
-              <th data-key="homeLast5Sv" class="num">Home L5 SV%</th>
-              <th data-key="awayXgf5" class="num">Away 5v5 xGF%</th>
-              <th data-key="homeXgf5" class="num">Home 5v5 xGF%</th>
-              <th data-key="edgeAbbrev">Edge</th>
-              <th data-key="edgeRole">Side</th>
-              <th data-key="notes">Notes</th>
+              <th data-key="gameDate" title="Game date and start time in Eastern Time. Click to sort." aria-label="Game date and start time in Eastern Time. Click to sort.">Date</th>
+              <th data-key="awayAbbrev" title="Away team. Click to sort." aria-label="Away team. Click to sort.">Away</th>
+              <th data-key="homeAbbrev" title="Home team. Click to sort." aria-label="Home team. Click to sort.">Home</th>
+              <th data-key="projectedLabel" title="Walk-forward score estimate. Click to sort." aria-label="Walk-forward score estimate. Click to sort.">Estimate</th>
+              <th data-key="actualLabel" title="Final score. Click to sort." aria-label="Final score. Click to sort.">Final</th>
+              <th data-key="verdict" title="Exact, winner only, or miss. Click to sort." aria-label="Exact, winner only, or miss. Click to sort.">Result</th>
+              <th data-key="awayPdo" class="num" title="Away PDO before the game, shooting percentage plus save percentage. Click to sort." aria-label="Away PDO before the game, shooting percentage plus save percentage. Click to sort.">Away PDO</th>
+              <th data-key="homePdo" class="num" title="Home PDO before the game, shooting percentage plus save percentage. Click to sort." aria-label="Home PDO before the game, shooting percentage plus save percentage. Click to sort.">Home PDO</th>
+              <th data-key="awayLast5" class="num" title="Away last-five goal differential. Click to sort." aria-label="Away last-five goal differential. Click to sort.">Away L5 GD</th>
+              <th data-key="homeLast5" class="num" title="Home last-five goal differential. Click to sort." aria-label="Home last-five goal differential. Click to sort.">Home L5 GD</th>
+              <th data-key="awayLast5Sv" class="num" title="Away last-five save percentage. Click to sort." aria-label="Away last-five save percentage. Click to sort.">Away L5 SV%</th>
+              <th data-key="homeLast5Sv" class="num" title="Home last-five save percentage. Click to sort." aria-label="Home last-five save percentage. Click to sort.">Home L5 SV%</th>
+              <th data-key="awayXgf5" class="num" title="Away even-strength expected-goals share before the game. Click to sort." aria-label="Away even-strength expected-goals share before the game. Click to sort.">Away 5v5 xGF%</th>
+              <th data-key="homeXgf5" class="num" title="Home even-strength expected-goals share before the game. Click to sort." aria-label="Home even-strength expected-goals share before the game. Click to sort.">Home 5v5 xGF%</th>
+              <th data-key="edgeAbbrev" title="Saved Edge pick. Click to sort." aria-label="Saved Edge pick. Click to sort.">Edge</th>
+              <th data-key="edgeRole" title="Favorite or underdog by points percentage. Click to sort." aria-label="Favorite or underdog by points percentage. Click to sort.">Side</th>
+              <th data-key="notes" title="Rest, streak, and fatigue notes. Click to sort." aria-label="Rest, streak, and fatigue notes. Click to sort.">Notes</th>
             </tr>
             <tr class="filters">
               <th><input data-filter="gameDate" placeholder="contains"></th>
@@ -107,7 +109,7 @@
     </section>
   </main>
   <footer>
-    <span>v1.9</span>
+    <span>v2.0</span>
   </footer>
   <script src="/js/dates.js"></script>
   <script src="/js/prefs.js"></script>
@@ -115,6 +117,7 @@
   <script src="/js/stats.js"></script>
   <script src="/js/archive.js"></script>
   <script src="/js/table-filter.js"></script>
+  <script src="/js/edge-model.js"></script>
   <script src="/js/backtest-app.js"></script>
 </body>
 </html>

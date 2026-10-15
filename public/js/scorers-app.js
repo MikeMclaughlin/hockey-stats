@@ -199,6 +199,18 @@
     cols.push("<th data-key='goals' class='num'>Total</th>");
     cols.push("<th data-key='gpg' class='num'>Goals per game</th>");
     head.innerHTML = "<tr>" + cols.join("") + "</tr>";
+    head.querySelectorAll("th[data-key]").forEach(function (th) {
+      var key = th.getAttribute("data-key");
+      var text = "Click to sort.";
+      if (key === "name") text = "Player name. Click to sort.";
+      else if (key === "team") text = "Team. Click to sort.";
+      else if (key === "gp") text = "Games played. Click to sort.";
+      else if (key === "goals") text = "Total goals. Click to sort.";
+      else if (key === "gpg") text = "Goals per game. Click to sort.";
+      else if (key && key.charAt(0) === "g") text = "Goals in game " + key.slice(1) + ", from the player's first game. Click to sort.";
+      th.setAttribute("title", text);
+      th.setAttribute("aria-label", text);
+    });
     body.innerHTML = players.map(function (p) {
       var seq = p.goalsByGame || [];
       var games = "";

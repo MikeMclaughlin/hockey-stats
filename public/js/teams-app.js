@@ -5,9 +5,10 @@
   var NUMERIC = {
     wins: true, losses: true, otl: true, sogGp: true, sogaGp: true,
     l5w: true, l5l: true, l5ot: true, l5gfGp: true, l5gaGp: true,
-    ptsPct: true, goalDiff: true, pdo: true, l5pdo: true, b2bWinPct: true
+    ptsPct: true, goalDiff: true, pdo: true, l5pdo: true, b2bWinPct: true,
+    goalsP1: true, goalsP2: true, goalsP3: true, goalsOt: true
   };
-  var COLS = 16;
+  var COLS = 20;
 
   function $(id) { return document.getElementById(id); }
 
@@ -100,6 +101,10 @@
         numCell(r.otl, pre.record) +
         numCell(r.ptsPct, pre.ptsPct) +
         numCell(r.goalDiff, pre.goalDiff) +
+        numCell(r.goalsP1) +
+        numCell(r.goalsP2) +
+        numCell(r.goalsP3) +
+        numCell(r.goalsOt) +
         "<td class='num'>" + fmt(r.sogGp, 1) + preHtml(pre.sog) + "</td>" +
         "<td class='num'>" + fmt(r.sogaGp, 1) + preHtml(pre.sog) + "</td>" +
         numCell(r.l5w, pre.last5) +
