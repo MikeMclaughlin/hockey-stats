@@ -137,14 +137,6 @@
     return "<div>" + t.record + (t.preseason && t.preseason.record ? " " + preMark(true) : "") + "</div>";
   }
 
-  function edgeDetail(e) {
-    if (!e || e.measured == null || e.totalMeasures == null) return "";
-    var low = !!e.lowData;
-    var text = "based on " + e.measured + " of " + e.totalMeasures + " stats";
-    if (low) text += " · low data";
-    return "<span class=\"edge-meta" + (low ? " low" : "") + "\">" + text + "</span>";
-  }
-
   function modelOf(m) {
     if (!window.HockeyEdgeModel) return null;
     return HockeyEdgeModel.fromMatchup(m);
@@ -329,7 +321,6 @@
               labelTag(model) +
               edgeProbLine(m) +
               chipRow(model) +
-              edgeDetail(m.edge) +
               marketFlag(m) +
             "</div>" +
             oddsLine(m) +
