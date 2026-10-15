@@ -22,10 +22,10 @@ var xgLogMemory = Object.create(null);
 
 function productVersion() {
   try {
-    var parts = String(require("./package.json").version || "2.0.0").split(".");
-    return (parts[0] || "2") + "." + (parts[1] || "0");
+    var parts = String(require("./package.json").version || "2.0.1").split(".");
+    return (parts[0] || "2") + "." + (parts[1] || "0") + "." + (parts[2] || "0");
   } catch (e) {
-    return "2.0";
+    return "2.0.1";
   }
 }
 

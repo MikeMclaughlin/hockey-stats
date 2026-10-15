@@ -1,7 +1,8 @@
 (function () {
   "use strict";
 
-  var state = { data: null, sortKey: "pdo", sortDir: -1, filters: {} };
+  var state = { data: null, sortKey: "pdo", sortDir: -1, filters: {}, cardsExpanded: false };
+  var CARDS_KEY = "hs-cards-expanded";
 
   var SORT_FIELDS = [
     ["pdo", "PDO gap"],
@@ -345,7 +346,7 @@
             '<p class="card-row">' + edgeProbLine(m) + "</p>" +
             chipRow(model) +
           "</div>" +
-          '<details class="card-details">' +
+          '<details class="card-details"' + (state.cardsExpanded ? " open" : "") + ">" +
             "<summary>Details</summary>" +
             detailBlock(m, model) +
           "</details>" +
@@ -542,6 +543,7 @@
     renderCards(visibleRows());
     renderTable();
     syncSortControl();
+    syncCardsButton();
     armScores();
     document.querySelectorAll("#board tbody tr[data-game]").forEach(function (tr) {
       tr.style.cursor = "pointer";
@@ -762,12 +764,38 @@
     if (q.get("dir")) state.sortDir = Number(q.get("dir")) || 1;
   })();
 
+  function readStoredCards() {
+    try { return sessionStorage.getItem(CARDS_KEY) === "1"; }
+    catch (e) { return false; }
+  }
+
+  function writeStoredCards(open) {
+    try { sessionStorage.setItem(CARDS_KEY, open ? "1" : "0"); }
+    catch (e) {}
+  }
+
+  function syncCardsButton() {
+    var btn = $("cards-toggle");
+    if (btn) btn.textContent = state.cardsExpanded ? "Collapse all" : "Expand all";
+  }
+
   function saveBoardPrefs() {
     if (!window.HockeyPrefs) return;
     HockeyPrefs.patch("matchups", {
       sortKey: state.sortKey,
-      sortDir: state.sortDir
+      sortDir: state.sortDir,
+      cardsExpanded: !!state.cardsExpanded
     });
+  }
+
+  function setCardsExpanded(open) {
+    state.cardsExpanded = !!open;
+    document.querySelectorAll("#cards details.card-details").forEach(function (el) {
+      el.open = state.cardsExpanded;
+    });
+    syncCardsButton();
+    writeStoredCards(state.cardsExpanded);
+    saveBoardPrefs();
   }
 
   function applySavedSort() {
@@ -777,10 +805,15 @@
       if (saved) {
         if (!q.get("sort") && saved.sortKey) state.sortKey = saved.sortKey;
         if (!q.get("dir") && (saved.sortDir === 1 || saved.sortDir === -1)) state.sortDir = saved.sortDir;
+        if (saved.cardsExpanded) {
+          state.cardsExpanded = true;
+          writeStoredCards(true);
+        }
       }
     }
     fillSortControl();
     syncSortControl();
+    syncCardsButton();
     if (state.data) {
       renderCards(visibleRows());
       renderTable();
@@ -788,6 +821,8 @@
   }
 
   function startBoard() {
+    state.cardsExpanded = readStoredCards();
+    syncCardsButton();
     var cached = recallBoard();
     if (cached) render(cached);
     applySavedSort();
@@ -795,6 +830,8 @@
   }
 
   $("refresh").addEventListener("click", function () { load(true); });
+  var cardsBtn = $("cards-toggle");
+  if (cardsBtn) cardsBtn.addEventListener("click", function () { setCardsExpanded(!state.cardsExpanded); });
   var dirBtn = $("sort-dir");
   if (dirBtn) dirBtn.addEventListener("click", function () { applySort(state.sortKey, state.sortDir * -1); });
   var prevBtn = $("prev-date");

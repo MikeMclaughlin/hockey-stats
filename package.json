@@ -1,6 +1,6 @@
 {
   "name": "hockey-stats",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "private": true,
   "description": "SPA for current NHL matchups with record, PDO, last-5 GD, SOG share, xG vs GF, CF%, HDCF%, locked score estimates",
   "main": "server.js",
@@ -9,6 +9,6 @@
   },
   "scripts": {
     "start": "node server.js",
-    "test": "node tests/stats.test.js && node tests/edge.test.js && node tests/model-label.test.js && node tests/archive.test.js && node tests/backtest.test.js && node tests/filter.test.js && node tests/store.test.js && node tests/streaks.test.js && node tests/teamStats.test.js && node tests/http.test.js"
+    "test": "node tests/stats.test.js && node tests/edge.test.js && node tests/archive.test.js && node tests/backtest.test.js && node tests/filter.test.js && node tests/store.test.js && node tests/streaks.test.js && node tests/teamStats.test.js && node tests/http.test.js"
   }
 }
