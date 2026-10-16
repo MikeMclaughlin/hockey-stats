@@ -14,6 +14,7 @@
   var DATA = path.join(ROOT, "data");
   var PREFIX = "hockey-stats/";
   var WRITE_PROBE = "health-write-test.json";
+  var DEFAULT_CONTAINER = "hockey-stats";
 
   var KEYS = {
     estimates: "estimates.json",
@@ -31,9 +32,11 @@
   };
 
   var lastWrite = { at: null, name: null, error: null };
+  var containerPromise = null;
+  var containerKey = "";
 
   var BLOB_SETUP_HINT =
-    "Connect a private Vercel Blob store to the hockey-stats project (it sets BLOB_STORE_ID; @vercel/blob authenticates with the deployment OIDC token) or set BLOB_READ_WRITE_TOKEN. Either one enables Blob. The function filesystem is read-only until then.";
+    "Set AZURE_STORAGE_CONNECTION_STRING for a private Azure Blob Storage container (AZURE_STORAGE_CONTAINER, default hockey-stats, no public access). That enables blob storage. The function filesystem is read-only until then.";
 
   function loadEnvLocal() {
     var file = path.join(ROOT, ".env.local");
@@ -56,19 +59,18 @@
 
   loadEnvLocal();
 
-  function blobToken() {
-    return String(process.env.BLOB_READ_WRITE_TOKEN || "").trim();
+  function azureConnectionString() {
+    return String(process.env.AZURE_STORAGE_CONNECTION_STRING || "").trim();
   }
 
-  function blobStoreId() {
-    return String(process.env.BLOB_STORE_ID || "").trim();
+  function azureContainerName() {
+    return String(process.env.AZURE_STORAGE_CONTAINER || "").trim() || DEFAULT_CONTAINER;
   }
 
-  // token when BLOB_READ_WRITE_TOKEN is set (passed explicitly so it wins).
-  // oidc when only BLOB_STORE_ID is set. none uses the local file fallback.
+  // connection-string when AZURE_STORAGE_CONNECTION_STRING is set.
+  // none uses the local file fallback.
   function blobAuthMode() {
-    if (blobToken()) return "token";
-    if (blobStoreId()) return "oidc";
+    if (azureConnectionString()) return "connection-string";
     return "none";
   }
 
@@ -81,7 +83,7 @@
   }
 
   function storageMode() {
-    if (usesBlob()) return "blob";
+    if (usesBlob()) return "azure";
     if (onVercel()) return "readonly";
     return "local";
   }
@@ -89,16 +91,6 @@
   function blobHint() {
     if (usesBlob() || !onVercel()) return null;
     return BLOB_SETUP_HINT;
-  }
-
-  // @vercel/blob 2.8 resolveBlobAuth: an explicit token always wins.
-  // OIDC: pass storeId and omit token and oidcToken so the SDK reads and
-  // refreshes VERCEL_OIDC_TOKEN itself. A manually passed oidcToken is not refreshed.
-  function blobAuthOptions() {
-    var mode = blobAuthMode();
-    if (mode === "token") return { token: blobToken() };
-    if (mode === "oidc") return { storeId: blobStoreId() };
-    return {};
   }
 
   function localPath(name) {
@@ -123,13 +115,81 @@
     fs.writeFileSync(file, JSON.stringify(body, null, 2));
   }
 
-  function blobApi() {
-    return require("@vercel/blob");
+  function azureError(message, cause) {
+    var detail = cause ? String(cause.message || cause) : "";
+    var err = new Error(detail ? message + " " + detail : message);
+    if (cause && cause.code) err.code = cause.code;
+    else if (cause && cause.statusCode) err.code = cause.statusCode;
+    return err;
+  }
+
+  function openContainer() {
+    var connection = azureConnectionString();
+    if (!connection) {
+      return Promise.reject(azureError("AZURE_STORAGE_CONNECTION_STRING is not set."));
+    }
+    var BlobServiceClient;
+    try {
+      BlobServiceClient = require("@azure/storage-blob").BlobServiceClient;
+    } catch (e) {
+      return Promise.reject(azureError("Could not load @azure/storage-blob.", e));
+    }
+    var service;
+    try {
+      service = BlobServiceClient.fromConnectionString(connection);
+    } catch (e) {
+      return Promise.reject(azureError("AZURE_STORAGE_CONNECTION_STRING could not be used.", e));
+    }
+    var name = azureContainerName();
+    var container = service.getContainerClient(name);
+    return container.createIfNotExists().then(function () {
+      return container.getProperties();
+    }).then(function (props) {
+      if (props && props.blobPublicAccess) {
+        throw azureError(
+          "Azure container \"" + name + "\" has public access (" + props.blobPublicAccess + "). Create it as a private container with no public access."
+        );
+      }
+      return container;
+    }).catch(function (e) {
+      if (e && e.message && e.message.indexOf("public access") !== -1) throw e;
+      throw azureError(
+        "Azure container \"" + name + "\" could not be created or opened. Create a private container, or use a connection string that can create one.",
+        e
+      );
+    });
+  }
+
+  function containerClient() {
+    var key = azureConnectionString() + "\n" + azureContainerName();
+    if (!containerPromise || containerKey !== key) {
+      containerKey = key;
+      containerPromise = openContainer().catch(function (err) {
+        containerPromise = null;
+        containerKey = "";
+        throw err;
+      });
+    }
+    return containerPromise;
   }
 
   function streamToText(stream) {
     if (!stream) return Promise.resolve("");
-    if (typeof Response === "function") return new Response(stream).text();
+    if (typeof stream.getReader === "function") {
+      var reader = stream.getReader();
+      var chunks = [];
+      var pump = function () {
+        return reader.read().then(function (step) {
+          if (step.done) return Buffer.concat(chunks).toString("utf8");
+          chunks.push(Buffer.from(step.value));
+          return pump();
+        });
+      };
+      return pump();
+    }
+    if (typeof Response === "function" && typeof stream.getReader !== "function" && typeof stream.on !== "function") {
+      return new Response(stream).text();
+    }
     return new Promise(function (resolve, reject) {
       var chunks = [];
       stream.on("data", function (c) { chunks.push(Buffer.isBuffer(c) ? c : Buffer.from(c)); });
@@ -138,24 +198,54 @@
     });
   }
 
+  function isMissingBlob(err) {
+    if (!err) return false;
+    var status = err.statusCode || err.status;
+    return status === 404 || err.code === "BlobNotFound";
+  }
+
   async function readBlobBody(name) {
-    var api = blobApi();
-    var pathname = blobPath(name);
-    var got = await api.get(pathname, Object.assign({ access: "private", useCache: false }, blobAuthOptions()));
-    if (!got || got.statusCode === 404 || !got.stream) return null;
-    var text = await streamToText(got.stream);
-    if (!text) return null;
-    return JSON.parse(text);
+    var container = await containerClient();
+    var blob = container.getBlobClient(blobPath(name));
+    try {
+      var download = await blob.download(0);
+      var text = await streamToText(download.readableStreamBody || download.blobBody);
+      if (!text) return null;
+      return JSON.parse(text);
+    } catch (e) {
+      if (isMissingBlob(e)) return null;
+      throw e;
+    }
   }
 
   async function writeBlob(name, body) {
-    var api = blobApi();
-    return api.put(blobPath(name), JSON.stringify(body), Object.assign({
-      access: "private",
-      contentType: "application/json",
-      addRandomSuffix: false,
-      allowOverwrite: true
-    }, blobAuthOptions()));
+    var container = await containerClient();
+    var pathname = blobPath(name);
+    var payload = Buffer.from(JSON.stringify(body), "utf8");
+    var block = container.getBlockBlobClient(pathname);
+    var uploaded = await block.uploadData(payload, {
+      blobHTTPHeaders: { blobContentType: "application/json" }
+    });
+    return {
+      pathname: pathname,
+      url: block.url,
+      etag: uploaded && uploaded.etag
+    };
+  }
+
+  async function headBlob(name) {
+    var container = await containerClient();
+    var pathname = blobPath(name);
+    var blob = container.getBlobClient(pathname);
+    var meta = await blob.getProperties();
+    return {
+      pathname: pathname,
+      url: blob.url,
+      etag: meta && meta.etag,
+      lastModified: meta && meta.lastModified,
+      contentLength: meta && meta.contentLength,
+      contentType: meta && meta.contentType
+    };
   }
 
   function bundledRead(name, fallback, reason) {
@@ -215,9 +305,7 @@
     var probe = { probe: true, at: at, mode: mode };
     try {
       var putResult = await writeBlob(WRITE_PROBE, probe);
-      var headTarget = (putResult && putResult.url) || blobPath(WRITE_PROBE);
-      var api = blobApi();
-      var meta = await api.head(headTarget, blobAuthOptions());
+      var meta = await headBlob(WRITE_PROBE);
       var got = await readBlobBody(WRITE_PROBE);
       var headOk = !!(meta && (meta.pathname === blobPath(WRITE_PROBE) || meta.url));
       var readOk = !!(got && got.probe === true && got.at === at);
@@ -246,10 +334,7 @@
     KEYS: KEYS,
     BLOB_SETUP_HINT: BLOB_SETUP_HINT,
     loadEnvLocal: loadEnvLocal,
-    blobToken: blobToken,
-    blobStoreId: blobStoreId,
     blobAuthMode: blobAuthMode,
-    blobAuthOptions: blobAuthOptions,
     usesBlob: usesBlob,
     onVercel: onVercel,
     storageMode: storageMode,
@@ -269,11 +354,18 @@
         } catch (e) { return []; }
       }
       try {
-        var api = blobApi();
-        var listed = await api.list(Object.assign({ prefix: PREFIX, limit: 50 }, blobAuthOptions()));
-        return ((listed && listed.blobs) || []).map(function (b) {
-          return { name: b.pathname, uploadedAt: b.uploadedAt || null, source: "blob" };
-        });
+        var container = await containerClient();
+        var out = [];
+        for await (var item of container.listBlobsFlat({ prefix: PREFIX })) {
+          var modified = item.properties && item.properties.lastModified;
+          out.push({
+            name: item.name,
+            uploadedAt: modified ? new Date(modified).toISOString() : null,
+            source: "blob"
+          });
+          if (out.length >= 50) break;
+        }
+        return out;
       } catch (e) {
         return [{ name: "error", error: String(e.message || e), source: "blob" }];
       }

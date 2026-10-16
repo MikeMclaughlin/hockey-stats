@@ -188,7 +188,7 @@
     if (!rows.length) {
       var empty = state.rows.length
         ? "No estimates in this range."
-        : "No locked estimates yet. Open Matchups so today’s slate is saved. On Vercel that save needs BLOB_READ_WRITE_TOKEN or a connected Blob store (BLOB_STORE_ID).";
+        : "No locked estimates yet. Open Matchups so today’s slate is saved. On Vercel that save needs AZURE_STORAGE_CONNECTION_STRING.";
       tbody.innerHTML = '<tr><td colspan="10" class="empty">' + empty + "</td></tr>";
       return;
     }
