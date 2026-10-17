@@ -188,7 +188,16 @@
       stat(sum.pending, "pending") +
       stat(sum.exactPct == null ? "—" : sum.exactPct + "%", "exact") +
       stat(sum.winnerPct == null ? "—" : sum.winnerPct + "%", "winner");
-    showMeta("");
+  }
+
+  function metaLine(payload) {
+    var bits = [];
+    if (payload.statsSeasonLabel) bits.push("stats " + payload.statsSeasonLabel);
+    if (payload.scoreboardSeasonLabel) bits.push("scoreboard " + payload.scoreboardSeasonLabel);
+    if (payload.note) bits.push(payload.note);
+    if (payload.storageError) bits.push("not saved (" + payload.storage + ")");
+    else if (payload.persisted === false) bits.push("not saved");
+    return bits.join(" · ");
   }
 
   function renderTable() {
@@ -277,13 +286,11 @@
     renderAccuracy(shown);
     renderMarket(shown);
     renderSummary(HockeyArchive.summarize(shown));
+    showMeta(metaLine(payload));
     var warn = $("storage-note");
     if (warn) {
       if (payload.storageError) {
         warn.textContent = payload.storageError;
-        warn.classList.remove("hidden");
-      } else if (payload.persisted === false) {
-        warn.textContent = "Estimates were not saved.";
         warn.classList.remove("hidden");
       } else {
         warn.classList.add("hidden");

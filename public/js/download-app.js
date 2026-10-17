@@ -92,7 +92,8 @@
     head.innerHTML = COLS.map(function (col) {
       var sortKey = col.sort || col.key;
       var on = state.sortKey === sortKey ? (state.sortDir === 1 ? " sort-asc" : " sort-desc") : "";
-      return '<th data-key="' + sortKey + '" class="' + on.trim() + '" title="' + esc(col.title) + '">' + esc(col.label) + "</th>";
+      var cls = (on + (col.clip ? " clip" : "")).trim();
+      return '<th data-key="' + sortKey + '" class="' + cls + '" title="' + esc(col.title) + '">' + esc(col.label) + "</th>";
     }).join("");
     head.querySelectorAll("th").forEach(function (th) {
       th.addEventListener("click", function () {
@@ -115,7 +116,9 @@
       return "<tr>" + COLS.map(function (col) {
         var text = show(row, col);
         var cls = (col.num ? "num" : "") + (col.clip ? " clip" : "");
-        return "<td" + (cls ? " class='" + cls.trim() + "'" : "") + ">" + (text ? esc(text) : "—") + "</td>";
+        var title = col.clip && text ? " title=\"" + esc(text) + "\"" : "";
+        var inner = col.clip ? "<span>" + (text ? esc(text) : "—") + "</span>" : (text ? esc(text) : "—");
+        return "<td" + (cls ? " class='" + cls.trim() + "'" : "") + title + ">" + inner + "</td>";
       }).join("") + "</tr>";
     }).join("");
     paintHead();
@@ -133,7 +136,7 @@
     rows.forEach(function (row) {
       lines.push(COLS.map(function (col) { return csvCell(show(row, col)); }).join(","));
     });
-    var blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8" });
+    var blob = new Blob(["\uFEFF" + lines.join("\n")], { type: "text/csv;charset=utf-8" });
     var a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
     a.download = "hockey-stats-2026-27-matchups.csv";

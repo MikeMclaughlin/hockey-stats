@@ -1170,7 +1170,20 @@ button.user-menu-btn:focus-visible {
 .review-pills .summary:last-child {
   margin-bottom: 0.15rem;
 }
+#download {
+  width: max-content;
+  min-width: 100%;
+}
+#download th.clip,
 #download td.clip {
-  max-width: 22rem;
-  white-space: normal;
+  min-width: 18rem;
+  max-width: 26rem;
+  white-space: nowrap;
+}
+#download td.clip span {
+  display: block;
+  max-width: 26rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
