@@ -354,7 +354,7 @@
   /**
    * Plain-language reason the edge team leads this matchup.
    * side, when "away" or "home", is the Edge badge team. The clauses
-   * then describe that team. Omit side to keep the older winner.
+   * then describe that team, using only the three backtested shares.
    */
   function explainEdge(edge, away, home, side) {
     var named = side === "away" || side === "home";
@@ -362,17 +362,20 @@
     var pick = pickSide === "away" ? away : home;
     var other = pickSide === "away" ? home : away;
     var bits = [];
-    if (pick && other && pick.xgfPct5v5 != null && other.xgfPct5v5 != null) {
-      bits.push("even-strength expected-goals share " + pick.xgfPct5v5 + "% to " + other.xgfPct5v5 + "%");
+    function shareBit(label, key) {
+      if (!pick || !other || pick[key] == null || other[key] == null) return;
+      if (!isFinite(Number(pick[key])) || !isFinite(Number(other[key]))) return;
+      bits.push(label + " " + pick[key] + "% to " + other[key] + "%");
     }
-    bits.push("home ice");
-    if (other && other.b2b && pick && !pick.b2b) bits.push("the other side played last night");
-    if (pick && pick.pdo != null && pick.pdo > 102) bits.push("a high shooting-plus-save figure that may regress");
+    shareBit("even-strength expected-goals share", "xgfPct5v5");
+    shareBit("shots-on-goal share", "sogShare");
+    shareBit("shot-attempt share", "cfPct");
     var name = pick && pick.name ? pick.name : "The home team";
+    var clause = bits.length ? ": " + bits.join("; ") : "";
     if (!named && (!edge || edge.winner === "even")) {
-      return name + " is the lean on home ice" + (bits[0] ? " (" + bits[0] + ")" : "") + ".";
+      return name + " is the lean" + clause + ".";
     }
-    return name + " is the pick: " + bits.join("; ") + ".";
+    return name + " is the pick" + clause + ".";
   }
 
   /**
@@ -495,6 +498,8 @@
         gamesPlayed: 0,
         restDays: opts.restDays != null ? opts.restDays : null,
         b2b: opts.restDays === 1,
+        homeRecord: opts.homeRecord || null,
+        roadRecord: opts.roadRecord || null,
         preseason: opts.preseasonFlags || {}
       };
     }
@@ -538,6 +543,8 @@
       gamesPlayed: gp,
       restDays: opts.restDays != null ? opts.restDays : null,
       b2b: opts.restDays === 1,
+      homeRecord: opts.homeRecord || null,
+      roadRecord: opts.roadRecord || null,
       preseason: opts.preseasonFlags || {}
     };
   }
@@ -583,6 +590,8 @@
       gamesPlayed: fill.gamesPlayed || 0,
       restDays: fill.restDays != null ? fill.restDays : null,
       b2b: fill.restDays === 1,
+      homeRecord: opts.homeRecord || null,
+      roadRecord: opts.roadRecord || null,
       preseason: flags
     };
   }

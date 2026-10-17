@@ -1,8 +1,21 @@
 (function () {
   "use strict";
 
-  var state = { data: null, sortKey: "pdo", sortDir: -1, filters: {}, cardsExpanded: false };
+  var state = { data: null, sortKey: "pdo", sortDir: -1, filters: {}, cardsExpanded: false, featured: null };
   var CARDS_KEY = "hs-cards-expanded";
+  var STATS_KEY = "hs-card-stats";
+  var DEFAULT_FEATURED = ["sogShare", "xgfPct5v5", "cf"];
+  var CARD_STATS = [
+    { key: "sogShare", label: "Shots-on-goal share", kind: "sogShare", fmt: "pct", field: "sogShare", pre: "sogShare" },
+    { key: "xgfPct5v5", label: "Even-strength expected-goals share", kind: "xgf5v5", fmt: "pct", field: "xgfPct5v5" },
+    { key: "cf", label: "Shot-attempt share", kind: "cf", fmt: "pct", field: "cfPct" },
+    { key: "pdo", label: "Shooting plus save percentage", kind: "pdo", fmt: "plain", field: "pdo", pre: "pdo" },
+    { key: "last5Sv", label: "Save percentage last five games", kind: "last5Sv", fmt: "pct", field: "last5SvPct", pre: "last5Sv" },
+    { key: "last5", label: "Average goal differential last five games", kind: "last5", fmt: "signed2", field: "last5AvgGd", pre: "last5" },
+    { key: "xgDiff", label: "Actual goals versus expected goals", kind: "xgDiff", fmt: "signed1", field: "gfMinusXg" },
+    { key: "hdcf", label: "High-danger chance share", kind: "hdcf", fmt: "pct", field: "hdcfPct" },
+    { key: "stXg", label: "Special-teams expected goals", kind: "stXg", fmt: "signed1", field: "stXg" }
+  ];
 
   var SORT_FIELDS = [
     ["pdo", "PDO gap"],
@@ -62,18 +75,56 @@
     return "<span class=\"pre\" title=\"" + String(label).replace(/"/g, "") + "\">pre</span>";
   }
 
-  function pill(label, value, kind, fmt, pre) {
-    fmt = fmt || function (v) { return v == null ? "—" : String(v); };
-    var sign = HockeyStats.pillSign(value, kind);
-    var cls = "pill" + (sign ? " " + sign : "");
-    var title = PILL_TITLES[kind] || label;
-    if (pre) title += " " + ((state.data && state.data.preseasonLabel) || "2026-27 preseason") + ".";
-    return (
-      '<div class="' + cls + '" title="' + title.replace(/"/g, "&quot;") + '">' +
-        '<span class="lab">' + label + (pre ? " " + preMark(true) : "") + "</span>" +
-        '<span class="val">' + fmt(value) + "</span>" +
-      "</div>"
-    );
+  function signedText(n, digits) {
+    if (n == null || !isFinite(Number(n))) return "—";
+    var v = HockeyStats.round(Number(n), digits == null ? 1 : digits);
+    return (v > 0 ? "+" : "") + v;
+  }
+
+  function statText(spec, value) {
+    if (value == null || !isFinite(Number(value))) return "—";
+    if (spec.fmt === "pct") return value + "%";
+    if (spec.fmt === "signed2") return signedText(value, 2);
+    if (spec.fmt === "signed1") return signedText(value, 1);
+    return String(value);
+  }
+
+  function readFeatured() {
+    try {
+      var raw = localStorage.getItem(STATS_KEY);
+      if (raw == null) return DEFAULT_FEATURED.slice();
+      var list = JSON.parse(raw);
+      if (!Array.isArray(list)) return DEFAULT_FEATURED.slice();
+      var known = {};
+      CARD_STATS.forEach(function (s) { known[s.key] = true; });
+      return list.filter(function (k) { return known[k]; });
+    } catch (e) {
+      return DEFAULT_FEATURED.slice();
+    }
+  }
+
+  function writeFeatured(keys) {
+    state.featured = keys.slice();
+    try { localStorage.setItem(STATS_KEY, JSON.stringify(state.featured)); }
+    catch (e) {}
+  }
+
+  function featuredKeys() {
+    if (!state.featured) state.featured = readFeatured();
+    return state.featured;
+  }
+
+  function isDefaultFeatured(keys) {
+    if (!keys || keys.length !== DEFAULT_FEATURED.length) return false;
+    var set = {};
+    keys.forEach(function (k) { set[k] = true; });
+    return DEFAULT_FEATURED.every(function (k) { return set[k]; });
+  }
+
+  function statsByKeys(keys) {
+    var want = {};
+    (keys || []).forEach(function (k) { want[k] = true; });
+    return CARD_STATS.filter(function (s) { return want[s.key]; });
   }
 
   function am(n) {
@@ -122,21 +173,6 @@
       partner + " moneyline</span>";
   }
 
-  function teamPills(t) {
-    var pre = t.preseason || {};
-    return (
-      '<div class="pills">' +
-        pill("Shooting plus save percentage", t.pdo, "pdo", null, pre.pdo) +
-        pill("Shots-on-goal share", t.sogShare, "sogShare", function (v) { return v == null ? "—" : v + "%"; }, pre.sogShare) +
-        pill("Save percentage last five games", t.last5SvPct, "last5Sv", function (v) { return v == null ? "—" : v + "%"; }, pre.last5Sv) +
-      "</div>"
-    );
-  }
-
-  function recordLine(t) {
-    return "<div>" + t.record + (t.preseason && t.preseason.record ? " " + preMark(true) : "") + "</div>";
-  }
-
   function modelOf(m) {
     if (!window.HockeyEdgeModel) return null;
     return HockeyEdgeModel.fromMatchup(m);
@@ -161,22 +197,71 @@
     return '<span class="score-num">' + num + "</span>" + status;
   }
 
-  function cardScoreInner(m) {
-    var s = m.scoreboard || {};
-    if (s.away == null || s.home == null || !(s.live || s.final)) return "";
-    var num = esc(m.away.abbrev) + " " + s.away + " – " + s.home + " " + esc(m.home.abbrev);
-    var label = "Final";
-    var tail = "";
+  function hyphenRecord(value) {
+    return String(value || "").replace(/–/g, "-").replace(/—/g, "-");
+  }
+
+  function shortTeam(t) {
+    var name = (t && t.name) || "";
+    var two = ["Blue Jackets", "Red Wings", "Maple Leafs", "Golden Knights"];
+    for (var i = 0; i < two.length; i++) {
+      if (name.slice(-two[i].length) === two[i]) return two[i];
+    }
+    var parts = name.split(" ");
+    if (parts.length > 1) return parts[parts.length - 1];
+    return name || (t && t.abbrev) || "";
+  }
+
+  function recordCaption(t, venue) {
+    var overall = hyphenRecord(t && t.record);
+    var splitRaw = venue === "Away" ? (t && t.roadRecord) : (t && t.homeRecord);
+    var split = hyphenRecord(splitRaw);
+    var pre = t && t.preseason && t.preseason.record ? " " + preMark(true) : "";
+    if (!overall && !split) return "";
+    if (split) return "(" + overall + ", " + split + " " + venue + ")" + pre;
+    return "(" + overall + ")" + pre;
+  }
+
+  function clockText(s) {
+    if (!s) return "";
     if (s.final) {
       var status = s.status ? String(s.status) : "Final";
-      if (status.indexOf("Final") === 0) label = status;
-      else tail = status;
-    } else {
-      label = "Live";
-      if (s.status) tail = String(s.status);
+      return status.indexOf("Final") === 0 ? status : "Final";
     }
-    return '<span class="score-num">' + esc(label) + ": " + num + "</span>" +
-      (tail ? '<span class="score-status">' + esc(tail) + "</span>" : "");
+    if (!s.live) return "";
+    var live = s.status ? String(s.status) : "";
+    if (live.toLowerCase().indexOf("intermission") !== -1) return live;
+    if (s.clock && s.period) return s.clock + " - " + s.period;
+    if (s.clock) return s.clock;
+    if (s.period) return s.period;
+    return live || "Live";
+  }
+
+  function scoreTeamRow(t, venue, goals, showGoals) {
+    var logo = t.logo ? '<img src="' + esc(t.logo) + '" alt="">' : "";
+    var goalsHtml = showGoals ? '<div class="score-goals">' + esc(goals) + "</div>" : "";
+    return (
+      '<div class="score-team">' +
+        logo +
+        '<div class="score-meta">' +
+          '<div class="score-name">' + esc(shortTeam(t)) + "</div>" +
+          '<div class="score-rec">' + recordCaption(t, venue) + "</div>" +
+        "</div>" +
+        goalsHtml +
+      "</div>"
+    );
+  }
+
+  function cardScoreInner(m) {
+    var s = m.scoreboard || {};
+    var show = s.away != null && s.home != null && (s.live || s.final);
+    var clock = clockText(s);
+    var clockHtml = clock
+      ? '<p class="score-clock' + (s.final ? " is-final" : "") + '">' + esc(clock) + "</p>"
+      : "";
+    return clockHtml +
+      scoreTeamRow(m.away, "Away", show ? s.away : "", show) +
+      scoreTeamRow(m.home, "Home", show ? s.home : "", show);
   }
 
   function edgeBadge(m) {
@@ -285,17 +370,33 @@
     return bits.join(" · ");
   }
 
-  function extraPills(t) {
-    var pre = t.preseason || {};
+  function statCell(spec, team) {
+    var value = team ? team[spec.field] : null;
+    var pre = spec.pre && team && team.preseason && team.preseason[spec.pre];
+    var sign = HockeyStats.pillSign(value, spec.kind);
+    var cls = sign || "neutral";
+    var title = PILL_TITLES[spec.kind] || spec.label;
+    if (pre) title += " " + ((state.data && state.data.preseasonLabel) || "2026-27 preseason") + ".";
+    var text = statText(spec, value);
+    if (pre && text !== "—") text += " " + "pre";
+    return '<td class="val ' + cls + '" title="' + esc(title) + '">' +
+      (pre && text !== "—" ? statText(spec, value) + " " + preMark(true) : esc(text)) +
+      "</td>";
+  }
+
+  function statTable(rows, away, home, headLabel) {
+    if (!rows.length) return "";
+    var body = rows.map(function (spec) {
+      return "<tr><td class='stat-label'>" + esc(spec.label) + "</td>" +
+        statCell(spec, away) + statCell(spec, home) + "</tr>";
+    }).join("");
     return (
-      '<div class="pills">' +
-        pill("Average goal differential last five games", t.last5AvgGd, "last5", function (v) { return signed(v, 2); }, pre.last5) +
-        pill("Actual goals versus expected goals", t.gfMinusXg, "xgDiff", function (v) { return signed(v, 1); }, false) +
-        pill("Shot-attempt share", t.cfPct, "cf", function (v) { return v == null ? "—" : v + "%"; }) +
-        pill("High-danger chance share", t.hdcfPct, "hdcf", function (v) { return v == null ? "—" : v + "%"; }) +
-        pill("Even-strength expected-goals share", t.xgfPct5v5, "xgf5v5", function (v) { return v == null ? "—" : v + "%"; }) +
-        pill("Special-teams expected goals", t.stXg, "stXg", function (v) { return signed(v, 1); }) +
-      "</div>"
+      '<table class="stat-table">' +
+        "<thead><tr>" +
+          "<th>" + headLabel + "</th>" +
+          "<th class='val'>" + esc(away.abbrev || "Away") + "</th>" +
+          "<th class='val'>" + esc(home.abbrev || "Home") + "</th>" +
+        "</tr></thead><tbody>" + body + "</tbody></table>"
     );
   }
 
@@ -311,14 +412,31 @@
       var why = model && (model.pick === "away" || model.pick === "home")
         ? HockeyStats.explainEdge(m.edge, m.away, m.home, model.pick)
         : (m.why || HockeyStats.explainEdge(m.edge, m.away, m.home));
+      var picked = featuredKeys();
+      var featured = statsByKeys(picked);
+      var rest = CARD_STATS.filter(function (s) {
+        return picked.indexOf(s.key) === -1;
+      });
+      var head = isDefaultFeatured(picked)
+        ? '<span class="stat-kicker">Top-three stats</span><span class="backtested">Backtested</span>'
+        : '<span class="stat-kicker">Selected stats</span>';
+      var more = rest.length
+        ? '<details class="more-stats"' + (state.cardsExpanded ? " open" : "") + ">" +
+            "<summary>More stats</summary>" +
+            statTable(rest, m.away, m.home, '<span class="stat-kicker">Stat</span>') +
+          "</details>"
+        : "";
       return (
         '<article class="card" id="game-' + m.id + '">' +
           '<div class="card-head">' +
             '<div class="head-top">' +
               "<span>" + esc(fmtTime(m.startTimeUTC)) +
                 (m.gameTypeLabel ? " · " + esc(m.gameTypeLabel) : "") + "</span>" +
-              '<span class="proj">Est. ' + esc(m.away.abbrev) + " " + proj.away + " – " + proj.home + " " + esc(m.home.abbrev) + "</span>" +
-              '<span class="score-line" data-score="' + m.id + '">' + cardScoreInner(m) + "</span>" +
+            "</div>" +
+            '<p class="est-row"><span class="est-label">Est.</span> ' +
+              esc(m.away.abbrev) + " " + proj.away + " – " + proj.home + " " + esc(m.home.abbrev) + "</p>" +
+            '<div class="score-block" data-score="' + m.id + '">' + cardScoreInner(m) + "</div>" +
+            '<div class="pick-row">' +
               edgeBadge(m) +
               labelTag(model) +
               edgeProbLine(m) +
@@ -328,33 +446,12 @@
             oddsLine(m) +
             '<p class="result-line" data-result="' + m.id + '">' + resultInner(m) + "</p>" +
             '<p class="why">' + esc(why) + "</p>" +
+            notesLine(m) +
           "</div>" +
-          '<div class="sides">' +
-            '<div class="col">' +
-              '<div class="team away">' +
-                (m.away.logo ? '<img src="' + esc(m.away.logo) + '" alt="">' : "") +
-                "<div><h3>" + esc(m.away.name) + "</h3>" + recordLine(m.away) + "</div>" +
-              "</div>" +
-              teamPills(m.away) +
-            "</div>" +
-            '<div class="vs">@</div>' +
-            '<div class="col">' +
-              '<div class="team home">' +
-                (m.home.logo ? '<img src="' + esc(m.home.logo) + '" alt="">' : "") +
-                "<div><h3>" + esc(m.home.name) + "</h3>" + recordLine(m.home) + "</div>" +
-              "</div>" +
-              teamPills(m.home) +
-            "</div>" +
+          '<div class="card-stats">' +
+            statTable(featured, m.away, m.home, head) +
+            more +
           "</div>" +
-          '<details class="more-stats"' + (state.cardsExpanded ? " open" : "") + ">" +
-            "<summary>Average goal differential, actual versus expected goals, shot-attempt share, high-danger chances, and expected goals</summary>" +
-            '<div class="sides more-sides">' +
-              '<div class="col">' + extraPills(m.away) + "</div>" +
-              '<div class="vs"></div>' +
-              '<div class="col">' + extraPills(m.home) + "</div>" +
-            "</div>" +
-          "</details>" +
-          notesLine(m) +
         "</article>"
       );
     }).join("");
@@ -825,6 +922,33 @@
     }
   }
 
+  function closeChoose() {
+    var panel = $("choose-stats-panel");
+    var btn = $("choose-stats");
+    if (panel) panel.hidden = true;
+    if (btn) btn.setAttribute("aria-expanded", "false");
+  }
+
+  function fillChooseStats() {
+    var panel = $("choose-stats-panel");
+    if (!panel || panel.childNodes.length) return;
+    var keys = featuredKeys();
+    panel.innerHTML = CARD_STATS.map(function (spec) {
+      var on = keys.indexOf(spec.key) !== -1 ? " checked" : "";
+      return "<label><input type='checkbox' data-stat='" + spec.key + "'" + on + "> " + esc(spec.label) + "</label>";
+    }).join("");
+    panel.addEventListener("change", function (e) {
+      var box = e.target;
+      if (!box || !box.getAttribute || !box.getAttribute("data-stat")) return;
+      var next = [];
+      panel.querySelectorAll("input[data-stat]").forEach(function (inp) {
+        if (inp.checked) next.push(inp.getAttribute("data-stat"));
+      });
+      writeFeatured(next);
+      if (state.data) renderCards(visibleRows());
+    });
+  }
+
   function startBoard() {
     state.cardsExpanded = readStoredCards();
     syncCardsButton();
@@ -833,6 +957,28 @@
     applySavedSort();
     load(false);
   }
+
+  fillChooseStats();
+  var chooseBtn = $("choose-stats");
+  if (chooseBtn) {
+    chooseBtn.addEventListener("click", function () {
+      var panel = $("choose-stats-panel");
+      if (!panel) return;
+      var willOpen = panel.hidden;
+      if (willOpen) {
+        panel.hidden = false;
+        chooseBtn.setAttribute("aria-expanded", "true");
+      } else closeChoose();
+    });
+  }
+  document.addEventListener("click", function (e) {
+    var wrap = document.querySelector(".choose-stats");
+    if (!wrap || wrap.contains(e.target)) return;
+    closeChoose();
+  });
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape") closeChoose();
+  });
 
   $("refresh").addEventListener("click", function () { load(true); });
   var cardsBtn = $("cards-toggle");
