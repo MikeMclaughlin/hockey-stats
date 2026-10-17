@@ -6,6 +6,7 @@ var fs = require("fs");
 var path = require("path");
 var { URL } = require("url");
 var stats = require("./public/js/stats.js");
+var dates = require("./public/js/dates.js");
 var edgeModel = require("./public/js/edge-model.js");
 var archive = require("./public/js/archive.js");
 var backtest = require("./public/js/backtest.js");
@@ -23,13 +24,13 @@ var xgLogMemory = Object.create(null);
 
 function productVersion() {
   try {
-    var parts = String(require("./package.json").version || "2.1").split(".");
+    var parts = String(require("./package.json").version || "2.2").split(".");
     var major = parts[0] || "2";
     var minor = parts[1] || "0";
     if (parts.length < 3 || parts[2] === "") return major + "." + minor;
     return major + "." + minor + "." + parts[2];
   } catch (e) {
-    return "2.1";
+    return "2.2";
   }
 }
 
@@ -436,6 +437,15 @@ function sameSeasonRow(row, seasonId) {
   return row;
 }
 
+function venueSplit(stand, prefix) {
+  if (!stand) return null;
+  var w = stand[prefix + "Wins"];
+  var l = stand[prefix + "Losses"];
+  var o = stand[prefix + "OtLosses"];
+  if (w == null && l == null && o == null) return null;
+  return stats.recordString(Number(w) || 0, Number(l) || 0, Number(o) || 0);
+}
+
 async function readStatsSeasonLock() {
   if (statsSeasonMemory && statsSeasonMemory.locked && Number(statsSeasonMemory.statsSeason) >= LIVE_STATS_SEASON) {
     return statsSeasonMemory;
@@ -776,12 +786,15 @@ async function buildMatchups(date) {
     var fill = rec.gamesPlayed ? null : preseasonFill(ab);
     var flags = {};
     if (!fill && restFromPre && rest != null) flags.rest = true;
+    var standRow = sameSeasonRow(standMap[ab], statsSeason);
     var p = stats.buildTeamProfile({
       abbrev: ab,
       name: meta.name || (teamObj.name && teamObj.name.default) || ab,
       logo: teamObj.logo,
-      stand: alignStand(sameSeasonRow(standMap[ab], statsSeason), sameSeasonRow(sumMap[ab], statsSeason)),
+      stand: alignStand(standRow, sameSeasonRow(sumMap[ab], statsSeason)),
       summary: sameSeasonRow(sumMap[ab], statsSeason) || {},
+      homeRecord: venueSplit(standRow, "home"),
+      roadRecord: venueSplit(standRow, "road"),
       moneypuck: mp[ab] || {},
       last5: last5Map[ab],
       last5SvPct: rec.gamesPlayed ? last5Save(ab, false) : null,
@@ -1289,7 +1302,7 @@ async function gradeEstimates() {
   return graded;
 }
 
-var CRON_SCHEDULES = ["0 4 * * *", "0 13 * * *", "0 21 * * *"];
+var CRON_SCHEDULES = ["0 4 * * *"];
 var CRON_AUTH_HINT = "Set CRON_SECRET on the Vercel project and send Authorization: Bearer <CRON_SECRET>. Vercel Cron adds that header automatically.";
 
 function cronSecret() {
@@ -2718,6 +2731,14 @@ function handleApi(req, res, url) {
     });
     return true;
   }
+  if (pathname === "/api/download") {
+    downloadPayload()
+      .then(function (body) { sendJson(res, 200, body); })
+      .catch(function (err) {
+        sendJson(res, 502, { error: String(err.message || err), rows: [] });
+      });
+    return true;
+  }
   if (pathname === "/api/estimates") {
     var gradeOnRead = url.searchParams.get("grade") === "1";
     var loadEstimatesView = gradeOnRead
@@ -2736,6 +2757,247 @@ function handleApi(req, res, url) {
     return true;
   }
   return false;
+}
+
+function filled(primary, fallback) {
+  if (primary != null && primary !== "") return primary;
+  if (fallback != null && fallback !== "") return fallback;
+  return null;
+}
+
+function inDownloadSeason(row) {
+  if (!row) return false;
+  var season = row.seasonId != null ? row.seasonId : row.season;
+  if (String(season) === LIVE_BACKTEST_SEASON) return true;
+  var day = String(row.gameDate || "");
+  return day >= "2026-09-01" && day < "2027-07-01";
+}
+
+function splitWhen(gameDate, startTimeUTC) {
+  var date = dates.formatTableDate(gameDate);
+  var time = "";
+  if (startTimeUTC) {
+    var full = String(dates.formatTableDate(startTimeUTC));
+    var m = full.match(/\s(\d{2}:\d{2}\s+\S+)$/);
+    if (m) time = m[1];
+  }
+  return { date: date === "—" ? "" : date, time: time };
+}
+
+function btSide(row, side) {
+  if (!row) return {};
+  var p = side === "away" ? "away" : "home";
+  return {
+    pdo: row[p + "Pdo"],
+    last5AvgGd: row[p + "Last5"],
+    last5SvPct: row[p + "Last5Sv"],
+    sogShare: row[p + "Sog"],
+    gfMinusXg: row[p + "XgDiff"],
+    cfPct: row[p + "Cf"],
+    hdcfPct: row[p + "Hdcf"],
+    xgfPct5v5: row[p + "Xgf5"],
+    stXg: row[p + "StXg"],
+    last5XgfPct: row[p + "Last5Xgf"],
+    b2b: !!row[p + "B2B"],
+    ptsPct: row[p + "PtsPct"],
+    goalDiff: row[p + "Gd"],
+    restDays: row[p + "Rest"]
+  };
+}
+
+function downloadProfile(abbrev, pills, snap) {
+  pills = pills || {};
+  snap = snap || {};
+  var meta = stats.teamByAbbrev(abbrev) || {};
+  return {
+    abbrev: abbrev,
+    name: meta.name || abbrev,
+    record: pills.record || null,
+    pdo: filled(snap.pdo, pills.pdo),
+    last5AvgGd: filled(snap.last5AvgGd, pills.last5AvgGd),
+    last5SvPct: filled(snap.last5SvPct, pills.last5SvPct),
+    sogShare: filled(snap.sogShare, pills.sogShare),
+    gfMinusXg: filled(snap.gfMinusXg, pills.gfMinusXg),
+    cfPct: filled(snap.cfPct, pills.cfPct),
+    hdcfPct: filled(snap.hdcfPct, pills.hdcfPct),
+    xgfPct5v5: filled(snap.xgfPct5v5, pills.xgfPct5v5),
+    stXg: filled(snap.stXg, pills.stXg),
+    last5XgfPct: filled(snap.last5XgfPct, pills.last5XgfPct),
+    b2b: !!(snap.b2b || pills.restDays === 1),
+    ptsPct: filled(snap.ptsPct, pills.ptsPct),
+    goalDiff: filled(snap.goalDiff, pills.goalDiff),
+    restDays: filled(snap.restDays, pills.restDays)
+  };
+}
+
+function scorePair(awayAbbrev, homeAbbrev, awayGoals, homeGoals) {
+  if (awayGoals == null || homeGoals == null) return "";
+  return awayAbbrev + " " + awayGoals + " – " + homeGoals + " " + homeAbbrev;
+}
+
+function oddsText(odds, awayAbbrev, homeAbbrev) {
+  if (!odds || (odds.awayMl == null && odds.homeMl == null && odds.total == null)) return "";
+  var bits = [];
+  if (odds.awayMl != null || odds.homeMl != null) {
+    bits.push("Moneyline " + awayAbbrev + " " + stats.formatAmerican(odds.awayMl) +
+      " · " + homeAbbrev + " " + stats.formatAmerican(odds.homeMl));
+  }
+  if (odds.total != null) bits.push("Over/under " + odds.total);
+  if (odds.partner) bits.push(odds.partner);
+  return bits.join(" · ");
+}
+
+function downloadResult(estAway, estHome, actAway, actHome, edgePick, toss, awayAbbrev, homeAbbrev) {
+  if (actAway == null || actHome == null) return "";
+  var bits = [];
+  if (estAway == null || estHome == null) bits.push("No saved estimate");
+  else {
+    bits.push("Estimate " + estAway + "–" + estHome + " vs actual " + actAway + "–" + actHome);
+    if (Number(estAway) === Number(actAway) && Number(estHome) === Number(actHome)) bits.push("exact score");
+    else {
+      var same = archive.winnerOf(Number(estAway), Number(estHome)) === archive.winnerOf(Number(actAway), Number(actHome));
+      bits.push(same ? "winner right" : "winner wrong");
+    }
+  }
+  if (!edgePick) bits.push("No saved Edge pick");
+  else if (toss) bits.push("Toss-up, no firm pick");
+  else {
+    var actualWinner = archive.winnerOf(Number(actAway), Number(actHome));
+    var edgeSide = edgePick === awayAbbrev ? "away" : edgePick === homeAbbrev ? "home" : null;
+    if (!edgeSide || !actualWinner || actualWinner === "tie") bits.push("Edge pick " + edgePick + " not graded");
+    else bits.push("Edge pick " + edgePick + (edgeSide === actualWinner ? " was right" : " was wrong"));
+  }
+  return bits.join(" · ");
+}
+
+function downloadRow(team, side, shared) {
+  return {
+    id: shared.id,
+    when: shared.when,
+    timeSort: shared.timeSort,
+    matchup: shared.matchup,
+    date: shared.date,
+    time: shared.time,
+    team: team.abbrev,
+    teamName: team.name,
+    side: side,
+    record: team.record || "",
+    pdo: team.pdo,
+    last5SvPct: team.last5SvPct,
+    last5AvgGd: team.last5AvgGd,
+    gfMinusXg: team.gfMinusXg,
+    sogShare: team.sogShare,
+    cfPct: team.cfPct,
+    hdcfPct: team.hdcfPct,
+    xgfPct5v5: team.xgfPct5v5,
+    stXg: team.stXg,
+    estimatedScore: shared.estimatedScore,
+    actualScore: shared.actualScore,
+    edgePick: shared.edgePick,
+    edgeLabel: shared.edgeLabel,
+    winChance: shared.winChance,
+    why: shared.why,
+    notes: shared.notes,
+    odds: shared.odds,
+    result: shared.result
+  };
+}
+
+async function downloadPayload() {
+  var bt = await readServedBacktest(LIVE_BACKTEST_SEASON);
+  var est = await loadEstimates();
+  var arch = await store.readJson(store.KEYS.matchupArchive, archive.emptyStore());
+  var oddsStore = await store.readJson(store.KEYS.odds, { byId: {} });
+  var byId = Object.create(null);
+  ((bt && bt.rows) || []).forEach(function (row) {
+    if (!row || row.id == null) return;
+    byId[String(row.id)] = { bt: row };
+  });
+  function slot(id) {
+    var key = String(id);
+    if (!byId[key]) byId[key] = {};
+    return byId[key];
+  }
+  Object.keys((arch && arch.byId) || {}).forEach(function (id) {
+    var row = arch.byId[id];
+    if (!inDownloadSeason(row)) return;
+    slot(id).arch = row;
+  });
+  Object.keys((est && est.byId) || {}).forEach(function (id) {
+    var row = est.byId[id];
+    if (!inDownloadSeason(row)) return;
+    slot(id).est = row;
+  });
+  var games = Object.keys(byId).map(function (id) {
+    var pack = byId[id];
+    var btRow = pack.bt || null;
+    var archRow = pack.arch || null;
+    var estRow = pack.est || null;
+    var awayAbbrev = (btRow && btRow.awayAbbrev) || (archRow && archRow.awayAbbrev) || (estRow && estRow.awayAbbrev) || "";
+    var homeAbbrev = (btRow && btRow.homeAbbrev) || (archRow && archRow.homeAbbrev) || (estRow && estRow.homeAbbrev) || "";
+    if (!awayAbbrev || !homeAbbrev) return null;
+    var away = downloadProfile(awayAbbrev, archRow && archRow.awayPills, btSide(btRow, "away"));
+    var home = downloadProfile(homeAbbrev, archRow && archRow.homePills, btSide(btRow, "home"));
+    var gameDate = (btRow && btRow.gameDate) || (archRow && archRow.gameDate) || (estRow && estRow.gameDate) || "";
+    var start = (btRow && btRow.startTimeUTC) || (archRow && archRow.startTimeUTC) || (estRow && estRow.startTimeUTC) || "";
+    var when = splitWhen(gameDate, start);
+    var estAway = filled(btRow && btRow.projectedAway, filled(archRow && archRow.estimatedAway, estRow && estRow.projectedAway));
+    var estHome = filled(btRow && btRow.projectedHome, filled(archRow && archRow.estimatedHome, estRow && estRow.projectedHome));
+    var actAway = filled(btRow && btRow.actualAway, estRow && estRow.actualAway);
+    var actHome = filled(btRow && btRow.actualHome, estRow && estRow.actualHome);
+    var storedPick = filled(btRow && btRow.edgeAbbrev, estRow && estRow.edgeAbbrev) || "";
+    var toss = !!(btRow && btRow.edgeTossUp) || !!(estRow && estRow.edgeTossUp);
+    var edge = stats.matchupEdge(away, home);
+    var storedSide = storedPick === awayAbbrev ? "away" : storedPick === homeAbbrev ? "home" : null;
+    var model = null;
+    try {
+      model = edgeModel.fromMatchup({
+        away: away,
+        home: home,
+        projected: { away: estAway, home: estHome },
+        edge: edge,
+        gameDate: gameDate
+      });
+    } catch (e) { model = null; }
+    var pickSide = model && (model.pick === "away" || model.pick === "home") ? model.pick : storedSide;
+    var edgePick = pickSide === "away" ? awayAbbrev : pickSide === "home" ? homeAbbrev : storedPick;
+    var why = stats.explainEdge(edge, away, home, pickSide || undefined);
+    var winPct = model && pickSide ? (pickSide === "away" ? model.awayProb : model.homeProb) : null;
+    var odds = (archRow && archRow.odds) || ((oddsStore.byId || {})[id]) || null;
+    if (!odds && btRow && btRow.openingAwayMl != null) {
+      odds = { awayMl: btRow.openingAwayMl, homeMl: btRow.openingHomeMl, total: btRow.openingTotal };
+    }
+    var shared = {
+      id: id,
+      when: (gameDate || "") + " " + (start || ""),
+      timeSort: when.time || "",
+      matchup: awayAbbrev + "-" + homeAbbrev,
+      date: when.date,
+      time: when.time,
+      estimatedScore: scorePair(awayAbbrev, homeAbbrev, estAway, estHome),
+      actualScore: scorePair(awayAbbrev, homeAbbrev, actAway, actHome),
+      edgePick: edgePick,
+      edgeLabel: model && model.pick === pickSide ? model.label : "",
+      winChance: winPct == null ? "" : edgePick + " " + winPct + "%",
+      why: why,
+      notes: (btRow && btRow.notes) || "",
+      odds: oddsText(odds, awayAbbrev, homeAbbrev),
+      result: downloadResult(estAway, estHome, actAway, actHome, storedPick, toss, awayAbbrev, homeAbbrev)
+    };
+    return [downloadRow(away, "Away", shared), downloadRow(home, "Home", shared)];
+  }).filter(Boolean);
+  var rows = [];
+  games.sort(function (a, b) {
+    return String(a[0].when).localeCompare(String(b[0].when)) || String(a[0].matchup).localeCompare(String(b[0].matchup));
+  });
+  games.forEach(function (pair) { rows.push(pair[0], pair[1]); });
+  return {
+    season: LIVE_BACKTEST_SEASON,
+    seasonLabel: formatSeason(LIVE_BACKTEST_SEASON),
+    generatedAt: new Date().toISOString(),
+    games: rows.length / 2,
+    rows: rows
+  };
 }
 
 function requestUrl(req) {
@@ -2768,6 +3030,7 @@ function routeKey(pathname) {
   if (p === "/streaks" || p === "/api/streaks") return "/api/streaks";
   if (p === "/teams" || p === "/api/teams") return "/api/teams";
   if (p === "/api/estimates/grade") return "/api/estimates/grade";
+  if (p === "/api/download") return "/api/download";
   if (p === "/estimates" || p === "/api/estimates") return "/api/estimates";
   return p;
 }

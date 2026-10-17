@@ -31,6 +31,10 @@
         </div>
         <button type="button" id="refresh">Refresh</button>
         <button type="button" id="cards-toggle">Expand all</button>
+        <div class="choose-stats">
+          <button type="button" id="choose-stats" aria-expanded="false" aria-controls="choose-stats-panel">Choose stats</button>
+          <div id="choose-stats-panel" class="choose-stats-panel" hidden></div>
+        </div>
         <label class="sort-control">Sort
           <select id="sort-key" aria-label="Sort matchups"></select>
         </label>
@@ -120,7 +124,7 @@
     </section>
   </main>
   <footer>
-    <span>v2.1</span>
+    <span>v2.2</span>
   </footer>
   <script src="/js/dates.js"></script>
   <script src="/js/prefs.js"></script>

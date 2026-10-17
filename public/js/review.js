@@ -169,17 +169,35 @@
       modelLine;
   }
 
-  function renderSummary(sum, extra) {
-    extra = extra || "";
+  function showMeta(text) {
+    var el = $("meta");
+    if (!el) return;
+    if (text) {
+      el.hidden = false;
+      el.textContent = text;
+    } else {
+      el.textContent = "";
+      el.hidden = true;
+    }
+  }
+
+  function renderSummary(sum) {
     $("summary").innerHTML =
       stat(sum.total, "locked") +
       stat(sum.graded, "graded") +
       stat(sum.pending, "pending") +
       stat(sum.exactPct == null ? "—" : sum.exactPct + "%", "exact") +
       stat(sum.winnerPct == null ? "—" : sum.winnerPct + "%", "winner");
-    $("meta").textContent = sum.total + " estimates · exact " +
-      (sum.exactPct == null ? "—" : sum.exactPct + "%") + " · winner " +
-      (sum.winnerPct == null ? "—" : sum.winnerPct + "%") + extra;
+  }
+
+  function metaLine(payload) {
+    var bits = [];
+    if (payload.statsSeasonLabel) bits.push("stats " + payload.statsSeasonLabel);
+    if (payload.scoreboardSeasonLabel) bits.push("scoreboard " + payload.scoreboardSeasonLabel);
+    if (payload.note) bits.push(payload.note);
+    if (payload.storageError) bits.push("not saved (" + payload.storage + ")");
+    else if (payload.persisted === false) bits.push("not saved");
+    return bits.join(" · ");
   }
 
   function renderTable() {
@@ -239,7 +257,7 @@
   }
 
   function showLoadError(message) {
-    $("meta").textContent = "Could not load estimates";
+    showMeta("Could not load estimates");
     var warn = $("storage-note");
     if (warn) {
       warn.textContent = message;
@@ -264,16 +282,11 @@
     state.payload = payload;
     state.rows = payload.estimates || [];
     state.asOf = payload.asOf || state.asOf;
-    var extra = "";
-    if (payload.statsSeasonLabel) extra += " · stats " + payload.statsSeasonLabel;
-    if (payload.scoreboardSeasonLabel) extra += " · scoreboard " + payload.scoreboardSeasonLabel;
-    if (payload.note) extra += " · " + payload.note;
-    if (payload.storageError) extra += " · not saved (" + payload.storage + ")";
-    else if (payload.persisted === false) extra += " · not saved";
     var shown = ranged();
     renderAccuracy(shown);
     renderMarket(shown);
-    renderSummary(HockeyArchive.summarize(shown), extra);
+    renderSummary(HockeyArchive.summarize(shown));
+    showMeta(metaLine(payload));
     var warn = $("storage-note");
     if (warn) {
       if (payload.storageError) {
@@ -320,7 +333,7 @@
   }
 
   function load() {
-    if (!state.rows.length) $("meta").textContent = "Loading…";
+    if (!state.rows.length) showMeta("Loading…");
     if (window.HockeyLoading) HockeyLoading.show();
     Promise.all([
       fetch("/api/estimates?grade=1").then(readEstimates),
@@ -352,13 +365,13 @@
   });
 
   $("grade").addEventListener("click", function () {
-    if (!state.rows.length) $("meta").textContent = "Grading…";
+    if (!state.rows.length) showMeta("Grading…");
     if (window.HockeyLoading) HockeyLoading.show();
     fetch("/api/estimates/grade", { method: "POST" })
       .then(function (r) {
         return r.json().then(function (body) {
           if (r.status === 401 || r.status === 403) {
-            $("meta").textContent = "Manual grading needs an admin sign-in. Opening this page still grades the finals.";
+            showMeta("Manual grading needs an admin sign-in. Opening this page still grades the finals.");
             return;
           }
           if (!r.ok || (body && body.error)) {
@@ -367,7 +380,7 @@
           render(body);
         }, function () {
           if (r.status === 401 || r.status === 403) {
-            $("meta").textContent = "Manual grading needs an admin sign-in. Opening this page still grades the finals.";
+            showMeta("Manual grading needs an admin sign-in. Opening this page still grades the finals.");
             return;
           }
           throw new Error(r.ok ? "Invalid response" : ("HTTP " + r.status));
