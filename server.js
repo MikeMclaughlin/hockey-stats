@@ -1370,6 +1370,16 @@ async function runScheduledUpdate() {
     status.scorersError = String(e.message || e);
   }
   try {
+    var trendsStarted = Date.now();
+    var trendsBody = await buildTeamTrends(true);
+    status.trends = {
+      teams: trendsBody && trendsBody.teams ? trendsBody.teams.length : 0,
+      ms: Date.now() - trendsStarted
+    };
+  } catch (e) {
+    status.trendsError = String(e.message || e);
+  }
+  try {
     await store.writeJson(store.KEYS.cronStatus, status);
   } catch (e) {
     status.statusWriteError = String(e.message || e);
@@ -1667,19 +1677,16 @@ async function loadTeamXgLog(abbrev, year) {
   return xgLogMemory[key];
 }
 
-var TRENDS_FRESH_MS = 15 * 60 * 1000;
 var TRENDS_CACHE_VERSION = 2;
 var MP_ALL_TEAMS_CSV = "https://moneypuck.com/moneypuck/playerData/careers/gameByGame/all_teams.csv";
 var REGULAR_SEASON_GAME_ID = /^2\d{3}02\d{4}$/;
 var trendsInflight = null;
 
-function trendsCacheFresh(cache, currentSeason, previousSeason) {
+function trendsCacheUsable(cache, currentSeason, previousSeason) {
   if (!cache || Number(cache.version) !== TRENDS_CACHE_VERSION) return false;
   if (String(cache.currentSeason) !== String(currentSeason)) return false;
   if (String(cache.previousSeason) !== String(previousSeason)) return false;
-  if (!cache.teams || !cache.updatedAt) return false;
-  var age = Date.now() - Date.parse(cache.updatedAt);
-  if (!isFinite(age) || age < 0 || age >= TRENDS_FRESH_MS) return false;
+  if (!cache.teams) return false;
   return stats.TEAMS.every(function (t) {
     var games = cache.teams[t.abbrev] && cache.teams[t.abbrev].games;
     return games && games.length >= 40;
@@ -1847,80 +1854,187 @@ function csvNum(cols, index) {
   return isFinite(value) ? value : 0;
 }
 
-function parseMoneyPuckTrendCsv(text, years) {
+function openMoneyPuckStream(urlStr, attempt) {
+  attempt = attempt || 1;
+  return new Promise(function (resolve, reject) {
+    var req = https.get(urlStr, {
+      headers: { "User-Agent": "hockey-stats/1.9", Accept: "*/*" }
+    }, function (up) {
+      if (up.statusCode >= 300 && up.statusCode < 400 && up.headers.location) {
+        up.resume();
+        var next = up.headers.location;
+        if (next.indexOf("http") !== 0) {
+          var base = new URL(urlStr);
+          next = new URL(next, base).href;
+        }
+        openMoneyPuckStream(next, attempt).then(resolve, reject);
+        return;
+      }
+      if (up.statusCode === 429 && attempt < 5) {
+        up.resume();
+        var wait = Number(up.headers["retry-after"]);
+        if (!isFinite(wait) || wait < 1) wait = Math.min(60, 3 * attempt);
+        setTimeout(function () {
+          openMoneyPuckStream(urlStr, attempt + 1).then(resolve, reject);
+        }, wait * 1000);
+        return;
+      }
+      if (up.statusCode !== 200) {
+        up.resume();
+        reject(new Error("HTTP " + up.statusCode + " " + urlStr));
+        return;
+      }
+      resolve(up);
+    });
+    req.on("error", reject);
+  });
+}
+
+function streamMoneyPuckTrendIndex(years) {
   var needles = [];
   Object.keys(years).forEach(function (year) {
     if (year && year !== "NaN") needles.push("," + year + ",");
   });
-  var lineEnd = text.indexOf("\n");
-  var header = (lineEnd < 0 ? text : text.slice(0, lineEnd)).replace(/\r$/, "").split(",");
-  var idx = Object.create(null);
-  header.forEach(function (name, i) { idx[name] = i; });
-  var required = [
-    "team", "season", "gameId", "gameDate", "situation",
-    "xGoalsFor", "xGoalsAgainst", "shotsOnGoalFor", "shotsOnGoalAgainst",
-    "shotAttemptsFor", "shotAttemptsAgainst"
-  ];
-  for (var r = 0; r < required.length; r++) {
-    if (idx[required[r]] == null) throw new Error("MoneyPuck all_teams.csv is missing " + required[r]);
+  var started = Date.now();
+  var startRss = process.memoryUsage().rss;
+  var startHeap = process.memoryUsage().heapUsed;
+  var peakRss = startRss;
+  var peakHeap = startHeap;
+  function noteMem() {
+    var usage = process.memoryUsage();
+    if (usage.rss > peakRss) peakRss = usage.rss;
+    if (usage.heapUsed > peakHeap) peakHeap = usage.heapUsed;
   }
-  var byId = Object.create(null);
-  var byDate = Object.create(null);
-  var rows = 0;
-  var pos = lineEnd < 0 ? text.length : lineEnd + 1;
-  var iSf = idx.shotsOnGoalFor;
-  var iSa = idx.shotsOnGoalAgainst;
-  var iCf = idx.shotAttemptsFor;
-  var iCa = idx.shotAttemptsAgainst;
-  var iXf = idx.xGoalsFor;
-  var iXa = idx.xGoalsAgainst;
-  while (pos < text.length) {
-    var next = text.indexOf("\n", pos);
-    if (next < 0) next = text.length;
-    var line = text.slice(pos, next);
-    pos = next + 1;
-    if (!line) continue;
-    var keep = false;
-    for (var n = 0; n < needles.length; n++) {
-      if (line.indexOf(needles[n]) >= 0) { keep = true; break; }
-    }
-    if (!keep) continue;
-    if (line.indexOf(",all,") < 0 && line.indexOf(",5on5,") < 0) continue;
-    if (line.charCodeAt(line.length - 1) === 13) line = line.slice(0, -1);
-    var cols = line.split(",");
-    var season = cols[idx.season];
-    if (!years[season]) continue;
-    var sit = cols[idx.situation];
-    if (sit !== "all" && sit !== "5on5") continue;
-    var id = cols[idx.gameId];
-    if (!REGULAR_SEASON_GAME_ID.test(id)) continue;
-    var team = cols[idx.team];
-    if (!team) continue;
-    var key = team + ":" + id;
-    var row = byId[key];
-    if (!row) {
-      var date = String(cols[idx.gameDate] || "");
-      row = byId[key] = { date: date };
-      rows += 1;
-      var dateKey = team + ":" + date;
-      var other = byDate[dateKey];
-      if (!other) byDate[dateKey] = row;
-      else if (other !== row) {
-        other.dateClash = true;
-        row.dateClash = true;
+  return openMoneyPuckStream(MP_ALL_TEAMS_CSV).then(function (up) {
+    return new Promise(function (resolve, reject) {
+      var pending = "";
+      var header = null;
+      var failed = false;
+      var byId = Object.create(null);
+      var byDate = Object.create(null);
+      var rows = 0;
+      var iTeam = 0;
+      var iSeason = 0;
+      var iId = 0;
+      var iDate = 0;
+      var iSit = 0;
+      var iSf = 0;
+      var iSa = 0;
+      var iCf = 0;
+      var iCa = 0;
+      var iXf = 0;
+      var iXa = 0;
+
+      function takeLine(line) {
+        if (!line) return;
+        if (line.charCodeAt(line.length - 1) === 13) line = line.slice(0, -1);
+        if (!header) {
+          header = line.split(",");
+          var idx = Object.create(null);
+          header.forEach(function (name, i) { idx[name] = i; });
+          var required = [
+            "team", "season", "gameId", "gameDate", "situation",
+            "xGoalsFor", "xGoalsAgainst", "shotsOnGoalFor", "shotsOnGoalAgainst",
+            "shotAttemptsFor", "shotAttemptsAgainst"
+          ];
+          for (var r = 0; r < required.length; r++) {
+            if (idx[required[r]] == null) throw new Error("MoneyPuck all_teams.csv is missing " + required[r]);
+          }
+          iTeam = idx.team;
+          iSeason = idx.season;
+          iId = idx.gameId;
+          iDate = idx.gameDate;
+          iSit = idx.situation;
+          iSf = idx.shotsOnGoalFor;
+          iSa = idx.shotsOnGoalAgainst;
+          iCf = idx.shotAttemptsFor;
+          iCa = idx.shotAttemptsAgainst;
+          iXf = idx.xGoalsFor;
+          iXa = idx.xGoalsAgainst;
+          return;
+        }
+        var yearHit = false;
+        for (var n = 0; n < needles.length; n++) {
+          if (line.indexOf(needles[n]) >= 0) { yearHit = true; break; }
+        }
+        if (!yearHit) return;
+        if (line.indexOf(",all,") < 0 && line.indexOf(",5on5,") < 0) return;
+        var cols = line.split(",");
+        var season = cols[iSeason];
+        if (!years[season]) return;
+        var sit = cols[iSit];
+        if (sit !== "all" && sit !== "5on5") return;
+        var id = cols[iId];
+        if (!REGULAR_SEASON_GAME_ID.test(id)) return;
+        var team = cols[iTeam];
+        if (!team) return;
+        var key = team + ":" + id;
+        var row = byId[key];
+        if (!row) {
+          var date = String(cols[iDate] || "");
+          row = byId[key] = { date: date };
+          rows += 1;
+          var dateKey = team + ":" + date;
+          var other = byDate[dateKey];
+          if (!other) byDate[dateKey] = row;
+          else if (other !== row) {
+            other.dateClash = true;
+            row.dateClash = true;
+          }
+        }
+        if (sit === "all") {
+          row.mSf = Math.round(csvNum(cols, iSf));
+          row.mSa = Math.round(csvNum(cols, iSa));
+          row.mCf = Math.round(csvNum(cols, iCf));
+          row.mCa = Math.round(csvNum(cols, iCa));
+        } else {
+          row.x5f = Math.round(csvNum(cols, iXf) * 10000) / 10000;
+          row.x5a = Math.round(csvNum(cols, iXa) * 10000) / 10000;
+        }
       }
-    }
-    if (sit === "all") {
-      row.mSf = Math.round(csvNum(cols, iSf));
-      row.mSa = Math.round(csvNum(cols, iSa));
-      row.mCf = Math.round(csvNum(cols, iCf));
-      row.mCa = Math.round(csvNum(cols, iCa));
-    } else {
-      row.x5f = Math.round(csvNum(cols, iXf) * 10000) / 10000;
-      row.x5a = Math.round(csvNum(cols, iXa) * 10000) / 10000;
-    }
-  }
-  return { byId: byId, byDate: byDate, rows: rows };
+
+      up.on("data", function (chunk) {
+        if (failed) return;
+        try {
+          noteMem();
+          pending += chunk.toString("utf8");
+          var nl = pending.indexOf("\n");
+          while (nl >= 0) {
+            var line = pending.slice(0, nl);
+            pending = pending.slice(nl + 1);
+            takeLine(line);
+            nl = pending.indexOf("\n");
+          }
+          noteMem();
+        } catch (err) {
+          failed = true;
+          up.destroy();
+          reject(err);
+        }
+      });
+      up.on("end", function () {
+        if (failed) return;
+        try {
+          if (pending) takeLine(pending);
+          noteMem();
+          if (!header) throw new Error("MoneyPuck all_teams.csv had no header");
+          resolve({
+            byId: byId,
+            byDate: byDate,
+            rows: rows,
+            ms: Date.now() - started,
+            startRss: startRss,
+            startHeap: startHeap,
+            peakRss: peakRss,
+            peakHeap: peakHeap
+          });
+        } catch (err) {
+          reject(err);
+        }
+      });
+      up.on("error", reject);
+    });
+  });
 }
 
 function trendCountRow(index, abbrev, game) {
@@ -1967,8 +2081,16 @@ async function loadMoneyPuckTrendIndex(currentSeason, previousSeason) {
   var years = Object.create(null);
   years[mpSeasonYear(currentSeason)] = true;
   years[mpSeasonYear(previousSeason)] = true;
-  var text = await getText(MP_ALL_TEAMS_CSV);
-  return parseMoneyPuckTrendCsv(text, years);
+  var index = await streamMoneyPuckTrendIndex(years);
+  console.log(
+    "team trends MoneyPuck rows " + index.rows +
+    " ms " + index.ms +
+    " rssStart " + index.startRss +
+    " rssPeak " + index.peakRss +
+    " heapStart " + index.startHeap +
+    " heapPeak " + index.peakHeap
+  );
+  return index;
 }
 
 async function buildTeamTrendsInner(refresh) {
@@ -1977,7 +2099,9 @@ async function buildTeamTrendsInner(refresh) {
   var cache = null;
   try { cache = await store.readJson(store.KEYS.teamTrends, null); }
   catch (e) { cache = null; }
-  if (!refresh && trendsCacheFresh(cache, currentSeason, previousSeason)) {
+  // A page request serves the saved cache. The 127 MB MoneyPuck file is
+  // rebuilt on cron and on ?refresh=1, which each have their own 60s limit.
+  if (!refresh && trendsCacheUsable(cache, currentSeason, previousSeason)) {
     return trendsPayloadFromCache(cache);
   }
   var mpPromise = loadMoneyPuckTrendIndex(currentSeason, previousSeason).catch(function (err) {
@@ -2003,7 +2127,6 @@ async function buildTeamTrendsInner(refresh) {
   });
   var mpIndex = await mpPromise;
   if (mpIndex && mpIndex.rows > 0) {
-    console.log("team trends MoneyPuck rows " + mpIndex.rows);
     stats.TEAMS.forEach(function (team) {
       var saved = teams[team.abbrev];
       if (saved) attachTrendCounts(saved.games, team.abbrev, mpIndex);

@@ -21,8 +21,10 @@
   // Share stats use the same situation split as public/js/stats.js:
   // shots-on-goal share and shot-attempt share are all situations;
   // even-strength expected-goals share is 5-on-5. Each share is
-  // sum(for) / (sum(for) + sum(against)) over the games in the span.
-  // A span with any game missing that count is null.
+  // sum(for) / (sum(for) + sum(against)) over the games in the span
+  // that have a MoneyPuck count. Games without one are skipped.
+  // The span is still the full NHL log through the cutoff. A share is
+  // null only when none of those games have a count.
 
   var AGO = [1, 5, 10, 15, 20];
 
@@ -40,15 +42,17 @@
   function pairShare(games, forKey, againstKey) {
     var f = 0;
     var a = 0;
+    var used = 0;
     for (var i = 0; i < games.length; i++) {
       var game = games[i];
       var fv = game[forKey];
       var av = game[againstKey];
-      if (fv == null || av == null || !isFinite(Number(fv)) || !isFinite(Number(av))) return null;
+      if (fv == null || av == null || !isFinite(Number(fv)) || !isFinite(Number(av))) continue;
       f += Number(fv);
       a += Number(av);
+      used += 1;
     }
-    if (!(f + a > 0)) return null;
+    if (!used || !(f + a > 0)) return null;
     return round(f / (f + a), 3);
   }
 
@@ -111,8 +115,9 @@
       "Shots-on-goal share is shots on goal for divided by shots for plus shots against, all situations. " +
       "Even-strength expected-goals share is 5-on-5 expected goals for divided by 5-on-5 expected goals for plus against. " +
       "Shot-attempt share is shot attempts for divided by shot attempts for plus against, all situations. " +
-      "Each share is the season-to-date total of those counts, not an average of single-game shares. " +
-      "A share is n/a when MoneyPuck has no count for any game in that span. " +
+      "Each share sums those counts over the games in that span that MoneyPuck has published, not an average of single-game shares. " +
+      "A share is n/a only when that span has no MoneyPuck game. " +
+      "MoneyPuck can lag the NHL log by a game. " +
       "Current is the " + currentLabel + " regular season to date. " +
       "1, 5, 10, 15, and 20 games ago are that same season-to-date rate through the game that many games before the team’s most recent regular-season game. " +
       "The count spans the " + previousLabel + " and " + currentLabel + " regular seasons when this season is shorter; the rate uses only games from the season that cutoff game belongs to. " +
