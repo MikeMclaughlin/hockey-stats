@@ -402,11 +402,18 @@
 
   var TOP_THREE_KEYS = { sogShare: true, xgfPct5v5: true, cf: true };
 
+  function presentStat(team, spec) {
+    if (!team) return null;
+    var raw = team[spec.field];
+    if (raw == null || raw === "") return null;
+    var n = Number(raw);
+    return isFinite(n) ? n : null;
+  }
+
   function leadsStat(team, opp, spec) {
-    if (!team || !opp) return false;
-    var a = Number(team[spec.field]);
-    var b = Number(opp[spec.field]);
-    if (!isFinite(a) || !isFinite(b)) return false;
+    var a = presentStat(team, spec);
+    var b = presentStat(opp, spec);
+    if (a == null || b == null) return false;
     return a > b;
   }
 
@@ -427,9 +434,14 @@
   function renderTakeList(matchups) {
     var el = $("take-list");
     if (!el) return;
+    var games = matchups || [];
     var top = CARD_STATS.filter(function (spec) { return TOP_THREE_KEYS[spec.key]; });
     var lines = [];
-    (matchups || []).forEach(function (m) {
+    games.forEach(function (m) {
+      var comparable = top.concat(CARD_STATS).every(function (spec) {
+        return presentStat(m.away, spec) != null && presentStat(m.home, spec) != null;
+      });
+      if (!comparable) return;
       if (leadsEvery(m.away, m.home, top) && leadsEvery(m.away, m.home, CARD_STATS)) {
         lines.push(takeLine(m.away, m, "away"));
       }
@@ -437,9 +449,11 @@
         lines.push(takeLine(m.home, m, "home"));
       }
     });
-    var body = lines.length
-      ? "<ul>" + lines.map(function (line) { return "<li>" + esc(line) + "</li>"; }).join("") + "</ul>"
-      : "<p class=\"take-empty\">No team leads in both</p>";
+    var body = !games.length
+      ? "<p class=\"take-empty\">No games</p>"
+      : lines.length
+        ? "<ul>" + lines.map(function (line) { return "<li>" + esc(line) + "</li>"; }).join("") + "</ul>"
+        : "<p class=\"take-empty\">No team leads in both</p>";
     el.hidden = false;
     el.innerHTML = "<h2>Teams to take</h2>" + body;
   }
