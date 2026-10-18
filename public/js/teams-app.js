@@ -95,7 +95,7 @@
     $("teams").querySelector("tbody").innerHTML = rows.map(function (r) {
       var pre = r.preseason || {};
       return "<tr data-team='" + r.abbrev + "'>" +
-        "<td>" + r.abbrev + "</td>" +
+        "<td class='team-col'>" + r.abbrev + "</td>" +
         numCell(r.wins, pre.record) +
         numCell(r.losses, pre.record) +
         numCell(r.otl, pre.record) +

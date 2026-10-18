@@ -33,11 +33,11 @@
   <main>
     <p id="note" class="note hidden"></p>
     <section class="board">
-      <div class="table-wrap">
+      <div class="table-wrap scroll-port">
         <table id="teams">
           <thead>
             <tr>
-              <th data-key="abbrev" title="Team abbreviation. Click to sort." aria-label="Team abbreviation. Click to sort.">Team</th>
+              <th data-key="abbrev" class="team-col" title="Team abbreviation. Click to sort." aria-label="Team abbreviation. Click to sort.">Team</th>
               <th data-key="wins" class="num" title="Wins. Click to sort." aria-label="Wins. Click to sort.">W</th>
               <th data-key="losses" class="num" title="Losses. Click to sort." aria-label="Losses. Click to sort.">L</th>
               <th data-key="otl" class="num" title="Overtime losses. Click to sort." aria-label="Overtime losses. Click to sort.">OTL</th>
@@ -59,7 +59,7 @@
               <th data-key="b2bWinPct" class="num" title="Win percentage in back-to-back second games. Click to sort." aria-label="Win percentage in back-to-back second games. Click to sort.">B2B win %</th>
             </tr>
             <tr class="filters">
-              <th><input data-filter="abbrev" placeholder="TOR"></th>
+              <th class="team-col"><input data-filter="abbrev" placeholder="TOR"></th>
               <th><input data-filter="wins" placeholder=">=10"></th>
               <th><input data-filter="losses" placeholder=""></th>
               <th><input data-filter="otl" placeholder=""></th>
@@ -87,7 +87,7 @@
     </section>
   </main>
   <footer>
-    <span>v2.2</span>
+    <span>v2.3</span>
   </footer>
   <script src="/js/dates.js"></script>
   <script src="/js/prefs.js"></script>
