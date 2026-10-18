@@ -17,6 +17,16 @@
   // Win % is wins / games played. A win is any game the team outscored the
   // opponent, including overtime and shootouts. Overtime and shootout losses
   // are not wins, so they count as losses. Ties are not wins.
+  //
+  // Share stats use the same situation split as public/js/stats.js:
+  // shots-on-goal share and shot-attempt share are all situations;
+  // even-strength expected-goals share is 5-on-5. Each share is
+  // sum(for) / (sum(for) + sum(against)) over the games in the span
+  // that have a MoneyPuck count. Games without one are skipped.
+  // The span is still the full NHL log through the cutoff. A share is
+  // null only when none of those games have a count.
+
+  var AGO = [1, 5, 10, 15, 20];
 
   function round(n, d) {
     var p = Math.pow(10, d == null ? 0 : d);
@@ -27,6 +37,23 @@
     var date = String(a.date || "").localeCompare(String(b.date || ""));
     if (date) return date;
     return Number(a.id) - Number(b.id);
+  }
+
+  function pairShare(games, forKey, againstKey) {
+    var f = 0;
+    var a = 0;
+    var used = 0;
+    for (var i = 0; i < games.length; i++) {
+      var game = games[i];
+      var fv = game[forKey];
+      var av = game[againstKey];
+      if (fv == null || av == null || !isFinite(Number(fv)) || !isFinite(Number(av))) continue;
+      f += Number(fv);
+      a += Number(av);
+      used += 1;
+    }
+    if (!used || !(f + a > 0)) return null;
+    return round(f / (f + a), 3);
   }
 
   function rate(games) {
@@ -47,9 +74,12 @@
     return {
       gp: gp,
       wins: wins,
-      winPct: round((100 * wins) / gp, 1),
+      winPct: round(wins / gp, 3),
       gfPerGame: round(gf / gp, 2),
-      sogPerGame: shotGames === gp ? round(sf / gp, 1) : null
+      sogPerGame: shotGames === gp ? round(sf / gp, 1) : null,
+      sogShare: pairShare(games, "mSf", "mSa"),
+      xgfPct5v5: pairShare(games, "x5f", "x5a"),
+      cfPct: pairShare(games, "mCf", "mCa")
     };
   }
 
@@ -72,21 +102,29 @@
       if (index < 0) return null;
       return seasonToDate(log, index);
     }
-    return {
-      current: currentGames.length ? rate(currentGames) : null,
-      ago10: ago(10),
-      ago15: ago(15),
-      ago20: ago(20)
+    var out = {
+      current: currentGames.length ? rate(currentGames) : null
     };
+    AGO.forEach(function (k) { out["ago" + k] = ago(k); });
+    return out;
   }
 
   function definition(currentLabel, previousLabel) {
     return "Win % is wins divided by games played; overtime and shootout losses count as losses. " +
       "GF/g is goals for per game and SOG/g is shots on goal per game, over the same games. " +
+      "Shots-on-goal share is shots on goal for divided by shots for plus shots against, all situations. " +
+      "Even-strength expected-goals share is 5-on-5 expected goals for divided by 5-on-5 expected goals for plus against. " +
+      "Shot-attempt share is shot attempts for divided by shot attempts for plus against, all situations. " +
+      "Each share sums those counts over the games in that span that MoneyPuck has published, not an average of single-game shares. " +
+      "A share is n/a only when that span has no MoneyPuck game. " +
+      "MoneyPuck can lag the NHL log by a game. " +
       "Current is the " + currentLabel + " regular season to date. " +
-      "10, 15, and 20 games ago are that same season-to-date rate through the game that many games before the team’s most recent regular-season game. " +
+      "1, 5, 10, 15, and 20 games ago are that same season-to-date rate through the game that many games before the team’s most recent regular-season game. " +
       "The count spans the " + previousLabel + " and " + currentLabel + " regular seasons when this season is shorter; the rate uses only games from the season that cutoff game belongs to. " +
-      "Playoffs and preseason are excluded.";
+      "Playoffs and preseason are excluded. " +
+      "Each column is shaded by that value’s percentile among the teams with a number in the same column. Higher is greener for every stat. Ties use the mid-rank. " +
+      "n/a is not shaded and is left out of that column’s percentile. " +
+      "The number under an ago value is current minus that ago value.";
   }
 
   return {

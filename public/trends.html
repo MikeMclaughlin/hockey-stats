@@ -29,6 +29,9 @@
             <option value="winPct">Win %</option>
             <option value="gf">GF/g</option>
             <option value="sog">SOG/g</option>
+            <option value="sogShare">Shots-on-goal share</option>
+            <option value="xgfPct5v5">Even-strength expected-goals share</option>
+            <option value="cfPct">Shot-attempt share</option>
           </select>
         </label>
       </div>
@@ -37,7 +40,14 @@
     </div>
   </header>
   <main>
-    <p class="trend-legend">Shading shows change from the ago value to current: green means current is higher, red means current is lower, gray means about the same. Darker means a bigger change.</p>
+    <div class="trend-legend" aria-label="Percentile shading">
+      <span class="band-0">Top 17%</span>
+      <span class="band-1">83–67%</span>
+      <span class="band-2">67–50%</span>
+      <span class="band-3">50–33%</span>
+      <span class="band-4">33–17%</span>
+      <span class="band-5">Bottom 17%</span>
+    </div>
     <section class="board">
       <div class="table-wrap">
         <table id="trends">
@@ -45,6 +55,8 @@
             <tr>
               <th data-key="team" title="Team abbreviation and name. Click to sort." aria-label="Team abbreviation and name. Click to sort.">Team</th>
               <th data-key="current" class="num" title="Current win percentage, wins divided by games played. Overtime and shootout losses count as losses. Click to sort." aria-label="Current win percentage, wins divided by games played. Overtime and shootout losses count as losses. Click to sort.">Current</th>
+              <th data-key="ago1" class="num" title="Win percentage through the game 1 game before this team’s most recent regular-season game. Click to sort." aria-label="Win percentage through the game 1 game before this team’s most recent regular-season game. Click to sort.">1 game ago</th>
+              <th data-key="ago5" class="num" title="Win percentage through the game 5 games before this team’s most recent regular-season game. Click to sort." aria-label="Win percentage through the game 5 games before this team’s most recent regular-season game. Click to sort.">5 games ago</th>
               <th data-key="ago10" class="num" title="Win percentage through the game 10 games before this team’s most recent regular-season game. Click to sort." aria-label="Win percentage through the game 10 games before this team’s most recent regular-season game. Click to sort.">10 games ago</th>
               <th data-key="ago15" class="num" title="Win percentage through the game 15 games before this team’s most recent regular-season game. Click to sort." aria-label="Win percentage through the game 15 games before this team’s most recent regular-season game. Click to sort.">15 games ago</th>
               <th data-key="ago20" class="num" title="Win percentage through the game 20 games before this team’s most recent regular-season game. Click to sort." aria-label="Win percentage through the game 20 games before this team’s most recent regular-season game. Click to sort.">20 games ago</th>
@@ -54,10 +66,10 @@
         </table>
       </div>
     </section>
-    <p id="definition" class="trend-note">Win % is wins divided by games played; overtime and shootout losses count as losses. GF/g is goals for per game and SOG/g is shots on goal per game, over the same games. Current is the 2026-27 regular season to date. 10, 15, and 20 games ago are that same season-to-date rate through the game that many games before the team’s most recent regular-season game. The count spans the 2025-26 and 2026-27 regular seasons when this season is shorter; the rate uses only games from the season that cutoff game belongs to. Playoffs and preseason are excluded.</p>
+    <p id="definition" class="trend-note">Win % is wins divided by games played; overtime and shootout losses count as losses. GF/g is goals for per game and SOG/g is shots on goal per game, over the same games. Shots-on-goal share is shots on goal for divided by shots for plus shots against, all situations. Even-strength expected-goals share is 5-on-5 expected goals for divided by 5-on-5 expected goals for plus against. Shot-attempt share is shot attempts for divided by shot attempts for plus against, all situations. Each share sums those counts over the games in that span that MoneyPuck has published, not an average of single-game shares. A share is n/a only when that span has no MoneyPuck game. MoneyPuck can lag the NHL log by a game. Current is the 2026-27 regular season to date. 1, 5, 10, 15, and 20 games ago are that same season-to-date rate through the game that many games before the team’s most recent regular-season game. The count spans the 2025-26 and 2026-27 regular seasons when this season is shorter; the rate uses only games from the season that cutoff game belongs to. Playoffs and preseason are excluded. Each column is shaded by that value’s percentile among the teams with a number in the same column. Higher is greener for every stat. Ties use the mid-rank. n/a is not shaded and is left out of that column’s percentile. The number under an ago value is current minus that ago value.</p>
   </main>
   <footer>
-    <span>v2.3</span>
+    <span>v2.4</span>
   </footer>
   <script src="/js/loading.js"></script>
   <script src="/js/trends-app.js"></script>

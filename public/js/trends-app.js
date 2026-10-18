@@ -1,45 +1,74 @@
 (function () {
   "use strict";
 
+  function gamesBefore(n) {
+    return n === 1 ? "1 game" : n + " games";
+  }
+
   var STATS = {
     winPct: {
       label: "Win %",
       field: "winPct",
-      digits: 1,
-      suffix: "%",
-      neutral: 1,
-      full: 12,
+      digits: 3,
+      share: true,
       currentTitle: "Current win percentage, wins divided by games played. Overtime and shootout losses count as losses. Click to sort.",
       agoTitle: function (n) {
-        return "Win percentage through the game " + n + " games before this team’s most recent regular-season game. Click to sort.";
+        return "Win percentage through the game " + gamesBefore(n) + " before this team’s most recent regular-season game. Click to sort.";
       }
     },
     gf: {
       label: "GF/g",
       field: "gfPerGame",
       digits: 2,
-      suffix: "",
-      neutral: 0.1,
-      full: 1.25,
+      share: false,
       currentTitle: "Current goals for per game. Click to sort.",
       agoTitle: function (n) {
-        return "Goals for per game through the game " + n + " games before this team’s most recent regular-season game. Click to sort.";
+        return "Goals for per game through the game " + gamesBefore(n) + " before this team’s most recent regular-season game. Click to sort.";
       }
     },
     sog: {
       label: "SOG/g",
       field: "sogPerGame",
       digits: 1,
-      suffix: "",
-      neutral: 0.5,
-      full: 4,
+      share: false,
       currentTitle: "Current shots on goal per game. Click to sort.",
       agoTitle: function (n) {
-        return "Shots on goal per game through the game " + n + " games before this team’s most recent regular-season game. Click to sort.";
+        return "Shots on goal per game through the game " + gamesBefore(n) + " before this team’s most recent regular-season game. Click to sort.";
+      }
+    },
+    sogShare: {
+      label: "Shots-on-goal share",
+      field: "sogShare",
+      digits: 3,
+      share: true,
+      currentTitle: "Current shots-on-goal share, shots on goal for divided by shots for plus shots against, all situations. Click to sort.",
+      agoTitle: function (n) {
+        return "Shots-on-goal share through the game " + gamesBefore(n) + " before this team’s most recent regular-season game. Click to sort.";
+      }
+    },
+    xgfPct5v5: {
+      label: "Even-strength expected-goals share",
+      field: "xgfPct5v5",
+      digits: 3,
+      share: true,
+      currentTitle: "Current even-strength expected-goals share, 5-on-5 expected goals for divided by 5-on-5 expected goals for plus against. Click to sort.",
+      agoTitle: function (n) {
+        return "Even-strength expected-goals share through the game " + gamesBefore(n) + " before this team’s most recent regular-season game. Click to sort.";
+      }
+    },
+    cfPct: {
+      label: "Shot-attempt share",
+      field: "cfPct",
+      digits: 3,
+      share: true,
+      currentTitle: "Current shot-attempt share, shot attempts for divided by shot attempts for plus against, all situations. Click to sort.",
+      agoTitle: function (n) {
+        return "Shot-attempt share through the game " + gamesBefore(n) + " before this team’s most recent regular-season game. Click to sort.";
       }
     }
   };
-  var AGO = { ago10: 10, ago15: 15, ago20: 20 };
+  var AGO = { ago1: 1, ago5: 5, ago10: 10, ago15: 15, ago20: 20 };
+  var COLUMNS = ["current", "ago1", "ago5", "ago10", "ago15", "ago20"];
 
   var state = { teams: [], stat: "winPct", sortKey: "current", sortDir: -1, definition: "" };
 
@@ -55,15 +84,23 @@
       .replace(/"/g, "&quot;");
   }
 
+  function formatShare(n) {
+    var text = Number(n).toFixed(spec().digits);
+    if (text.charAt(0) === "-" && text.charAt(1) === "0" && text.charAt(2) === ".") return "-" + text.slice(2);
+    if (text.charAt(0) === "0" && text.charAt(1) === ".") return text.slice(1);
+    return text;
+  }
+
   function formatValue(v) {
     if (v == null || !isFinite(Number(v))) return "n/a";
-    return Number(v).toFixed(spec().digits) + spec().suffix;
+    if (spec().share) return formatShare(v);
+    return Number(v).toFixed(spec().digits);
   }
 
   function formatDelta(v) {
     if (v == null || !isFinite(Number(v))) return "";
     var n = Number(v);
-    var text = n.toFixed(spec().digits);
+    var text = spec().share ? formatShare(n) : n.toFixed(spec().digits);
     return (n > 0 ? "+" : "") + text;
   }
 
@@ -75,35 +112,47 @@
     return Number(v);
   }
 
-  function mix(a, b, t) {
-    return [
-      Math.round(a[0] + (b[0] - a[0]) * t),
-      Math.round(a[1] + (b[1] - a[1]) * t),
-      Math.round(a[2] + (b[2] - a[2]) * t)
-    ];
+  function columnPools() {
+    var pools = {};
+    COLUMNS.forEach(function (key) {
+      var values = [];
+      state.teams.forEach(function (team) {
+        var value = cellValue(team, key);
+        if (value != null) values.push(value);
+      });
+      pools[key] = values;
+    });
+    return pools;
   }
 
-  function shade(delta) {
-    if (delta == null || !isFinite(delta)) return "";
-    var s = spec();
-    var abs = Math.abs(delta);
-    if (abs < s.neutral) return "background:#e6e9ed;color:#243140";
-    var t = Math.min(1, (abs - s.neutral) / (s.full - s.neutral));
-    var rgb = delta > 0
-      ? mix([226, 244, 232], [47, 158, 90], t)
-      : mix([252, 232, 232], [216, 86, 86], t);
-    return "background:rgb(" + rgb.join(",") + ");color:#1b2836";
+  // Mid-rank percentile on a 0–100 scale. Band 0 is the top sixth.
+  function bandClass(value, pool) {
+    if (value == null || !pool || !pool.length) return "";
+    var below = 0;
+    var equal = 0;
+    for (var i = 0; i < pool.length; i++) {
+      if (pool[i] < value) below += 1;
+      else if (pool[i] === value) equal += 1;
+    }
+    var percentile = (100 * (below + 0.5 * equal)) / pool.length;
+    var index = Math.min(5, Math.floor((100 - percentile) / (100 / 6)));
+    return " band-" + index;
   }
 
-  function agoCell(team, key) {
-    var ago = cellValue(team, key);
-    var current = cellValue(team, "current");
-    if (ago == null) return "<td class='num trend-cell'>n/a</td>";
-    var delta = current == null ? null : Math.round((current - ago) * 100) / 100;
-    var deltaHtml = delta == null ? "" : "<span class='trend-delta'>" + esc(formatDelta(delta)) + "</span>";
-    var style = delta == null ? "" : shade(delta);
-    return "<td class='num trend-cell'" + (style ? " style=\"" + style + "\"" : "") + ">" +
-      "<span class='trend-val'>" + esc(formatValue(ago)) + "</span>" + deltaHtml + "</td>";
+  function valueCell(team, key, pools, withDelta) {
+    var value = cellValue(team, key);
+    if (value == null) return "<td class='num trend-cell'>n/a</td>";
+    var deltaHtml = "";
+    if (withDelta) {
+      var current = cellValue(team, "current");
+      if (current != null) {
+        var factor = Math.pow(10, spec().digits);
+        var delta = Math.round((current - value) * factor) / factor;
+        deltaHtml = "<span class='trend-delta'>" + esc(formatDelta(delta)) + "</span>";
+      }
+    }
+    return "<td class='num trend-cell" + bandClass(value, pools[key]) + "'>" +
+      "<span class='trend-val'>" + esc(formatValue(value)) + "</span>" + deltaHtml + "</td>";
   }
 
   function teamCell(team) {
@@ -146,17 +195,19 @@
 
   function render() {
     var body = $("trends").querySelector("tbody");
+    var pools = columnPools();
     var rows = sorted();
     body.innerHTML = rows.map(function (team) {
-      var current = cellValue(team, "current");
       return "<tr>" +
         teamCell(team) +
-        "<td class='num trend-cell'><span class='trend-val'>" + esc(formatValue(current)) + "</span></td>" +
-        agoCell(team, "ago10") +
-        agoCell(team, "ago15") +
-        agoCell(team, "ago20") +
+        valueCell(team, "current", pools, false) +
+        valueCell(team, "ago1", pools, true) +
+        valueCell(team, "ago5", pools, true) +
+        valueCell(team, "ago10", pools, true) +
+        valueCell(team, "ago15", pools, true) +
+        valueCell(team, "ago20", pools, true) +
         "</tr>";
-    }).join("") || "<tr><td colspan='5' class='empty'>No teams.</td></tr>";
+    }).join("") || "<tr><td colspan='7' class='empty'>No teams.</td></tr>";
     syncHeaders();
     var def = $("definition");
     if (def && state.definition) def.textContent = state.definition;

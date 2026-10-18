@@ -1288,15 +1288,68 @@ body[data-page="teams"] .table-wrap.scroll-port {
   z-index: 4;
   background: #fff;
 }
-.trend-legend,
+.trend-legend {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 3px;
+  margin: 0.35rem 0 0.85rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  line-height: 1.15;
+}
+.trend-legend span {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  min-height: 2.15rem;
+  padding: 0.35rem 0.25rem;
+  border-radius: 2px;
+}
 .trend-note {
   color: var(--muted);
   font-size: 0.88rem;
   line-height: 1.4;
-  margin: 0.35rem 0 0.85rem;
+  margin: 0.85rem 0 0.85rem;
 }
-.trend-note {
-  margin-top: 0.85rem;
+#trends td.band-0,
+.trend-legend .band-0 {
+  background: #2f9e5a;
+  color: #ffffff;
+}
+#trends td.band-1,
+.trend-legend .band-1 {
+  background: #a9dcb9;
+  color: #1b2836;
+}
+#trends td.band-2,
+.trend-legend .band-2 {
+  background: #ffffff;
+  color: #1b2836;
+}
+#trends td.band-3,
+.trend-legend .band-3 {
+  background: #fbd9dd;
+  color: #1b2836;
+}
+#trends td.band-4,
+.trend-legend .band-4 {
+  background: #ef9a9a;
+  color: #1b2836;
+}
+#trends td.band-5,
+.trend-legend .band-5 {
+  background: #d85656;
+  color: #ffffff;
+}
+@media (max-width: 720px) {
+  .trend-legend {
+    font-size: 0.68rem;
+    gap: 2px;
+  }
+  .trend-legend span {
+    padding: 0.28rem 0.08rem;
+  }
 }
 #trends {
   width: max-content;
@@ -1339,7 +1392,7 @@ body[data-page="teams"] .table-wrap.scroll-port {
   margin-top: 0.12rem;
   font-size: 0.72rem;
   font-weight: 650;
-  color: #3c4c5c;
+  color: inherit;
   font-variant-numeric: tabular-nums;
 }
 #trends td.trend-cell {
