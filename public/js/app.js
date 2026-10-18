@@ -400,6 +400,64 @@
     );
   }
 
+  var TOP_THREE_KEYS = { sogShare: true, xgfPct5v5: true, cf: true };
+
+  function presentStat(team, spec) {
+    if (!team) return null;
+    var raw = team[spec.field];
+    if (raw == null || raw === "") return null;
+    var n = Number(raw);
+    return isFinite(n) ? n : null;
+  }
+
+  function leadsStat(team, opp, spec) {
+    var a = presentStat(team, spec);
+    var b = presentStat(opp, spec);
+    if (a == null || b == null) return false;
+    return a > b;
+  }
+
+  function leadsEvery(team, opp, rows) {
+    return rows.every(function (spec) { return leadsStat(team, opp, spec); });
+  }
+
+  function takeLine(team, m, side) {
+    var name = (team && team.name) || (team && team.abbrev) || "Team";
+    var ml = m.odds && (side === "away" ? m.odds.awayMl : m.odds.homeMl);
+    if (ml == null || !isFinite(Number(ml))) return name + " odds pending";
+    var text = window.HockeyStats && HockeyStats.formatAmerican
+      ? HockeyStats.formatAmerican(Number(ml))
+      : String(ml);
+    return name + " " + text;
+  }
+
+  function renderTakeList(matchups) {
+    var el = $("take-list");
+    if (!el) return;
+    var games = matchups || [];
+    var top = CARD_STATS.filter(function (spec) { return TOP_THREE_KEYS[spec.key]; });
+    var lines = [];
+    games.forEach(function (m) {
+      var comparable = top.concat(CARD_STATS).every(function (spec) {
+        return presentStat(m.away, spec) != null && presentStat(m.home, spec) != null;
+      });
+      if (!comparable) return;
+      if (leadsEvery(m.away, m.home, top) && leadsEvery(m.away, m.home, CARD_STATS)) {
+        lines.push(takeLine(m.away, m, "away"));
+      }
+      if (leadsEvery(m.home, m.away, top) && leadsEvery(m.home, m.away, CARD_STATS)) {
+        lines.push(takeLine(m.home, m, "home"));
+      }
+    });
+    var body = !games.length
+      ? "<p class=\"take-empty\">No games</p>"
+      : lines.length
+        ? "<ul>" + lines.map(function (line) { return "<li>" + esc(line) + "</li>"; }).join("") + "</ul>"
+        : "<p class=\"take-empty\">No team leads in both</p>";
+    el.hidden = false;
+    el.innerHTML = "<h2>Teams to take</h2>" + body;
+  }
+
   function renderCards(matchups) {
     var root = $("cards");
     if (!matchups.length) {
@@ -642,6 +700,7 @@
     } else {
       note.classList.add("hidden");
     }
+    renderTakeList(data.matchups || []);
     renderCards(visibleRows());
     renderTable();
     syncSortControl();
@@ -728,7 +787,8 @@
 
   function refreshScores() {
     var q = new URLSearchParams(location.search);
-    var url = "/api/scores" + (q.get("date") ? "?date=" + encodeURIComponent(q.get("date")) : "");
+    var date = q.get("date") || slateDate();
+    var url = "/api/scores" + (date ? "?date=" + encodeURIComponent(date) : "");
     fetch(url)
       .then(function (r) { return r.json(); })
       .then(applyScorePayload)
@@ -755,9 +815,14 @@
     });
   }
 
+  function slateDate() {
+    if (window.HockeyDates && HockeyDates.etSlateDate) return HockeyDates.etSlateDate();
+    return "";
+  }
+
   function boardCacheKey() {
     var q = new URLSearchParams(location.search);
-    return "hs-board:" + (q.get("date") || "now");
+    return "hs-board:" + (q.get("date") || slateDate() || "now");
   }
 
   function rememberBoard(data) {

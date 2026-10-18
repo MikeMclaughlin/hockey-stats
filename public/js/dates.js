@@ -45,5 +45,19 @@
     return map.month + "/" + map.day + "/" + map.year + " " + pad(map.hour) + ":" + pad(map.minute) + " EST";
   }
 
-  return { formatTableDate: formatTableDate };
+  // Default matchup slate rolls at 6:00 AM Eastern. At and after 6:00 the
+  // date is today's Eastern calendar day. Before 6:00 it is the previous
+  // Eastern calendar day. Explicit ?date= values are not passed through here.
+  function etSlateDate(now) {
+    var map = partsOf(now instanceof Date ? now : new Date());
+    var ymd = map.year + "-" + map.month + "-" + map.day;
+    if (Number(map.hour) < 6) {
+      var d = new Date(ymd + "T12:00:00Z");
+      d.setUTCDate(d.getUTCDate() - 1);
+      return d.toISOString().slice(0, 10);
+    }
+    return ymd;
+  }
+
+  return { formatTableDate: formatTableDate, etSlateDate: etSlateDate };
 });

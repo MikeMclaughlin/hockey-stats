@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Hockey Stats — Team Trends</title>
+  <link rel="icon" href="/favicon.ico?v=1.9" sizes="any">
+  <link rel="icon" href="/favicon.svg?v=1.9" type="image/svg+xml">
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png?v=1.9">
+  <link rel="icon" type="image/png" sizes="192x192" href="/favicon-192x192.png?v=1.9">
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png?v=1.9">
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body data-page="trends">
+  <header class="top">
+    <script src="/js/site-nav.js"></script>
+    <div class="header-body">
+    <div class="brand">
+      <img class="site-logo" src="/favicon.svg?v=1.9" alt="Hockey Stats">
+      <div>
+        <h1>Team Trends</h1>
+        <p class="tag">Season-to-date rates, and the same rates as of earlier games</p>
+      </div>
+    </div>
+    <div class="toolbar">
+      <div class="toolbar-row nav-controls">
+        <label>Stat
+          <select id="stat" aria-label="Stat">
+            <option value="winPct">Win %</option>
+            <option value="gf">GF/g</option>
+            <option value="sog">SOG/g</option>
+          </select>
+        </label>
+      </div>
+      <p id="meta" class="meta meta-line">Loading…</p>
+    </div>
+    </div>
+  </header>
+  <main>
+    <p class="trend-legend">Shading shows change from the ago value to current: green means current is higher, red means current is lower, gray means about the same. Darker means a bigger change.</p>
+    <section class="board">
+      <div class="table-wrap">
+        <table id="trends">
+          <thead>
+            <tr>
+              <th data-key="team" title="Team abbreviation and name. Click to sort." aria-label="Team abbreviation and name. Click to sort.">Team</th>
+              <th data-key="current" class="num" title="Current win percentage, wins divided by games played. Overtime and shootout losses count as losses. Click to sort." aria-label="Current win percentage, wins divided by games played. Overtime and shootout losses count as losses. Click to sort.">Current</th>
+              <th data-key="ago10" class="num" title="Win percentage through the game 10 games before this team’s most recent regular-season game. Click to sort." aria-label="Win percentage through the game 10 games before this team’s most recent regular-season game. Click to sort.">10 games ago</th>
+              <th data-key="ago15" class="num" title="Win percentage through the game 15 games before this team’s most recent regular-season game. Click to sort." aria-label="Win percentage through the game 15 games before this team’s most recent regular-season game. Click to sort.">15 games ago</th>
+              <th data-key="ago20" class="num" title="Win percentage through the game 20 games before this team’s most recent regular-season game. Click to sort." aria-label="Win percentage through the game 20 games before this team’s most recent regular-season game. Click to sort.">20 games ago</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+    <p id="definition" class="trend-note">Win % is wins divided by games played; overtime and shootout losses count as losses. GF/g is goals for per game and SOG/g is shots on goal per game, over the same games. Current is the 2026-27 regular season to date. 10, 15, and 20 games ago are that same season-to-date rate through the game that many games before the team’s most recent regular-season game. The count spans the 2025-26 and 2026-27 regular seasons when this season is shorter; the rate uses only games from the season that cutoff game belongs to. Playoffs and preseason are excluded.</p>
+  </main>
+  <footer>
+    <span>v2.3</span>
+  </footer>
+  <script src="/js/loading.js"></script>
+  <script src="/js/trends-app.js"></script>
+</body>
+</html>

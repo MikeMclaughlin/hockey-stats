@@ -14,6 +14,7 @@ var store = require("./public/js/store.js");
 var auth = require("./lib/auth.js");
 var streaks = require("./public/js/streaks.js");
 var teamStats = require("./public/js/teamStats.js");
+var trends = require("./public/js/trends.js");
 
 var ROOT = __dirname;
 var PORT = Number(process.env.PORT || 3080);
@@ -24,13 +25,13 @@ var xgLogMemory = Object.create(null);
 
 function productVersion() {
   try {
-    var parts = String(require("./package.json").version || "2.2").split(".");
+    var parts = String(require("./package.json").version || "2.3").split(".");
     var major = parts[0] || "2";
     var minor = parts[1] || "0";
     if (parts.length < 3 || parts[2] === "") return major + "." + minor;
     return major + "." + minor + "." + parts[2];
   } catch (e) {
-    return "2.2";
+    return "2.3";
   }
 }
 
@@ -649,17 +650,13 @@ async function applyOddsSnapshots(matchups, liveById) {
 }
 
 async function buildMatchups(date) {
-  var day = cleanDate(date);
-  var score = await getJson(day
-    ? "https://api-web.nhle.com/v1/score/" + day
-    : "https://api-web.nhle.com/v1/score/now");
-  rememberScoreboard(day || "now", score);
+  var day = cleanDate(date) || dates.etSlateDate(new Date());
+  var score = await getJson("https://api-web.nhle.com/v1/score/" + day);
+  rememberScoreboard(day, score);
   var standings = await getJson("https://api-web.nhle.com/v1/standings/now");
   var liveOdds = await fetchPartnerOdds(null);
-  if (day) {
-    var datedOdds = await fetchPartnerOdds(day);
-    Object.keys(datedOdds).forEach(function (id) { liveOdds[id] = datedOdds[id]; });
-  }
+  var datedOdds = await fetchPartnerOdds(day);
+  Object.keys(datedOdds).forEach(function (id) { liveOdds[id] = datedOdds[id]; });
   var seasonId = seasonIdFromScore(score);
   var resolved = await resolveStatsSeason(seasonId, standings);
   var statsSeason = resolved.statsSeason;
@@ -710,7 +707,7 @@ async function buildMatchups(date) {
             return !g.gameType || Number(g.gameType) === 2;
           });
           last5Map[ab] = last5FromSchedule({ games: regular }, ab);
-          formMap[ab] = backtest.scheduleForm(games, ab, score.currentDate);
+          formMap[ab] = backtest.scheduleForm(games, ab, day);
         })
         .catch(function () {
           schedMap[ab] = [];
@@ -738,14 +735,14 @@ async function buildMatchups(date) {
 
   function preseasonRest(ab) {
     var prior = teamStats.finishedGames(schedMap[ab] || [], ab, 1).filter(function (g) {
-      return !score.currentDate || String(g.date || "").slice(0, 10) < String(score.currentDate).slice(0, 10);
+      return !day || String(g.date || "").slice(0, 10) < String(day).slice(0, 10);
     });
     if (!prior.length) return null;
-    return restDaysBetween(prior[prior.length - 1].date, score.currentDate);
+    return restDaysBetween(prior[prior.length - 1].date, day);
   }
 
   function last5Save(ab, preseason) {
-    var fromMp = stats.last5SavePctFromMp(mpGamesCache, ab, score.currentDate);
+    var fromMp = stats.last5SavePctFromMp(mpGamesCache, ab, day);
     if (fromMp != null && !preseason) return fromMp;
     var games = schedMap[ab] || [];
     var rs = teamStats.finishedGames(games, ab, 2);
@@ -780,7 +777,7 @@ async function buildMatchups(date) {
     var ab = teamObj.abbrev;
     var meta = stats.teamByAbbrev(ab) || {};
     var rec = teamRecord(ab);
-    var rsRest = restDaysBetween((formMap[ab] || {}).lastDate, score.currentDate);
+    var rsRest = restDaysBetween((formMap[ab] || {}).lastDate, day);
     var restFromPre = rsRest == null;
     var rest = rsRest != null ? rsRest : preseasonRest(ab);
     var fill = rec.gamesPlayed ? null : preseasonFill(ab);
@@ -818,7 +815,7 @@ async function buildMatchups(date) {
     var marketDisagree = !!(market && market !== "even" && edge.winner && edge.winner !== market);
     return {
       id: g.id,
-      gameDate: g.gameDate || score.currentDate,
+      gameDate: g.gameDate || day,
       startTimeUTC: g.startTimeUTC,
       venue: g.venue && g.venue.default,
       gameState: g.gameState,
@@ -835,7 +832,7 @@ async function buildMatchups(date) {
         home: home,
         projected: projected,
         edge: edge,
-        gameDate: g.gameDate || score.currentDate
+        gameDate: g.gameDate || day
       }).pick),
       projected: projected,
       odds: odds,
@@ -855,7 +852,7 @@ async function buildMatchups(date) {
   var xgYear = mpSeasonYear(statsSeason);
   await mapPool(abbrevs, 4, function (ab) { return loadTeamXgLog(ab, xgYear); });
   matchups.forEach(function (m) {
-    var before = m.gameDate || score.currentDate;
+    var before = m.gameDate || day;
     m.away.last5XgfPct = last5XgShare(xgLogMemory[xgYear + ":" + m.away.abbrev], m.away.abbrev, before);
     m.home.last5XgfPct = last5XgShare(xgLogMemory[xgYear + ":" + m.home.abbrev], m.home.abbrev, before);
     var market = stats.marketSide(m.odds);
@@ -873,7 +870,7 @@ async function buildMatchups(date) {
   var seasons = seasonMeta(seasonId, statsSeason, standingsSnapshot(standings, statsSeason).maxGp);
   return {
     generatedAt: new Date().toISOString(),
-    currentDate: score.currentDate,
+    currentDate: day,
     prevDate: score.prevDate,
     nextDate: score.nextDate,
     seasonId: seasonId,
@@ -1329,7 +1326,7 @@ async function runScheduledUpdate() {
   } catch (e) {
     storageError = String(e.message || e);
   }
-  matchupCache.now = { at: Date.now(), body: body };
+  matchupCache[body.currentDate || dates.etSlateDate(new Date())] = { at: Date.now(), body: body };
   var graded;
   try {
     graded = await gradeEstimates();
@@ -1668,6 +1665,225 @@ async function loadTeamXgLog(abbrev, year) {
     xgLogMemory[key] = [];
   }
   return xgLogMemory[key];
+}
+
+var TRENDS_FRESH_MS = 15 * 60 * 1000;
+var trendsInflight = null;
+
+function trendsCacheFresh(cache, currentSeason, previousSeason) {
+  if (!cache || String(cache.currentSeason) !== String(currentSeason)) return false;
+  if (String(cache.previousSeason) !== String(previousSeason)) return false;
+  if (!cache.teams || !cache.updatedAt) return false;
+  var age = Date.now() - Date.parse(cache.updatedAt);
+  if (!isFinite(age) || age < 0 || age >= TRENDS_FRESH_MS) return false;
+  return stats.TEAMS.every(function (t) {
+    var games = cache.teams[t.abbrev] && cache.teams[t.abbrev].games;
+    return games && games.length >= 40;
+  });
+}
+
+function scheduleFinal(g, abbrev) {
+  if (!g || Number(g.gameType) !== 2 || !isFinalState(g.gameState)) return null;
+  var away = g.awayTeam || {};
+  var home = g.homeTeam || {};
+  var isAway = away.abbrev === abbrev;
+  var isHome = home.abbrev === abbrev;
+  if (!isAway && !isHome) return null;
+  var ascore = Number(away.score);
+  var hscore = Number(home.score);
+  if (!isFinite(ascore) || !isFinite(hscore)) return null;
+  var gf = isHome ? hscore : ascore;
+  var ga = isHome ? ascore : hscore;
+  var side = isHome ? home : away;
+  return {
+    id: g.id,
+    date: g.gameDate,
+    season: String(g.season || ""),
+    gf: gf,
+    win: gf > ga ? 1 : 0,
+    sf: null,
+    home: isHome ? 1 : 0,
+    logo: side.logo || null
+  };
+}
+
+async function fetchTeamShotLog(teamId, season) {
+  var rows = [];
+  var start = 0;
+  var total = null;
+  while (total == null || start < total) {
+    var exp = encodeURIComponent("teamId=" + teamId + " and gameTypeId=2 and seasonId=" + season);
+    var sort = encodeURIComponent("[{\"property\":\"gameDate\",\"direction\":\"ASC\"}]");
+    var url = "https://api.nhle.com/stats/rest/en/team/summary?isAggregate=false&isGame=true&limit=100&start=" +
+      start + "&sort=" + sort + "&cayenneExp=" + exp;
+    var data = await getJson(url);
+    var batch = (data && data.data) || [];
+    total = Number(data && data.total);
+    if (!isFinite(total)) total = rows.length + batch.length;
+    rows = rows.concat(batch);
+    if (!batch.length) break;
+    start += batch.length;
+    if (start > 400) break;
+  }
+  var byId = Object.create(null);
+  rows.forEach(function (row) {
+    if (!row || row.gameId == null || Number(row.gamesPlayed) !== 1) return;
+    var shots = Number(row.shotsForPerGame);
+    if (!isFinite(shots)) return;
+    byId[String(row.gameId)] = Math.round(shots);
+  });
+  return byId;
+}
+
+function applyShotMap(games, byId) {
+  (games || []).forEach(function (g) {
+    if (!g || g.sf != null) return;
+    var n = byId && byId[String(g.id)];
+    if (n == null || !isFinite(Number(n))) return;
+    g.sf = Number(n);
+  });
+}
+
+async function fillMissingShots(games) {
+  var missing = (games || []).filter(function (g) { return g && g.sf == null && g.id != null; });
+  if (!missing.length) return;
+  var map = await loadShotMap(missing.map(function (g) { return g.id; }));
+  missing.forEach(function (g) {
+    var shots = map[String(g.id)];
+    if (!shots) return;
+    var n = g.home ? shots.home : shots.away;
+    if (isFinite(Number(n))) g.sf = Number(n);
+  });
+}
+
+function previousComplete(games, previousSeason) {
+  var rows = (games || []).filter(function (g) {
+    return String(g.season) === String(previousSeason) && g.sf != null;
+  });
+  return rows.length >= 80;
+}
+
+async function loadTeamTrendGames(team, seasons, cachedGames) {
+  var prev = String(seasons.previous);
+  var curr = String(seasons.current);
+  var kept = previousComplete(cachedGames, prev)
+    ? cachedGames.filter(function (g) { return String(g.season) === prev; })
+    : [];
+  var fetchSeasons = kept.length ? [curr] : [prev, curr];
+  var games = kept.slice();
+  var logo = null;
+  for (var i = 0; i < fetchSeasons.length; i++) {
+    var season = fetchSeasons[i];
+    var sched = await getJson("https://api-web.nhle.com/v1/club-schedule-season/" + team.abbrev + "/" + season);
+    var finals = [];
+    (sched.games || []).forEach(function (g) {
+      var row = scheduleFinal(g, team.abbrev);
+      if (row) finals.push(row);
+    });
+    var shots = {};
+    try { shots = await fetchTeamShotLog(team.id, season); }
+    catch (e) { shots = {}; }
+    applyShotMap(finals, shots);
+    finals.forEach(function (g) {
+      if (g.logo && String(g.season) === curr) logo = g.logo;
+      else if (g.logo && !logo) logo = g.logo;
+    });
+    games = games.filter(function (g) { return String(g.season) !== String(season); }).concat(finals);
+  }
+  await fillMissingShots(games);
+  games.sort(function (a, b) {
+    return String(a.date || "").localeCompare(String(b.date || "")) || (Number(a.id) - Number(b.id));
+  });
+  kept.forEach(function (g) { if (!logo && g.logo) logo = g.logo; });
+  return { logo: logo, games: games };
+}
+
+function trendsPayloadFromCache(cache) {
+  var currentSeason = cache.currentSeason;
+  var previousSeason = cache.previousSeason;
+  var teams = stats.TEAMS.map(function (t) {
+    var saved = (cache.teams && cache.teams[t.abbrev]) || { games: [] };
+    var snap = trends.snapshots(saved.games || [], currentSeason);
+    var through = "";
+    (saved.games || []).forEach(function (g) {
+      if (String(g.season) === String(currentSeason) && g.date && String(g.date) > through) through = String(g.date);
+    });
+    return {
+      abbrev: t.abbrev,
+      name: t.name,
+      logo: saved.logo || null,
+      throughDate: through || null,
+      current: snap.current,
+      ago10: snap.ago10,
+      ago15: snap.ago15,
+      ago20: snap.ago20
+    };
+  });
+  var through = "";
+  teams.forEach(function (t) {
+    if (t.throughDate && t.throughDate > through) through = t.throughDate;
+  });
+  return {
+    generatedAt: new Date().toISOString(),
+    cachedAt: cache.updatedAt || null,
+    currentSeason: currentSeason,
+    previousSeason: previousSeason,
+    currentSeasonLabel: formatSeason(currentSeason),
+    previousSeasonLabel: formatSeason(previousSeason),
+    throughDate: through || null,
+    definition: trends.definition(formatSeason(currentSeason), formatSeason(previousSeason)),
+    teams: teams
+  };
+}
+
+async function buildTeamTrendsInner(refresh) {
+  var currentSeason = String(LIVE_STATS_SEASON);
+  var previousSeason = String(priorSeasonId(LIVE_STATS_SEASON));
+  var cache = null;
+  try { cache = await store.readJson(store.KEYS.teamTrends, null); }
+  catch (e) { cache = null; }
+  if (!refresh && trendsCacheFresh(cache, currentSeason, previousSeason)) {
+    return trendsPayloadFromCache(cache);
+  }
+  var teams = Object.create(null);
+  if (cache && cache.teams) {
+    Object.keys(cache.teams).forEach(function (ab) { teams[ab] = cache.teams[ab]; });
+  }
+  await mapPool(stats.TEAMS, 4, function (team) {
+    var prior = teams[team.abbrev] && teams[team.abbrev].games;
+    return loadTeamTrendGames(team, { current: currentSeason, previous: previousSeason }, prior || [])
+      .then(function (loaded) {
+        teams[team.abbrev] = {
+          logo: loaded.logo || (teams[team.abbrev] && teams[team.abbrev].logo) || null,
+          games: loaded.games
+        };
+      })
+      .catch(function () {
+        if (!teams[team.abbrev]) teams[team.abbrev] = { logo: null, games: [] };
+      });
+  });
+  var next = {
+    version: 1,
+    updatedAt: new Date().toISOString(),
+    currentSeason: currentSeason,
+    previousSeason: previousSeason,
+    teams: teams
+  };
+  try { await store.writeJson(store.KEYS.teamTrends, next); }
+  catch (e) { /* the page still returns the log it just built */ }
+  return trendsPayloadFromCache(next);
+}
+
+function buildTeamTrends(refresh) {
+  if (trendsInflight && !refresh) return trendsInflight;
+  trendsInflight = buildTeamTrendsInner(!!refresh).then(function (body) {
+    trendsInflight = null;
+    return body;
+  }, function (err) {
+    trendsInflight = null;
+    throw err;
+  });
+  return trendsInflight;
 }
 
 async function buildTeamStats() {
@@ -2388,6 +2604,7 @@ function detectRoute(req, url) {
   if (blob.indexOf("matchup") !== -1) return "/api/matchups";
   if (blob.indexOf("backtest") !== -1) return "/api/backtest";
   if (blob.indexOf("streak") !== -1) return "/api/streaks";
+  if (blob.indexOf("trend") !== -1) return "/api/trends";
   if (blob.indexOf("/teams") !== -1 || blob.indexOf("api/teams") !== -1) return "/api/teams";
   if (blob.indexOf("estimate") !== -1) return "/api/estimates";
   return p;
@@ -2603,7 +2820,7 @@ function handleApi(req, res, url) {
     return true;
   }
   if (pathname === "/api/scores") {
-    var scoreDate = cleanDate(url.searchParams.get("date"));
+    var scoreDate = cleanDate(url.searchParams.get("date")) || dates.etSlateDate(new Date());
     loadScoreboard(scoreDate)
       .then(function (packed) { sendJson(res, 200, scorePayload(packed)); })
       .catch(function (err) {
@@ -2612,8 +2829,9 @@ function handleApi(req, res, url) {
     return true;
   }
   if (pathname === "/api/matchups") {
-    var boardDate = cleanDate(url.searchParams.get("date"));
-    var cacheKey = boardDate || "now";
+    var explicitDate = cleanDate(url.searchParams.get("date"));
+    var boardDate = explicitDate || dates.etSlateDate(new Date());
+    var cacheKey = boardDate;
     var hit = matchupCache[cacheKey];
     function sendBoard(body, persist) {
       var chain = persist
@@ -2634,17 +2852,17 @@ function handleApi(req, res, url) {
       });
     }
     if (hit && hit.body && Date.now() - hit.at < CACHE_MS && url.searchParams.get("refresh") !== "1") {
-      sendBoard(hit.body, false);
+        sendBoard(hit.body, false);
       return true;
     }
     buildMatchups(boardDate)
       .then(function (body) {
         matchupCache[cacheKey] = { at: Date.now(), body: body };
-        sendBoard(body, !boardDate);
+        sendBoard(body, !explicitDate);
       })
       .catch(function (err) {
         store.readJson(store.KEYS.matchups, null).then(function (fallback) {
-          if (fallback && !boardDate) {
+          if (fallback && !explicitDate) {
             fallback.stale = true;
             fallback.error = String(err.message || err);
             sendBoard(fallback, false);
@@ -2652,6 +2870,14 @@ function handleApi(req, res, url) {
           }
           sendJson(res, 502, { error: String(err.message || err), matchups: [] });
         });
+      });
+    return true;
+  }
+  if (pathname === "/api/trends" && req.method === "GET") {
+    buildTeamTrends(url.searchParams.get("refresh") === "1")
+      .then(function (body) { sendJson(res, 200, body); })
+      .catch(function (err) {
+        sendJson(res, 502, { error: String(err.message || err), teams: [] });
       });
     return true;
   }
@@ -3028,6 +3254,7 @@ function routeKey(pathname) {
   if (p === "/matchups" || p === "/api/matchups") return "/api/matchups";
   if (p === "/backtest" || p === "/api/backtest") return "/api/backtest";
   if (p === "/streaks" || p === "/api/streaks") return "/api/streaks";
+  if (p === "/trends" || p === "/api/trends") return "/api/trends";
   if (p === "/teams" || p === "/api/teams") return "/api/teams";
   if (p === "/api/estimates/grade") return "/api/estimates/grade";
   if (p === "/api/download") return "/api/download";
