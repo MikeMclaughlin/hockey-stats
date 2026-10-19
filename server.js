@@ -2537,7 +2537,7 @@ function teamAbbrevOf(value) {
 
 function statsRestUrl(gameRows, start, limit) {
   var exp = "seasonId=" + LIVE_STATS_SEASON + " and gameTypeId=2";
-  if (!gameRows) exp += " and goals>=1";
+  if (!gameRows) exp += " and points>=1";
   // goals alone is not unique, so offset pages skip and repeat rows.
   var sort = gameRows
     ? "[{\"property\":\"gameId\",\"direction\":\"ASC\"},{\"property\":\"playerId\",\"direction\":\"ASC\"}]"
@@ -2616,6 +2616,7 @@ function playerLogMismatches(players) {
 function scorersBodyOk(body) {
   if (!body || body.error || !Array.isArray(body.players) || !body.players.length) return false;
   if (body.totalsMatch === false) return false;
+  if (body.pointScorersIncluded !== true) return false;
   return playerLogMismatches(body.players).length === 0;
 }
 
@@ -2674,15 +2675,15 @@ async function buildScorers() {
   var mismatches = [];
   summary.forEach(function (s) {
     var goals = Number(s.goals) || 0;
-    if (goals < 1) return;
+    var assists = Number(s.assists) || 0;
+    var points = Number(s.points);
+    if (!isFinite(points)) points = goals + assists;
+    if (goals < 1 && points < 1) return;
     var id = s.playerId;
     var seq = sequencesFor(id);
     var goalSeq = seq.goalSeq;
     var pointSeq = seq.pointSeq;
     var gp = Number(s.gamesPlayed) || 0;
-    var assists = Number(s.assists) || 0;
-    var points = Number(s.points);
-    if (!isFinite(points)) points = goals + assists;
     var name = skaterName(s);
     if (leaderGoals[id] != null && leaderGoals[id] !== goals) {
       mismatches.push({ id: id, name: name, stat: "goals", summary: goals, leader: leaderGoals[id] });
@@ -2749,11 +2750,15 @@ async function buildScorers() {
   });
   var maxGames = 0;
   var goalScorers = 0;
+  var pointScorers = 0;
   players.forEach(function (p) {
-    if ((Number(p.goals) || 0) < 1) return;
-    goalScorers += 1;
+    var goalsN = Number(p.goals) || 0;
+    var pointsN = Number(p.points) || 0;
+    if (pointsN >= 1) pointScorers += 1;
     if (p.gp > maxGames) maxGames = p.gp;
-    if (p.goalsByGame.length > maxGames) maxGames = p.goalsByGame.length;
+    if ((p.goalsByGame || []).length > maxGames) maxGames = p.goalsByGame.length;
+    if ((p.pointsByGame || []).length > maxGames) maxGames = p.pointsByGame.length;
+    if (goalsN >= 1) goalScorers += 1;
   });
   var logMismatches = playerLogMismatches(players);
   var totalsMatch = logMismatches.length === 0 && goalScorers > 0;
@@ -2769,6 +2774,8 @@ async function buildScorers() {
     generatedAt: new Date().toISOString(),
     maxGames: maxGames,
     playerCount: goalScorers,
+    pointScorers: pointScorers,
+    pointScorersIncluded: true,
     gameRows: games.length,
     totalsMatch: totalsMatch,
     mismatchCount: logMismatches.length,

@@ -171,8 +171,9 @@
       try { fromStats = require("./stats.js").TOSSUP_ABS_SCORE; }
       catch (e) { fromStats = null; }
     }
-    if (fromStats == null && root && root.HockeyStats && root.HockeyStats.TOSSUP_ABS_SCORE != null) {
-      fromStats = root.HockeyStats.TOSSUP_ABS_SCORE;
+    var g = typeof globalThis !== "undefined" ? globalThis : null;
+    if (fromStats == null && g && g.HockeyStats && g.HockeyStats.TOSSUP_ABS_SCORE != null) {
+      fromStats = g.HockeyStats.TOSSUP_ABS_SCORE;
     }
     return fromStats == null ? 0.5 : fromStats;
   }
