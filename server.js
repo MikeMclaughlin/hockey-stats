@@ -25,13 +25,13 @@ var xgLogMemory = Object.create(null);
 
 function productVersion() {
   try {
-    var parts = String(require("./package.json").version || "2.4").split(".");
+    var parts = String(require("./package.json").version || "2.5").split(".");
     var major = parts[0] || "2";
     var minor = parts[1] || "0";
     if (parts.length < 3 || parts[2] === "") return major + "." + minor;
     return major + "." + minor + "." + parts[2];
   } catch (e) {
-    return "2.4";
+    return "2.5";
   }
 }
 
@@ -1722,6 +1722,7 @@ function scheduleFinal(g, abbrev) {
     date: g.gameDate,
     season: String(g.season || ""),
     gf: gf,
+    ga: ga,
     win: gf > ga ? 1 : 0,
     sf: null,
     home: isHome ? 1 : 0,
@@ -1857,6 +1858,7 @@ function trendsPayloadFromCache(cache) {
     currentSeasonLabel: formatSeason(currentSeason),
     previousSeasonLabel: formatSeason(previousSeason),
     throughDate: through || null,
+    earlyDeltaGp: trends.EARLY_DELTA_GP,
     definition: trends.definition(formatSeason(currentSeason), formatSeason(previousSeason)),
     teams: teams
   };
@@ -2535,7 +2537,7 @@ function teamAbbrevOf(value) {
 
 function statsRestUrl(gameRows, start, limit) {
   var exp = "seasonId=" + LIVE_STATS_SEASON + " and gameTypeId=2";
-  if (!gameRows) exp += " and goals>=1";
+  if (!gameRows) exp += " and points>=1";
   // goals alone is not unique, so offset pages skip and repeat rows.
   var sort = gameRows
     ? "[{\"property\":\"gameId\",\"direction\":\"ASC\"},{\"property\":\"playerId\",\"direction\":\"ASC\"}]"
@@ -2614,6 +2616,7 @@ function playerLogMismatches(players) {
 function scorersBodyOk(body) {
   if (!body || body.error || !Array.isArray(body.players) || !body.players.length) return false;
   if (body.totalsMatch === false) return false;
+  if (body.pointScorersIncluded !== true) return false;
   return playerLogMismatches(body.players).length === 0;
 }
 
@@ -2672,15 +2675,15 @@ async function buildScorers() {
   var mismatches = [];
   summary.forEach(function (s) {
     var goals = Number(s.goals) || 0;
-    if (goals < 1) return;
+    var assists = Number(s.assists) || 0;
+    var points = Number(s.points);
+    if (!isFinite(points)) points = goals + assists;
+    if (goals < 1 && points < 1) return;
     var id = s.playerId;
     var seq = sequencesFor(id);
     var goalSeq = seq.goalSeq;
     var pointSeq = seq.pointSeq;
     var gp = Number(s.gamesPlayed) || 0;
-    var assists = Number(s.assists) || 0;
-    var points = Number(s.points);
-    if (!isFinite(points)) points = goals + assists;
     var name = skaterName(s);
     if (leaderGoals[id] != null && leaderGoals[id] !== goals) {
       mismatches.push({ id: id, name: name, stat: "goals", summary: goals, leader: leaderGoals[id] });
@@ -2747,11 +2750,15 @@ async function buildScorers() {
   });
   var maxGames = 0;
   var goalScorers = 0;
+  var pointScorers = 0;
   players.forEach(function (p) {
-    if ((Number(p.goals) || 0) < 1) return;
-    goalScorers += 1;
+    var goalsN = Number(p.goals) || 0;
+    var pointsN = Number(p.points) || 0;
+    if (pointsN >= 1) pointScorers += 1;
     if (p.gp > maxGames) maxGames = p.gp;
-    if (p.goalsByGame.length > maxGames) maxGames = p.goalsByGame.length;
+    if ((p.goalsByGame || []).length > maxGames) maxGames = p.goalsByGame.length;
+    if ((p.pointsByGame || []).length > maxGames) maxGames = p.pointsByGame.length;
+    if (goalsN >= 1) goalScorers += 1;
   });
   var logMismatches = playerLogMismatches(players);
   var totalsMatch = logMismatches.length === 0 && goalScorers > 0;
@@ -2767,6 +2774,8 @@ async function buildScorers() {
     generatedAt: new Date().toISOString(),
     maxGames: maxGames,
     playerCount: goalScorers,
+    pointScorers: pointScorers,
+    pointScorersIncluded: true,
     gameRows: games.length,
     totalsMatch: totalsMatch,
     mismatchCount: logMismatches.length,
@@ -3617,6 +3626,10 @@ async function downloadPayload() {
     var toss = !!(btRow && btRow.edgeTossUp) || !!(estRow && estRow.edgeTossUp);
     var edge = stats.matchupEdge(away, home);
     var storedSide = storedPick === awayAbbrev ? "away" : storedPick === homeAbbrev ? "home" : null;
+    var odds = (archRow && archRow.odds) || ((oddsStore.byId || {})[id]) || null;
+    if (!odds && btRow && btRow.openingAwayMl != null) {
+      odds = { awayMl: btRow.openingAwayMl, homeMl: btRow.openingHomeMl, total: btRow.openingTotal };
+    }
     var model = null;
     try {
       model = edgeModel.fromMatchup({
@@ -3624,6 +3637,7 @@ async function downloadPayload() {
         home: home,
         projected: { away: estAway, home: estHome },
         edge: edge,
+        odds: odds,
         gameDate: gameDate
       });
     } catch (e) { model = null; }
@@ -3631,10 +3645,6 @@ async function downloadPayload() {
     var edgePick = pickSide === "away" ? awayAbbrev : pickSide === "home" ? homeAbbrev : storedPick;
     var why = stats.explainEdge(edge, away, home, pickSide || undefined);
     var winPct = model && pickSide ? (pickSide === "away" ? model.awayProb : model.homeProb) : null;
-    var odds = (archRow && archRow.odds) || ((oddsStore.byId || {})[id]) || null;
-    if (!odds && btRow && btRow.openingAwayMl != null) {
-      odds = { awayMl: btRow.openingAwayMl, homeMl: btRow.openingHomeMl, total: btRow.openingTotal };
-    }
     var shared = {
       id: id,
       when: (gameDate || "") + " " + (start || ""),

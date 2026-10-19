@@ -383,6 +383,7 @@
         awayB2B: awayRest === 1,
         homeB2B: homeRest === 1,
         edgeAbbrev: edge.winner === "away" ? g.awayAbbrev : g.homeAbbrev,
+        edgeScore: edge.score,
         edgeTossUp: toss,
         edgeRole: edgeRole,
         favoriteMethod: "points-percentage",

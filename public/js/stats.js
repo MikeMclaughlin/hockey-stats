@@ -146,15 +146,16 @@
 
   // Left unchanged after the 2025-26 replay (1,140 games, both clubs at least
   // 5 GP): Edge picks won 55.8% (636 of 1,140). Modest weight moves changed
-  // that by about three games. cf, hdcf, xgDiff, and stXg are not in that
-  // replay, so those four weights stay as well.
+  // that by about three games. cf, hdcf, and stXg are not in that replay.
+  // 2.5 sets PDO and goals-versus-expected (xgDiff) to zero. Last-five save
+  // percentage is not an Edge measure; the win-chance model also ignores it.
   var EDGE_WEIGHTS = {
     ptsPct: 1.2,
     gd: 1.0,
-    pdo: 0.35,
+    pdo: 0,
     last5: 0.4,
     sogShare: 1.0,
-    xgDiff: 1.3,
+    xgDiff: 0,
     cf: 1.2,
     hdcf: 1.15,
     xgf5v5: 1.85,
@@ -187,7 +188,9 @@
         var span = Math.max(Math.abs(aVal) + Math.abs(hVal), 1);
         mag = Math.abs(aVal - hVal) / span;
       }
-      var pts = dir * mag * (EDGE_WEIGHTS[key] || 1);
+      var weight = EDGE_WEIGHTS[key];
+      if (weight == null) weight = 1;
+      var pts = dir * mag * weight;
       breakdown.push({
         key: key,
         away: aVal,
@@ -232,10 +235,11 @@
   }
 
   /**
-   * A matchup is a toss-up when the absolute Edge score is under 0.25.
-   * On the 2025-26 replay that is about the closest tenth of games.
+   * A matchup is a toss-up when the absolute Edge score is under 0.50.
+   * Raised from 0.25 in 2.5 so a weak Lean is not a firm pick.
+   * Confident and Strong labels are kept even when the score is under this.
    */
-  var TOSSUP_ABS_SCORE = 0.25;
+  var TOSSUP_ABS_SCORE = 0.5;
 
   /**
    * P(the nominal Edge side wins), from 1,140 graded 2025-26 games.
