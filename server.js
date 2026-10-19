@@ -1685,7 +1685,8 @@ async function loadTeamXgLog(abbrev, year) {
   return xgLogMemory[key];
 }
 
-var TRENDS_CACHE_VERSION = 2;
+// 3 drops 2.4 logs that have no per-game goals against, so GA/g can rebuild.
+var TRENDS_CACHE_VERSION = 3;
 var MP_ALL_TEAMS_CSV = "https://moneypuck.com/moneypuck/playerData/careers/gameByGame/all_teams.csv";
 var REGULAR_SEASON_GAME_ID = /^2\d{3}02\d{4}$/;
 var trendsInflight = null;
@@ -1780,9 +1781,14 @@ async function fillMissingShots(games) {
 }
 
 function previousComplete(games, previousSeason) {
-  var rows = (games || []).filter(function (g) {
-    return String(g.season) === String(previousSeason) && g.sf != null;
+  var seasonGames = (games || []).filter(function (g) {
+    return String(g.season) === String(previousSeason);
   });
+  for (var i = 0; i < seasonGames.length; i++) {
+    var ga = seasonGames[i] && seasonGames[i].ga;
+    if (ga == null || !isFinite(Number(ga))) return false;
+  }
+  var rows = seasonGames.filter(function (g) { return g.sf != null; });
   return rows.length >= 80;
 }
 
