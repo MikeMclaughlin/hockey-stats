@@ -105,10 +105,10 @@
       <h2>How the edge is scored</h2>
       <ul>
         <li><strong>Season record</strong> — regulation/OT wins–losses–OT losses. Compared on points percentage.</li>
-        <li><strong>PDO</strong> — shooting % + save % from shots on goal. ~100 is league-normal; much higher is finishing/save luck. The board opens sorted by the absolute PDO gap, largest first. A game missing PDO on either side sorts last.</li>
+        <li><strong>PDO</strong> — shooting % + save % from shots on goal. ~100 is league-normal; much higher is finishing/save luck. The board opens sorted by the absolute PDO gap, largest first. A game missing PDO on either side sorts last. PDO does not add to the Edge score.</li>
         <li><strong>Avg GD last 5</strong> — (GF − GA) / games in each club’s last five completed regular-season games.</li>
         <li><strong>SOG share</strong> — shots on goal for / (SF + SA).</li>
-        <li><strong>Expected vs actual</strong> — MoneyPuck xGoals vs actual goals (GF − xGF). Positive means outscoring the shot quality.</li>
+        <li><strong>Expected vs actual</strong> — MoneyPuck xGoals vs actual goals (GF − xGF). Positive means outscoring the shot quality. Goals versus expected goals do not add to the Edge score.</li>
         <li><strong>CF%</strong> — Corsi for percentage: shot attempts for / (CF + CA), all situations.</li>
         <li><strong>HDCF%</strong> — high-danger chances for / (HDCF + HDCA).</li>
         <li><strong>5v5 xGF%</strong> — MoneyPuck 5-on-5 expected goals for / (xGF + xGA).</li>
@@ -116,16 +116,16 @@
         <li><strong>Moneyline / O/U</strong> — NHL partner board for the US (DraftKings when posted). The line is saved for every game and kept after puck drop. A played game with no saved line says so. A “≠ DK” mark means the model edge and the DraftKings favorite are different teams.</li>
         <li><strong>Seasons</strong> — the scoreboard season is the slate on the board. Records and rates use the latest season that already has a final regular-season game, for every date, and that choice stays. Before any final, they stay on the previous regular season. Early in the season the sample is small. A team with no regular-season games yet shows 2026-27 preseason for record, goals, shots, PDO, last five, and rest, marked pre. A stat with no preseason source stays blank. MoneyPuck does not publish 2026-27 preseason, so shot-attempt share, high-danger chances, expected goals, and special-teams expected goals stay blank until a regular-season MoneyPuck row exists. Regular-season numbers replace preseason as soon as that stat has them.</li>
         <li><strong>Edge sample</strong> — the board’s Edge cell counts how many of the 11 measures had a number for both teams. A blank on either side scores zero and is not counted. Fewer than 6 of 11 is marked low data. The matchup card does not repeat that count.</li>
-        <li><strong>Win chance</strong> — the card’s percentage is a logistic model fit on 2021-22 through 2024-25 (home ice, 5-on-5 xG share, last-five goal differential, PDO, last-five save percentage, back-to-back, and projected margin). Confident is 65% or more, Lean is 55% up to 65%, and Toss-up is under 55%. If the pick’s last-five xG share is below the opponent, the label drops one step and the side stays put. Review and Backtest still show the previous 55%/65% rule beside this chance.</li>
+        <li><strong>Win chance</strong> — the card’s percentage is a logistic model fit on 2021-22 through 2024-25 (home ice, 5-on-5 xG share, last-five goal differential, back-to-back, and projected margin). PDO and last-five save percentage stay on the card and add nothing to this percentage or to the Edge score. Strong means 65% or more and the pick leads shots-on-goal share, even-strength expected-goals share, and shot-attempt share by an average of 3 points or more. Confident is 65% or more and leads all three, with a smaller average lead. Lean is 55% up to 65% when the absolute Edge score is at least 0.50. Toss-up is under 55%, a Lean below 0.50, or a market underdog that does not clear an absolute Edge score of 1.75 and does not lead all three shares. If the pick’s last-five xG share is below the opponent, the label drops one step before those gates and the side stays put. Review and Backtest still show the previous score rule beside this chance.</li>
         <li><strong>Score</strong> — finals show the official score. A game in progress shows the live score, period, and clock when the NHL scoreboard has them, and the page checks again about every 90 seconds while any game is live. A finished game keeps its saved final if a later feed drops the score.</li>
-        <li><strong>Toss-up</strong> — the win-chance label when the logistic pick is under 55%. Confident is 65% or more. Lean is 55% up to 65%. The label drops one step when the pick’s last-five xG share is below the opponent and that drop changes the word. The side stays put.</li>
+        <li><strong>Toss-up</strong> — no firm pick. That is a win chance under 55%, a Lean whose absolute Edge score is under 0.50, or an Edge side that is the market underdog without an absolute Edge score of at least 1.75 or a lead in all three of shots-on-goal share, even-strength expected-goals share, and shot-attempt share. Strong, Confident, and Lean are the firm picks. The last-five xG downgrade happens before those gates and does not flip the side.</li>
         <li><strong>Result</strong> — a finished game shows the locked estimate against the actual score (winner right or wrong) and whether the saved Edge pick was right. If the pick was not stored on the estimate, it is rebuilt once from the saved pre-game stats.</li>
         <li><strong>Updates</strong> — a scheduled job refreshes the board, re-locks estimates before puck drop, and grades finals. Opening the page is not required. Live scores are not on that job.</li>
       </ul>
     </section>
   </main>
   <footer>
-    <span>v2.4</span>
+    <span>v2.5</span>
   </footer>
   <script src="/js/dates.js"></script>
   <script src="/js/prefs.js"></script>

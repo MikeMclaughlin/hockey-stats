@@ -25,13 +25,13 @@ var xgLogMemory = Object.create(null);
 
 function productVersion() {
   try {
-    var parts = String(require("./package.json").version || "2.4").split(".");
+    var parts = String(require("./package.json").version || "2.5").split(".");
     var major = parts[0] || "2";
     var minor = parts[1] || "0";
     if (parts.length < 3 || parts[2] === "") return major + "." + minor;
     return major + "." + minor + "." + parts[2];
   } catch (e) {
-    return "2.4";
+    return "2.5";
   }
 }
 
@@ -1722,6 +1722,7 @@ function scheduleFinal(g, abbrev) {
     date: g.gameDate,
     season: String(g.season || ""),
     gf: gf,
+    ga: ga,
     win: gf > ga ? 1 : 0,
     sf: null,
     home: isHome ? 1 : 0,
@@ -1857,6 +1858,7 @@ function trendsPayloadFromCache(cache) {
     currentSeasonLabel: formatSeason(currentSeason),
     previousSeasonLabel: formatSeason(previousSeason),
     throughDate: through || null,
+    earlyDeltaGp: trends.EARLY_DELTA_GP,
     definition: trends.definition(formatSeason(currentSeason), formatSeason(previousSeason)),
     teams: teams
   };
@@ -3617,6 +3619,10 @@ async function downloadPayload() {
     var toss = !!(btRow && btRow.edgeTossUp) || !!(estRow && estRow.edgeTossUp);
     var edge = stats.matchupEdge(away, home);
     var storedSide = storedPick === awayAbbrev ? "away" : storedPick === homeAbbrev ? "home" : null;
+    var odds = (archRow && archRow.odds) || ((oddsStore.byId || {})[id]) || null;
+    if (!odds && btRow && btRow.openingAwayMl != null) {
+      odds = { awayMl: btRow.openingAwayMl, homeMl: btRow.openingHomeMl, total: btRow.openingTotal };
+    }
     var model = null;
     try {
       model = edgeModel.fromMatchup({
@@ -3624,6 +3630,7 @@ async function downloadPayload() {
         home: home,
         projected: { away: estAway, home: estHome },
         edge: edge,
+        odds: odds,
         gameDate: gameDate
       });
     } catch (e) { model = null; }
@@ -3631,10 +3638,6 @@ async function downloadPayload() {
     var edgePick = pickSide === "away" ? awayAbbrev : pickSide === "home" ? homeAbbrev : storedPick;
     var why = stats.explainEdge(edge, away, home, pickSide || undefined);
     var winPct = model && pickSide ? (pickSide === "away" ? model.awayProb : model.homeProb) : null;
-    var odds = (archRow && archRow.odds) || ((oddsStore.byId || {})[id]) || null;
-    if (!odds && btRow && btRow.openingAwayMl != null) {
-      odds = { awayMl: btRow.openingAwayMl, homeMl: btRow.openingHomeMl, total: btRow.openingTotal };
-    }
     var shared = {
       id: id,
       when: (gameDate || "") + " " + (start || ""),

@@ -923,25 +923,31 @@ button.user-menu-btn:focus-visible {
   color: var(--muted);
 }
 #scorers td.sticky,
-#scorers th.sticky {
+#scorers th.sticky,
+#points-table td.sticky,
+#points-table th.sticky {
   position: sticky;
   left: 0;
   z-index: 1;
   background: #fff;
   box-shadow: 1px 0 0 var(--line);
 }
-#scorers th.sticky {
+#scorers th.sticky,
+#points-table th.sticky {
   z-index: 2;
   background: #f3f6fa;
 }
-#scorers td.g-score {
+#scorers td.g-score,
+#points-table td.g-score {
   background: #e5f4ea;
   font-weight: 700;
 }
-#scorers td.g-zero {
+#scorers td.g-zero,
+#points-table td.g-zero {
   color: var(--muted);
 }
-#scorers td.g-blank {
+#scorers td.g-blank,
+#points-table td.g-blank {
   background: transparent;
 }
 .streak-chart {

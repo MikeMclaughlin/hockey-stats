@@ -28,6 +28,10 @@
 
   var AGO = [1, 5, 10, 15, 20];
 
+  // 20 games ago is still the previous season until a team has played more
+  // than 20 games. Until 21 games, every ago caption uses the 1-game change.
+  var EARLY_DELTA_GP = 21;
+
   function round(n, d) {
     var p = Math.pow(10, d == null ? 0 : d);
     return Math.round(n * p) / p;
@@ -61,11 +65,17 @@
     var gp = games.length;
     var wins = 0;
     var gf = 0;
+    var ga = 0;
+    var gaGames = 0;
     var sf = 0;
     var shotGames = 0;
     games.forEach(function (g) {
       if (Number(g.win) === 1 || g.win === true) wins += 1;
       gf += Number(g.gf) || 0;
+      if (g.ga != null && isFinite(Number(g.ga))) {
+        ga += Number(g.ga);
+        gaGames += 1;
+      }
       if (g.sf != null && isFinite(Number(g.sf))) {
         sf += Number(g.sf);
         shotGames += 1;
@@ -76,10 +86,14 @@
       wins: wins,
       winPct: round(wins / gp, 3),
       gfPerGame: round(gf / gp, 2),
+      gaPerGame: gaGames === gp ? round(ga / gp, 2) : null,
       sogPerGame: shotGames === gp ? round(sf / gp, 1) : null,
       sogShare: pairShare(games, "mSf", "mSa"),
+      sogAgainstShare: pairShare(games, "mSa", "mSf"),
       xgfPct5v5: pairShare(games, "x5f", "x5a"),
-      cfPct: pairShare(games, "mCf", "mCa")
+      xgaPct5v5: pairShare(games, "x5a", "x5f"),
+      cfPct: pairShare(games, "mCf", "mCa"),
+      caPct: pairShare(games, "mCa", "mCf")
     };
   }
 
@@ -115,6 +129,8 @@
       "Shots-on-goal share is shots on goal for divided by shots for plus shots against, all situations. " +
       "Even-strength expected-goals share is 5-on-5 expected goals for divided by 5-on-5 expected goals for plus against. " +
       "Shot-attempt share is shot attempts for divided by shot attempts for plus against, all situations. " +
+      "GA/g is goals against per game. " +
+      "Shots-on-goal against share, 5-on-5 expected-goals-against share, and shot-attempt against share use the same spans with the against count in the numerator. " +
       "Each share sums those counts over the games in that span that MoneyPuck has published, not an average of single-game shares. " +
       "A share is n/a only when that span has no MoneyPuck game. " +
       "MoneyPuck can lag the NHL log by a game. " +
@@ -122,12 +138,16 @@
       "1, 5, 10, 15, and 20 games ago are that same season-to-date rate through the game that many games before the team’s most recent regular-season game. " +
       "The count spans the " + previousLabel + " and " + currentLabel + " regular seasons when this season is shorter; the rate uses only games from the season that cutoff game belongs to. " +
       "Playoffs and preseason are excluded. " +
-      "Each column is shaded by that value’s percentile among the teams with a number in the same column. Higher is greener for every stat. Ties use the mid-rank. " +
+      "Each column is shaded by that value’s percentile among the teams with a number in the same column. " +
+      "Higher is greener for win percentage, goals for, shots on goal, and the for-shares. " +
+      "Lower is greener for goals against and the against-shares. Ties use the mid-rank. " +
       "n/a is not shaded and is left out of that column’s percentile. " +
-      "The number under an ago value is current minus that ago value.";
+      "While a team has played fewer than " + EARLY_DELTA_GP + " games, the number under each ago value is current minus the 1-game-ago value. " +
+      "From " + EARLY_DELTA_GP + " games on, that number is current minus that column’s own ago value.";
   }
 
   return {
+    EARLY_DELTA_GP: EARLY_DELTA_GP,
     rate: rate,
     snapshots: snapshots,
     definition: definition

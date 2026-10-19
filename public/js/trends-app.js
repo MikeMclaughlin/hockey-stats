@@ -65,12 +65,56 @@
       agoTitle: function (n) {
         return "Shot-attempt share through the game " + gamesBefore(n) + " before this team’s most recent regular-season game. Click to sort.";
       }
+    },
+    ga: {
+      label: "GA/g",
+      field: "gaPerGame",
+      digits: 2,
+      share: false,
+      lowerBetter: true,
+      currentTitle: "Current goals against per game. Lower is better. Click to sort.",
+      agoTitle: function (n) {
+        return "Goals against per game through the game " + gamesBefore(n) + " before this team’s most recent regular-season game. Lower is better. Click to sort.";
+      }
+    },
+    sogAgainst: {
+      label: "SOG-against share",
+      field: "sogAgainstShare",
+      digits: 3,
+      share: true,
+      lowerBetter: true,
+      currentTitle: "Current shots-on-goal against share, shots against divided by shots for plus shots against, all situations. Lower is better. Click to sort.",
+      agoTitle: function (n) {
+        return "Shots-on-goal against share through the game " + gamesBefore(n) + " before this team’s most recent regular-season game. Lower is better. Click to sort.";
+      }
+    },
+    xgaPct5v5: {
+      label: "5v5 expected-goals-against share",
+      field: "xgaPct5v5",
+      digits: 3,
+      share: true,
+      lowerBetter: true,
+      currentTitle: "Current 5-on-5 expected-goals-against share, expected goals against divided by expected goals for plus against. Lower is better. Click to sort.",
+      agoTitle: function (n) {
+        return "5-on-5 expected-goals-against share through the game " + gamesBefore(n) + " before this team’s most recent regular-season game. Lower is better. Click to sort.";
+      }
+    },
+    caPct: {
+      label: "Shot-attempt-against share",
+      field: "caPct",
+      digits: 3,
+      share: true,
+      lowerBetter: true,
+      currentTitle: "Current shot-attempt against share, shot attempts against divided by shot attempts for plus against, all situations. Lower is better. Click to sort.",
+      agoTitle: function (n) {
+        return "Shot-attempt against share through the game " + gamesBefore(n) + " before this team’s most recent regular-season game. Lower is better. Click to sort.";
+      }
     }
   };
   var AGO = { ago1: 1, ago5: 5, ago10: 10, ago15: 15, ago20: 20 };
   var COLUMNS = ["current", "ago1", "ago5", "ago10", "ago15", "ago20"];
 
-  var state = { teams: [], stat: "winPct", sortKey: "current", sortDir: -1, definition: "" };
+  var state = { teams: [], stat: "winPct", sortKey: "current", sortDir: -1, definition: "", earlyDeltaGp: 21 };
 
   function $(id) { return document.getElementById(id); }
 
@@ -126,7 +170,8 @@
   }
 
   // Mid-rank percentile on a 0–100 scale. Band 0 is the top sixth.
-  function bandClass(value, pool) {
+  // lowerBetter flips the rank so a smaller number is greener.
+  function bandClass(value, pool, lowerBetter) {
     if (value == null || !pool || !pool.length) return "";
     var below = 0;
     var equal = 0;
@@ -135,6 +180,7 @@
       else if (pool[i] === value) equal += 1;
     }
     var percentile = (100 * (below + 0.5 * equal)) / pool.length;
+    if (lowerBetter) percentile = 100 - percentile;
     var index = Math.min(5, Math.floor((100 - percentile) / (100 / 6)));
     return " band-" + index;
   }
@@ -145,13 +191,16 @@
     var deltaHtml = "";
     if (withDelta) {
       var current = cellValue(team, "current");
-      if (current != null) {
+      var gp = team.current && team.current.gp;
+      var early = gp != null && gp < state.earlyDeltaGp;
+      var baseline = early ? cellValue(team, "ago1") : value;
+      if (current != null && baseline != null) {
         var factor = Math.pow(10, spec().digits);
-        var delta = Math.round((current - value) * factor) / factor;
+        var delta = Math.round((current - baseline) * factor) / factor;
         deltaHtml = "<span class='trend-delta'>" + esc(formatDelta(delta)) + "</span>";
       }
     }
-    return "<td class='num trend-cell" + bandClass(value, pools[key]) + "'>" +
+    return "<td class='num trend-cell" + bandClass(value, pools[key], spec().lowerBetter) + "'>" +
       "<span class='trend-val'>" + esc(formatValue(value)) + "</span>" + deltaHtml + "</td>";
   }
 
@@ -230,6 +279,7 @@
     statSelect.addEventListener("change", function () {
       state.stat = statSelect.value;
       if (!STATS[state.stat]) state.stat = "winPct";
+      if (state.sortKey !== "team") state.sortDir = spec().lowerBetter ? 1 : -1;
       render();
     });
   }
@@ -248,8 +298,12 @@
         });
       })
       .then(function (data) {
-        state.teams = data.teams || [];
+        var nextTeams = data.teams || [];
+        if (nextTeams.length || !state.teams.length) state.teams = nextTeams;
         state.definition = data.definition || state.definition;
+        if (data.earlyDeltaGp != null && isFinite(Number(data.earlyDeltaGp))) {
+          state.earlyDeltaGp = Number(data.earlyDeltaGp);
+        }
         var through = data.throughDate || "";
         $("meta").textContent = state.teams.length + " teams" +
           (data.currentSeasonLabel ? " · " + data.currentSeasonLabel : "") +

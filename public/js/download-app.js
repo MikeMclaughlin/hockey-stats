@@ -20,7 +20,7 @@
     { key: "estimatedScore", label: "Estimated score", title: "Estimated score, away goals then home goals. Click to sort." },
     { key: "actualScore", label: "Actual score", title: "Actual or final score, away goals then home goals. Click to sort." },
     { key: "edgePick", label: "Edge pick", title: "Edge pick abbreviation. Click to sort." },
-    { key: "edgeLabel", label: "Edge label", title: "Confident, Lean, or Toss-up from the win-chance model. Click to sort." },
+    { key: "edgeLabel", label: "Edge label", title: "Strong, Confident, Lean, or Toss-up from the win-chance model. Click to sort." },
     { key: "winChance", label: "Win chance", title: "Calibrated win chance for the Edge pick. Click to sort." },
     { key: "why", label: "Why", title: "Why sentence from shots-on-goal share, even-strength expected-goals share, and shot-attempt share. Click to sort.", clip: true },
     { key: "notes", label: "Notes", title: "Rest, streak, and fatigue notes. Click to sort.", clip: true },

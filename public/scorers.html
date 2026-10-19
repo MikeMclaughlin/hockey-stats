@@ -19,15 +19,17 @@
       <img class="site-logo" src="/favicon.svg?v=1.9" alt="Hockey Stats">
       <div>
         <h1>Scorers</h1>
-        <p class="tag">Cumulative goals by each player’s game number</p>
+        <p class="tag">Cumulative goals or points by each player’s game number</p>
       </div>
     </div>
     <div class="toolbar">
       <div class="toolbar-row nav-controls">
-        <div class="stat-toggle" role="group" aria-label="Chart stat">
-          <button type="button" data-stat="goals" aria-pressed="true" class="is-on">Goals</button>
-          <button type="button" data-stat="points" aria-pressed="false">Points</button>
-        </div>
+        <label>Chart
+          <select id="chart-stat" aria-label="Chart stat">
+            <option value="goals">Goals</option>
+            <option value="points">Points</option>
+          </select>
+        </label>
       </div>
       <p id="meta" class="meta meta-line">Loading…</p>
     </div>
@@ -42,18 +44,27 @@
       </div>
       <ul id="legend" class="chart-legend"></ul>
     </section>
-    <section class="board">
-      <h2>Goals per game</h2>
+    <details class="panel" id="goals-panel" open>
+      <summary>Goals per game</summary>
       <div class="table-wrap">
         <table id="scorers">
           <thead id="scorer-head"></thead>
           <tbody id="scorer-body"></tbody>
         </table>
       </div>
-    </section>
+    </details>
+    <details class="panel" id="points-panel" open>
+      <summary>Points per game</summary>
+      <div class="table-wrap">
+        <table id="points-table">
+          <thead id="points-head"></thead>
+          <tbody id="points-body"></tbody>
+        </table>
+      </div>
+    </details>
   </main>
   <footer>
-    <span>v2.4</span>
+    <span>v2.5</span>
   </footer>
   <script src="/js/dates.js"></script>
   <script src="/js/prefs.js"></script>

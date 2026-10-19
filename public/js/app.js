@@ -275,7 +275,7 @@
     if (!model) return "";
     var cls = "badge";
     if (model.label === "Toss-up") cls += " toss";
-    else if (model.label !== "Confident") cls += " even";
+    else if (model.label !== "Confident" && model.label !== "Strong") cls += " even";
     var title = HockeyEdgeModel.labelTitle(model);
     if (model.confidentPick && model.label === "Confident") {
       title += " Confident pick: the Edge, the projected winner, and last-five xG share agree, and the pick is not on a back-to-back against a rested opponent.";

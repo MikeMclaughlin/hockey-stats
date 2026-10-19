@@ -12,9 +12,11 @@
   // the training mean and sd. 2025-26 was held out: 675 of 1,226 picks
   // (55.1%), and 141 of 204 games at a 65%+ win chance (69.1%).
   // xG share is the pre-game 5-on-5 share already stored on each backtest
-  // row (home minus away). PDO's weight is whatever this fit produced.
+  // row (home minus away). PDO and last-five save percentage stay in the
+  // feature list so the fit's column order is unchanged, and both weights
+  // are 0 so those pills do not move the win chance.
   var NAMES = ["homeIce", "xgShare", "last5Gd", "pdo", "sv", "b2b", "projMargin"];
-  var WEIGHTS = [0.171466, 0.350884, 0.048083, 0.057388, -0.032031, 0.155218, 0.135108];
+  var WEIGHTS = [0.171466, 0.350884, 0.048083, 0, 0, 0.155218, 0.135108];
   var MEAN = [0, -0.069604, -0.048633, 0.01022, -0.019319, 0.109343, 0.369645];
   var SD = [1, 5.825264, 1.867758, 2.824197, 3.883198, 0.455125, 1.143356];
   var VALIDATION = {
@@ -110,16 +112,33 @@
     model = model || {};
     var pct = num(model.pickPct);
     var chance = "Calibrated win chance " + (pct == null ? "—" : pct) + "%.";
+    if (model.dogGated) {
+      return "Toss-up. The Edge side is the market underdog, and it does not have an absolute Edge score of " +
+        UNDERDOG_ABS_SCORE + " or a lead in shots-on-goal share, even-strength expected-goals share, and shot-attempt share. " +
+        chance;
+    }
+    if (model.scoreGated) {
+      return "Toss-up. This Lean’s absolute Edge score is under " + scoreCutoff() + ", so it is not a firm pick. " + chance;
+    }
     if (model.downgraded && model.labelBefore && model.labelBefore !== model.label) {
       return "Lowered from " + model.labelBefore + " to " + model.label +
         " because the pick's last-5 xG share is below the opponent. " +
         chance + " The side was not flipped.";
     }
+    if (model.label === "Strong") {
+      return "Strong. Win chance 65% or more, and the pick leads shots-on-goal share, even-strength expected-goals share, and shot-attempt share by an average of " +
+        STRONG_AVG_GAP + " points or more. " + chance;
+    }
     if (model.label === "Confident" && pct != null && pct >= 65) {
-      return "Confident at 65% or more. " + chance;
+      return "Confident at 65% or more, and the pick leads shots-on-goal share, even-strength expected-goals share, and shot-attempt share. The average lead is under " +
+        STRONG_AVG_GAP + " points. " + chance;
+    }
+    if (model.top3Demoted) {
+      return "Lean. The win chance is in the Confident band, and the pick does not lead all three of shots-on-goal share, even-strength expected-goals share, and shot-attempt share. " +
+        chance;
     }
     if (model.label === "Lean" && pct != null && pct >= 55 && pct < 65) {
-      return "Lean, from 55% up to 65%. " + chance;
+      return "Lean, from 55% up to 65%, with an absolute Edge score of at least " + scoreCutoff() + ". " + chance;
     }
     if (model.label === "Toss-up" && pct != null && pct < 55) {
       return "Toss-up, under 55%. " + chance;
@@ -146,6 +165,23 @@
     return h > a ? "home" : "away";
   }
 
+  function scoreCutoff() {
+    var fromStats = null;
+    if (typeof require === "function") {
+      try { fromStats = require("./stats.js").TOSSUP_ABS_SCORE; }
+      catch (e) { fromStats = null; }
+    }
+    if (fromStats == null && root && root.HockeyStats && root.HockeyStats.TOSSUP_ABS_SCORE != null) {
+      fromStats = root.HockeyStats.TOSSUP_ABS_SCORE;
+    }
+    return fromStats == null ? 0.5 : fromStats;
+  }
+
+  // Same band as the old 65% Edge score. A market underdog needs this
+  // absolute score, or a lead in all three top shares.
+  var UNDERDOG_ABS_SCORE = 1.75;
+  var STRONG_AVG_GAP = 3;
+
   function oldPickPct(edge) {
     if (!edge) return null;
     var score = num(edge.score);
@@ -154,8 +190,42 @@
       if (edge.winner && edge.winner !== "even") return 55;
       return null;
     }
-    if (Math.abs(score) < 0.25) return null;
+    if (Math.abs(score) < scoreCutoff()) return null;
     return Math.abs(score) >= 1.75 ? 65 : 55;
+  }
+
+  function impliedPct(ml) {
+    var n = num(ml);
+    if (n == null || n === 0) return null;
+    var p = n > 0 ? 100 / (n + 100) : (-n) / ((-n) + 100);
+    return Math.round(p * 1000) / 10;
+  }
+
+  function marketSideFromMl(awayMl, homeMl) {
+    var away = impliedPct(awayMl);
+    var home = impliedPct(homeMl);
+    if (away == null || home == null) return null;
+    if (Math.abs(away - home) < 0.5) return "even";
+    return away > home ? "away" : "home";
+  }
+
+  function top3Lead(input, pick) {
+    var pairs = [
+      ["awaySog", "homeSog"],
+      ["awayXg", "homeXg"],
+      ["awayCf", "homeCf"]
+    ];
+    var gaps = [];
+    for (var i = 0; i < pairs.length; i++) {
+      var away = num(input[pairs[i][0]]);
+      var home = num(input[pairs[i][1]]);
+      if (away == null || home == null) return { all: false, avg: null };
+      gaps.push(pick === "home" ? home - away : away - home);
+    }
+    return {
+      all: gaps[0] > 0 && gaps[1] > 0 && gaps[2] > 0,
+      avg: (gaps[0] + gaps[1] + gaps[2]) / 3
+    };
   }
 
   function chipsFor(input, pick) {
@@ -219,6 +289,29 @@
       downgraded = dropped !== label;
       label = dropped;
     }
+    var top = top3Lead(input, pick);
+    var score = num(input.edgeScore);
+    var absScore = score == null ? null : Math.abs(score);
+    var top3Demoted = false;
+    if (label === "Confident" && !top.all) {
+      label = "Lean";
+      top3Demoted = true;
+    }
+    if (label === "Confident" && top.all && top.avg >= STRONG_AVG_GAP) label = "Strong";
+    var scoreGated = false;
+    if (label === "Lean" && absScore != null && absScore < scoreCutoff()) {
+      label = "Toss-up";
+      scoreGated = true;
+    }
+    var market = marketSideFromMl(input.awayMl, input.homeMl);
+    var dogGated = false;
+    if (label !== "Toss-up" && market && market !== "even" && pick !== market) {
+      var bigScore = absScore != null && absScore >= UNDERDOG_ABS_SCORE;
+      if (!(bigScore || top.all)) {
+        label = "Toss-up";
+        dogGated = true;
+      }
+    }
     var xgSide = last5Side(input);
     var projSide = projectedSide(input);
     var pickB2B = pick === "home" ? !!input.homeB2B : !!input.awayB2B;
@@ -235,6 +328,9 @@
       label: label,
       labelBefore: labelBefore,
       downgraded: downgraded,
+      top3Demoted: top3Demoted,
+      scoreGated: scoreGated,
+      dogGated: dogGated,
       confidentPick: confidentPick,
       earlySeason: month === "10" || month === "11",
       chips: chipsFor(input, pick),
@@ -253,6 +349,12 @@
       homeAbbrev: row.homeAbbrev,
       awayXg: row.awayXgf5,
       homeXg: row.homeXgf5,
+      awaySog: row.awaySog,
+      homeSog: row.homeSog,
+      awayCf: row.awayCf,
+      homeCf: row.homeCf,
+      awayMl: row.openingAwayMl,
+      homeMl: row.openingHomeMl,
       awayLast5Xg: row.awayLast5Xgf,
       homeLast5Xg: row.homeLast5Xgf,
       awayLast5: row.awayLast5,
@@ -283,6 +385,12 @@
       homeAbbrev: home.abbrev,
       awayXg: away.xgfPct5v5,
       homeXg: home.xgfPct5v5,
+      awaySog: away.sogShare,
+      homeSog: home.sogShare,
+      awayCf: away.cfPct,
+      homeCf: home.cfPct,
+      awayMl: m.odds && m.odds.awayMl,
+      homeMl: m.odds && m.odds.homeMl,
       awayLast5Xg: away.last5XgfPct,
       homeLast5Xg: home.last5XgfPct,
       awayLast5: away.last5AvgGd,
@@ -298,7 +406,7 @@
       gameDate: m.gameDate,
       edgeScore: edge.score,
       edgeWinner: edge.winner,
-      edgeTossUp: !!(m.edgeTossUp || (edge.score != null && Math.abs(edge.score) < 0.25))
+      edgeTossUp: !!(m.edgeTossUp || (edge.score != null && Math.abs(edge.score) < scoreCutoff()))
     });
   }
 
@@ -322,6 +430,8 @@
     VALIDATION: VALIDATION,
     homeWinProbability: homeWinProbability,
     oldPickPct: oldPickPct,
+    UNDERDOG_ABS_SCORE: UNDERDOG_ABS_SCORE,
+    STRONG_AVG_GAP: STRONG_AVG_GAP,
     assess: assess,
     labelTitle: labelTitle,
     fromBacktestRow: fromBacktestRow,

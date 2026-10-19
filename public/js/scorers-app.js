@@ -9,8 +9,10 @@
   var state = {
     payload: null,
     stat: "goals",
-    sortKey: "goals",
-    sortDir: -1
+    tables: {
+      goals: { sortKey: "goals", sortDir: -1 },
+      points: { sortKey: "points", sortDir: -1 }
+    }
   };
 
   function $(id) { return document.getElementById(id); }
@@ -49,22 +51,28 @@
     return out;
   }
 
-  function cmpVal(row, key) {
+  function cmpVal(row, key, seqKey) {
     if (key.indexOf("g") === 0 && /^g\d+$/.test(key)) {
       var idx = Number(key.slice(1)) - 1;
-      var seq = row.goalsByGame || [];
+      var seq = row[seqKey] || [];
       if (idx >= seq.length) return null;
       return seq[idx];
+    }
+    if (key === "ppg") {
+      var pts = Number(row.points);
+      var gp = Number(row.gp);
+      if (!isFinite(pts) || !gp) return gp ? 0 : null;
+      return pts / gp;
     }
     if (key === "name" || key === "team") return String(row[key] || "");
     var n = Number(row[key]);
     return isFinite(n) ? n : null;
   }
 
-  function compare(a, b) {
+  function compareRows(a, b, sort, seqKey, totalKey, rateKey) {
     function one(key, dir) {
-      var av = cmpVal(a, key);
-      var bv = cmpVal(b, key);
+      var av = cmpVal(a, key, seqKey);
+      var bv = cmpVal(b, key, seqKey);
       if (av == null && bv == null) return 0;
       if (av == null) return 1;
       if (bv == null) return -1;
@@ -79,14 +87,14 @@
       if (av > bv) return 1 * dir;
       return 0;
     }
-    var c = one(state.sortKey, state.sortDir);
+    var c = one(sort.sortKey, sort.sortDir);
     if (c) return c;
-    if (state.sortKey !== "goals") {
-      c = one("goals", -1);
+    if (sort.sortKey !== totalKey) {
+      c = one(totalKey, -1);
       if (c) return c;
     }
-    if (state.sortKey !== "gpg") {
-      c = one("gpg", -1);
+    if (sort.sortKey !== rateKey) {
+      c = one(rateKey, -1);
       if (c) return c;
     }
     return one("name", 1);
@@ -185,39 +193,75 @@
     return "<td class='num g-zero'>0</td>";
   }
 
-  function renderTable() {
+  function renderStatTable(kind) {
+    var spec = kind === "points"
+      ? {
+          kind: "points",
+          headId: "points-head",
+          bodyId: "points-body",
+          seqKey: "pointsByGame",
+          totalKey: "points",
+          rateKey: "ppg",
+          rateLabel: "Points per game",
+          totalTitle: "Total points. Click to sort.",
+          rateTitle: "Points per game. Click to sort.",
+          gameTitle: function (n) { return "Points in game " + n + ", from the player's first game. Click to sort."; },
+          keep: function (p) { return (Number(p.points) || 0) >= 1; },
+          total: function (p) { return p.points; },
+          rate: function (p) { return p.gp ? (p.points / p.gp).toFixed(2) : "0.00"; }
+        }
+      : {
+          kind: "goals",
+          headId: "scorer-head",
+          bodyId: "scorer-body",
+          seqKey: "goalsByGame",
+          totalKey: "goals",
+          rateKey: "gpg",
+          rateLabel: "Goals per game",
+          totalTitle: "Total goals. Click to sort.",
+          rateTitle: "Goals per game. Click to sort.",
+          gameTitle: function (n) { return "Goals in game " + n + ", from the player's first game. Click to sort."; },
+          keep: function (p) { return (Number(p.goals) || 0) >= 1; },
+          total: function (p) { return p.goals; },
+          rate: function (p) { return p.gp ? (p.goals / p.gp).toFixed(2) : "0.00"; }
+        };
+    var sort = state.tables[spec.kind];
     var payload = state.payload || {};
-    var players = (payload.players || []).filter(function (p) {
-      return (Number(p.goals) || 0) >= 1;
-    }).slice().sort(compare);
-    var maxGames = payload.maxGames || 0;
-    var head = $("scorer-head");
-    var body = $("scorer-body");
+    var players = (payload.players || []).filter(spec.keep).slice().sort(function (a, b) {
+      return compareRows(a, b, sort, spec.seqKey, spec.totalKey, spec.rateKey);
+    });
+    var maxGames = 0;
+    players.forEach(function (p) {
+      var seq = p[spec.seqKey] || [];
+      if (seq.length > maxGames) maxGames = seq.length;
+      if ((Number(p.gp) || 0) > maxGames) maxGames = Number(p.gp) || 0;
+    });
+    var head = $(spec.headId);
+    var body = $(spec.bodyId);
     if (!head || !body) return;
     var cols = ["<th data-key='name' class='sticky'>Player</th>", "<th data-key='team'>Team</th>", "<th data-key='gp' class='num'>GP</th>"];
     for (var g = 1; g <= maxGames; g++) cols.push("<th data-key='g" + g + "' class='num'>G" + g + "</th>");
-    cols.push("<th data-key='goals' class='num'>Total</th>");
-    cols.push("<th data-key='gpg' class='num'>Goals per game</th>");
+    cols.push("<th data-key='" + spec.totalKey + "' class='num'>Total</th>");
+    cols.push("<th data-key='" + spec.rateKey + "' class='num'>" + spec.rateLabel + "</th>");
     head.innerHTML = "<tr>" + cols.join("") + "</tr>";
     head.querySelectorAll("th[data-key]").forEach(function (th) {
       var key = th.getAttribute("data-key");
       var text = "Click to sort.";
       if (key === "name") text = "Player name. Click to sort.";
-      else if (key === "team") text = "Team. Click to sort.";
+      else if (key === "team") text = "Team abbreviation. Click to sort.";
       else if (key === "gp") text = "Games played. Click to sort.";
-      else if (key === "goals") text = "Total goals. Click to sort.";
-      else if (key === "gpg") text = "Goals per game. Click to sort.";
-      else if (key && key.charAt(0) === "g") text = "Goals in game " + key.slice(1) + ", from the player's first game. Click to sort.";
+      else if (key === spec.totalKey) text = spec.totalTitle;
+      else if (key === spec.rateKey) text = spec.rateTitle;
+      else if (key && key.charAt(0) === "g") text = spec.gameTitle(key.slice(1));
       th.setAttribute("title", text);
       th.setAttribute("aria-label", text);
     });
     body.innerHTML = players.map(function (p) {
-      var seq = p.goalsByGame || [];
+      var seq = p[spec.seqKey] || [];
       var games = "";
       for (var i = 0; i < maxGames; i++) games += cell(seq[i] || 0, i < seq.length);
-      var gpg = p.gp ? (p.goals / p.gp).toFixed(2) : "0.00";
       return "<tr><td class='sticky'></td><td class='scorer-team'></td><td class='num'>" + (p.gp || 0) + "</td>" +
-        games + "<td class='num'>" + p.goals + "</td><td class='num'>" + gpg + "</td></tr>";
+        games + "<td class='num'>" + spec.total(p) + "</td><td class='num'>" + spec.rate(p) + "</td></tr>";
     }).join("");
     var rows = body.querySelectorAll("tr");
     players.forEach(function (p, i) {
@@ -226,23 +270,36 @@
     });
     head.querySelectorAll("th").forEach(function (th) {
       th.classList.remove("sort-asc", "sort-desc");
-      if (th.getAttribute("data-key") === state.sortKey) {
-        th.classList.add(state.sortDir === 1 ? "sort-asc" : "sort-desc");
+      if (th.getAttribute("data-key") === sort.sortKey) {
+        th.classList.add(sort.sortDir === 1 ? "sort-asc" : "sort-desc");
       }
       th.addEventListener("click", function () {
         var key = th.getAttribute("data-key");
-        if (state.sortKey === key) state.sortDir *= -1;
+        if (sort.sortKey === key) sort.sortDir *= -1;
         else {
-          state.sortKey = key;
-          state.sortDir = (key === "name" || key === "team") ? 1 : -1;
+          sort.sortKey = key;
+          sort.sortDir = (key === "name" || key === "team") ? 1 : -1;
         }
-        renderTable();
+        renderStatTable(spec.kind);
       });
     });
   }
 
+  function renderTable() {
+    renderStatTable("goals");
+    renderStatTable("points");
+  }
+
   function render(payload) {
-    state.payload = payload || { players: [] };
+    var next = payload || { players: [] };
+    var nextCount = (next.players || []).length;
+    var prevCount = state.payload && state.payload.players ? state.payload.players.length : 0;
+    if (!nextCount && prevCount) {
+      var metaKeep = $("meta");
+      if (metaKeep) metaKeep.textContent = "Refresh returned no scorers. Showing the previous tables.";
+      return;
+    }
+    state.payload = next;
     var meta = $("meta");
     var when = state.payload.generatedAt && window.HockeyDates
       ? HockeyDates.formatTableDate(state.payload.generatedAt)
@@ -254,32 +311,34 @@
     }
     var note = $("note");
     if (note) {
-      var text = "Game number is each player’s own game log, earliest date first. A blank cell is a game not played. 0 is a game played without a goal.";
+      var text = "Game number is each player’s own game log, earliest date first. A blank cell is a game not played. 0 is a game played without a goal in the goals table, or without a point in the points table.";
       if (state.payload.totalsMatchLeaders === false) {
         text += " Some totals differ from the NHL leaders list.";
       }
       note.textContent = text;
     }
-    document.querySelectorAll(".stat-toggle button").forEach(function (btn) {
-      var on = btn.getAttribute("data-stat") === state.stat;
-      btn.setAttribute("aria-pressed", on ? "true" : "false");
-      btn.classList.toggle("is-on", on);
-    });
+    var chartStat = $("chart-stat");
+    if (chartStat) chartStat.value = state.stat;
     drawChart();
     renderTable();
   }
 
   function fail(err) {
+    var message = String(err && err.message ? err.message : err);
     var meta = $("meta");
+    if (state.payload) {
+      if (meta) meta.textContent = "Refresh failed. Showing the previous tables. " + message;
+      return;
+    }
     if (meta) meta.textContent = "Could not load scorers";
     var note = $("note");
-    if (note) note.textContent = String(err && err.message ? err.message : err);
-    if (!state.payload) {
-      var body = $("scorer-body");
+    if (note) note.textContent = message;
+    ["scorer-body", "points-body"].forEach(function (id) {
+      var body = $(id);
       if (body && !body.children.length) {
-        body.innerHTML = "<tr><td class='empty' colspan='6'>" + String(err && err.message ? err.message : err) + "</td></tr>";
+        body.innerHTML = "<tr><td class='empty' colspan='6'>" + message + "</td></tr>";
       }
-    }
+    });
   }
 
   function load() {
@@ -299,12 +358,13 @@
       .then(hideLoading);
   }
 
-  document.querySelectorAll(".stat-toggle button").forEach(function (btn) {
-    btn.addEventListener("click", function () {
-      state.stat = btn.getAttribute("data-stat") === "points" ? "points" : "goals";
-      if (state.payload) render(state.payload);
+  var chartStat = $("chart-stat");
+  if (chartStat) {
+    chartStat.addEventListener("change", function () {
+      state.stat = chartStat.value === "points" ? "points" : "goals";
+      if (state.payload) drawChart();
     });
-  });
+  }
   window.addEventListener("resize", function () {
     if (state.payload) drawChart();
   });
