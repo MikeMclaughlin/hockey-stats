@@ -80,6 +80,11 @@
     if (key === "verdict") return verdictOf(r);
     if (key === "totalErr") return r.totalErr == null ? 99 : r.totalErr;
     if (key === "gameDate") return whenOf(r);
+    if (key === "edgeAbbrev") {
+      var model = modelOfRow(r);
+      return (model && model.pickAbbrev) || r.edgeAbbrev || "";
+    }
+    if (key === "edgeRole") return edgeRoleOf(r);
     return r[key] == null ? "" : r[key];
   }
 
@@ -101,8 +106,8 @@
       homeLast5Sv: r.homeLast5Sv,
       awayXgf5: r.awayXgf5,
       homeXgf5: r.homeXgf5,
-      edgeAbbrev: r.edgeAbbrev || "",
-      edgeRole: r.edgeRole || "",
+      edgeAbbrev: (modelOfRow(r) && modelOfRow(r).pickAbbrev) || r.edgeAbbrev || "",
+      edgeRole: edgeRoleOf(r),
       notes: r.notes || ""
     };
   }
@@ -130,7 +135,7 @@
 
   function sideHit(r) {
     if (!state.side) return true;
-    return r.edgeRole === state.side;
+    return edgeRoleOf(r) === state.side;
   }
 
   function filteredRows() {
@@ -186,10 +191,28 @@
     return ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][d.getUTCDay()];
   }
 
+  function modelOfRow(r) {
+    if (!window.HockeyEdgeModel || !r) return null;
+    return HockeyEdgeModel.fromBacktestRow(r);
+  }
+
+  function edgeRoleOf(r) {
+    var model = modelOfRow(r);
+    if (!model) return r.edgeRole || "";
+    if (model.label === "Toss-up") return "toss-up";
+    var away = r.awayPtsPct;
+    var home = r.homePtsPct;
+    if (away == null || home == null || Number(away) === Number(home)) return "even";
+    var favorite = Number(away) > Number(home) ? "away" : "home";
+    return model.pick === favorite ? "favorite" : "underdog";
+  }
+
   function edgeChanceCell(r) {
-    var bits = (r.edgeAbbrev || "—") + (r.edgeTossUp ? " toss up" : "");
-    if (!window.HockeyEdgeModel || !r.graded) return bits;
-    var model = HockeyEdgeModel.fromBacktestRow(r);
+    var model = modelOfRow(r);
+    var bits = model
+      ? (model.pickAbbrev || "—") + (model.label === "Toss-up" ? " toss up" : "")
+      : (r.edgeAbbrev || "—") + (r.edgeTossUp ? " toss up" : "");
+    if (!model || !r.graded) return bits;
     var oldPct = model.oldPct == null ? "toss-up" : model.oldPct + "%";
     return bits + "<div class='edge-meta'>New " + model.pickAbbrev + " " + model.pickPct +
       "% " + model.label + "</div><div class='edge-meta'>Old " + oldPct + "</div>";
@@ -355,7 +378,7 @@
         "<td class='num'>" + pct(r.awayXgf5) + "</td>" +
         "<td class='num'>" + pct(r.homeXgf5) + "</td>" +
         "<td>" + edgeChanceCell(r) + "</td>" +
-        "<td>" + (r.edgeRole || "—") + "</td>" +
+        "<td>" + (edgeRoleOf(r) || "—") + "</td>" +
         "<td class='notes'>" + (r.notes || "—") + "</td>" +
         "</tr>";
     }).join("");

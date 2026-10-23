@@ -1,20 +1,22 @@
 (function () {
   "use strict";
 
-  var state = { data: null, sortKey: "pdo", sortDir: -1, filters: {}, tier: "all", cardsExpanded: false, featured: null };
+  var state = { data: null, sortKey: "pdo", sortDir: -1, filters: {}, tier: "all", b2b: "all", showWhy: true, cardsExpanded: false, featured: null };
+  var B2B_KEY = "hs-b2b-filter";
+  var WHY_KEY = "hs-show-why";
   var CARDS_KEY = "hs-cards-expanded";
   var STATS_KEY = "hs-card-stats";
   var DEFAULT_FEATURED = ["sogShare", "xgfPct5v5", "cf"];
   var CARD_STATS = [
-    { key: "sogShare", label: "Shots-on-goal share", kind: "sogShare", fmt: "pct", field: "sogShare", pre: "sogShare" },
-    { key: "xgfPct5v5", label: "Even-strength expected-goals share", kind: "xgf5v5", fmt: "pct", field: "xgfPct5v5" },
-    { key: "cf", label: "Shot-attempt share", kind: "cf", fmt: "pct", field: "cfPct" },
-    { key: "pdo", label: "Shooting plus save percentage", kind: "pdo", fmt: "plain", field: "pdo", pre: "pdo" },
-    { key: "last5Sv", label: "Save percentage last five games", kind: "last5Sv", fmt: "pct", field: "last5SvPct", pre: "last5Sv" },
-    { key: "last5", label: "Average goal differential last five games", kind: "last5", fmt: "signed2", field: "last5AvgGd", pre: "last5" },
-    { key: "xgDiff", label: "Actual goals versus expected goals", kind: "xgDiff", fmt: "signed1", field: "gfMinusXg" },
-    { key: "hdcf", label: "High-danger chance share", kind: "hdcf", fmt: "pct", field: "hdcfPct" },
-    { key: "stXg", label: "Special-teams expected goals", kind: "stXg", fmt: "signed1", field: "stXg" }
+    { key: "sogShare", label: "Shots-on-goal share", short: "SOG share", kind: "sogShare", fmt: "pct", field: "sogShare", pre: "sogShare" },
+    { key: "xgfPct5v5", label: "Even-strength expected-goals share", short: "5v5 xG share", kind: "xgf5v5", fmt: "pct", field: "xgfPct5v5" },
+    { key: "cf", label: "Shot-attempt share", short: "Shot-attempt share (CF%)", kind: "cf", fmt: "pct", field: "cfPct" },
+    { key: "pdo", label: "Shooting plus save percentage", short: "PDO (SH% + SV%)", kind: "pdo", fmt: "plain", field: "pdo", pre: "pdo" },
+    { key: "last5Sv", label: "Save percentage last five games", short: "Save % last 5", kind: "last5Sv", fmt: "pct", field: "last5SvPct", pre: "last5Sv" },
+    { key: "last5", label: "Average goal differential last five games", short: "Avg goal diff last 5", kind: "last5", fmt: "signed2", field: "last5AvgGd", pre: "last5" },
+    { key: "xgDiff", label: "Actual goals versus expected goals", short: "Goals vs xG", kind: "xgDiff", fmt: "signed1", field: "gfMinusXg" },
+    { key: "hdcf", label: "High-danger chance share", short: "High-danger share", kind: "hdcf", fmt: "pct", field: "hdcfPct" },
+    { key: "stXg", label: "Special-teams expected goals", short: "Special-teams xG", kind: "stXg", fmt: "signed1", field: "stXg" }
   ];
 
   var SORT_FIELDS = [
@@ -77,15 +79,18 @@
 
   function signedText(n, digits) {
     if (n == null || !isFinite(Number(n))) return "—";
-    var v = HockeyStats.round(Number(n), digits == null ? 1 : digits);
-    return (v > 0 ? "+" : "") + v;
+    var v = Number(n);
+    var text = v.toFixed(digits == null ? 1 : digits);
+    if (v > 0) text = "+" + text;
+    return text;
   }
 
   function statText(spec, value) {
     if (value == null || !isFinite(Number(value))) return "—";
-    if (spec.fmt === "pct") return value + "%";
+    if (spec.fmt === "pct") return Number(value).toFixed(1) + "%";
     if (spec.fmt === "signed2") return signedText(value, 2);
     if (spec.fmt === "signed1") return signedText(value, 1);
+    if (spec.fmt === "plain") return Number(value).toFixed(1);
     return String(value);
   }
 
@@ -151,9 +156,7 @@
       : "O/U —";
     var src = o.partner ? " · " + o.partner : "";
     if (o.locked) src += " · saved";
-    var hold = HockeyStats.twoWayHold ? HockeyStats.twoWayHold(o.awayMl, o.homeMl) : null;
-    var vig = hold != null ? "<span>Hold " + hold + "%</span>" : "";
-    return '<p class="odds"><span>Moneyline ' + ml + "</span><span>" + ou.replace("O/U", "Over/under") + src + "</span>" + vig + "</p>";
+    return '<p class="odds"><span>Moneyline ' + ml + "</span><span>" + ou.replace("O/U", "Over/under") + src + "</span></p>";
   }
 
   function notesLine(m) {
@@ -256,12 +259,14 @@
     var s = m.scoreboard || {};
     var show = s.away != null && s.home != null && (s.live || s.final);
     var clock = clockText(s);
+    if (!show && !clock) return "";
     var clockHtml = clock
       ? '<p class="score-clock' + (s.final ? " is-final" : "") + '">' + esc(clock) + "</p>"
       : "";
-    return clockHtml +
-      scoreTeamRow(m.away, "Away", show ? s.away : "", show) +
-      scoreTeamRow(m.home, "Home", show ? s.home : "", show);
+    var num = show
+      ? '<p class="score-num">' + esc(m.away.abbrev) + " " + esc(s.away) + " – " + esc(s.home) + " " + esc(m.home.abbrev) + "</p>"
+      : "";
+    return clockHtml + num;
   }
 
   function edgeBadge(m) {
@@ -389,34 +394,203 @@
     return bits.join(" · ");
   }
 
-  function statCell(spec, team) {
-    var value = team ? team[spec.field] : null;
-    var pre = spec.pre && team && team.preseason && team.preseason[spec.pre];
-    var sign = HockeyStats.pillSign(value, spec.kind);
-    var cls = sign || "neutral";
-    var title = PILL_TITLES[spec.kind] || spec.label;
-    if (pre) title += " " + ((state.data && state.data.preseasonLabel) || "2026-27 preseason") + ".";
-    var text = statText(spec, value);
-    if (pre && text !== "—") text += " " + "pre";
-    return '<td class="val ' + cls + '" title="' + esc(title) + '">' +
-      (pre && text !== "—" ? statText(spec, value) + " " + preMark(true) : esc(text)) +
-      "</td>";
+  var TEAM_COLORS = {
+    ANA: "#FC4C02", BOS: "#FFB81C", BUF: "#003087", CAR: "#CE1126",
+    CBJ: "#002654", CGY: "#C8102E", CHI: "#CF0A2C", COL: "#6F263D",
+    DAL: "#006847", DET: "#CE1126", EDM: "#041E42", FLA: "#041E42",
+    LAK: "#111111", MIN: "#154734", MTL: "#001E62", NJD: "#CE1126",
+    NSH: "#FFB81C", NYI: "#00539B", NYR: "#0038A8", OTT: "#C52032",
+    PHI: "#F74902", PIT: "#111111", SEA: "#001628", SJS: "#006D75",
+    STL: "#002F87", TBL: "#002868", TOR: "#00205B", UTA: "#111111",
+    VAN: "#00205B", VGK: "#B4975A", WPG: "#041E42", WSH: "#041E42"
+  };
+
+  function inkOn(hex) {
+    var h = String(hex || "").replace("#", "");
+    if (h.length !== 6) return "#fff";
+    var r = parseInt(h.slice(0, 2), 16);
+    var g = parseInt(h.slice(2, 4), 16);
+    var b = parseInt(h.slice(4, 6), 16);
+    var y = (r * 299 + g * 587 + b * 114) / 1000;
+    return y > 160 ? "#1a1a1a" : "#fff";
   }
 
-  function statTable(rows, away, home, headLabel) {
+  function teamColor(abbrev) {
+    return TEAM_COLORS[String(abbrev || "").toUpperCase()] || "#0b1c2c";
+  }
+
+  function seasonMark(m) {
+    var label = (state.data && state.data.scoreboardSeasonLabel) || "2026-27";
+    var kind = m && Number(m.gameType) === 2 ? "REG" : (m && m.gameTypeLabel ? String(m.gameTypeLabel) : "REG");
+    return label + " " + kind;
+  }
+
+  function bannerWhen(m) {
+    var time = "";
+    if (m.startTimeUTC) {
+      var d = new Date(m.startTimeUTC);
+      if (isFinite(d.getTime())) {
+        try {
+          time = new Intl.DateTimeFormat("en-US", {
+            timeZone: "America/New_York",
+            hour: "numeric",
+            minute: "2-digit",
+            timeZoneName: "short"
+          }).format(d);
+        } catch (e) {
+          time = fmtTime(m.startTimeUTC);
+        }
+      }
+    }
+    var venue = m.venue || "";
+    if (time && venue) return time + " · " + venue;
+    return time || venue || fmtTime(m.startTimeUTC);
+  }
+
+  function splitBanner(m) {
+    function half(team, venue) {
+      var bg = teamColor(team && team.abbrev);
+      var fg = inkOn(bg);
+      var logo = team && team.logo ? '<img class="split-logo" src="' + esc(team.logo) + '" alt="">' : "";
+      var record = hyphenRecord(team && team.record);
+      var splitRaw = venue === "Away" ? (team && team.roadRecord) : (team && team.homeRecord);
+      var split = hyphenRecord(splitRaw);
+      var title = split ? (venue + " " + split + (record ? ", overall " + record : "")) : (record || "");
+      var pre = team && team.preseason && team.preseason.record ? " " + preMark(true) : "";
+      return '<div class="split-side" style="background:' + bg + ";color:" + fg + '">' +
+        '<div class="split-season">' + esc(seasonMark(m)) + "</div>" +
+        logo +
+        '<div class="split-record" title="' + esc(title) + '">' + esc(record || "—") + pre + "</div>" +
+        '<div class="split-name">' + esc(shortTeam(team)) + "</div>" +
+        "</div>";
+    }
+    return '<div class="split-banner">' +
+      half(m.away, "Away") +
+      half(m.home, "Home") +
+      '<div class="split-vs" aria-hidden="true">VS</div>' +
+      "</div>" +
+      '<p class="split-meta">' + esc(bannerWhen(m)) + "</p>";
+  }
+
+  function leagueTeams() {
+    return (state.data && state.data.cardLeague && state.data.cardLeague.teams) || [];
+  }
+
+  function leagueBoards() {
+    if (!window.HockeyCardLeague) return {};
+    return HockeyCardLeague.rankBoards(leagueTeams());
+  }
+
+  function teamPrior(abbrev) {
+    var teams = leagueTeams();
+    for (var i = 0; i < teams.length; i++) {
+      if (teams[i].abbrev === abbrev) return teams[i];
+    }
+    return null;
+  }
+
+  function deltaDigits(spec) {
+    if (spec.fmt === "signed2") return 2;
+    if (spec.fmt === "signed1") return 1;
+    return 1;
+  }
+
+  function signedDelta(n, digits) {
+    if (n == null || !isFinite(Number(n))) return "—";
+    return signedText(n, digits);
+  }
+
+  function toneClass(n) {
+    if (n == null || !isFinite(Number(n)) || Number(n) === 0) return "flat";
+    return Number(n) > 0 ? "good" : "bad";
+  }
+
+  function compareSide(spec, team, board, which) {
+    var value = team ? team[spec.field] : null;
+    var num = value == null || !isFinite(Number(value)) ? null : Number(value);
+    var entry = teamPrior(team && team.abbrev);
+    var prior = entry && entry.prior ? entry.prior[spec.field] : null;
+    var delta = num == null || prior == null || !isFinite(Number(prior)) ? null : num - Number(prior);
+    var info = board && board.byAbbrev ? board.byAbbrev[team && team.abbrev] : null;
+    var digits = deltaDigits(spec);
+    var pre = spec.pre && team && team.preseason && team.preseason[spec.pre];
+    var valueText = statText(spec, value);
+    if (pre && valueText !== "—") valueText = statText(spec, value) + " " + preMark(true);
+    else valueText = esc(valueText);
+    var valueCls = "val current";
+    if (spec.fmt === "signed1" || spec.fmt === "signed2") {
+      var sign = HockeyStats.pillSign(num, spec.kind);
+      if (sign === "pos") valueCls += " good";
+      else if (sign === "neg") valueCls += " bad";
+    }
+    var rankText = info && window.HockeyCardLeague
+      ? HockeyCardLeague.rankLabel(info.rank, info.tied)
+      : "—";
+    var gapText = info && info.gap != null ? signedDelta(info.gap, digits) + " vs avg" : "—";
+    var gapCls = info && info.gap != null ? toneClass(info.gap) : "flat";
+    var deltaCls = delta == null ? "flat" : toneClass(delta);
+    var rankTitle = which + " rank for " + spec.label + ". 1st is best. Ties are marked T-. The gap is this team minus the league average.";
+    var deltaTitle = which + " 5-day change in " + spec.label + ". Green is an improvement. Red is a decline.";
+    var valueTitle = (PILL_TITLES[spec.kind] || spec.label) + " Current " + which.toLowerCase() + " value.";
+    if (pre) valueTitle += " " + ((state.data && state.data.preseasonLabel) || "2026-27 preseason") + ".";
+    return {
+      delta: '<td class="val delta ' + deltaCls + '" title="' + esc(deltaTitle) + '">' + esc(signedDelta(delta, digits)) + "</td>",
+      rank: '<td class="val rank ' + gapCls + '" title="' + esc(rankTitle) + '">' +
+        '<div class="rank-no">' + esc(rankText) + "</div>" +
+        '<div class="rank-gap">' + esc(gapText) + "</div></td>",
+      value: '<td class="' + valueCls + '" title="' + esc(valueTitle) + '">' + valueText + "</td>"
+    };
+  }
+
+  function statTable(rows, away, home) {
     if (!rows.length) return "";
+    var boards = leagueBoards();
     var body = rows.map(function (spec) {
-      return "<tr><td class='stat-label'>" + esc(spec.label) + "</td>" +
-        statCell(spec, away) + statCell(spec, home) + "</tr>";
+      var board = boards[spec.field] || { byAbbrev: {}, avg: null, n: 0 };
+      var left = compareSide(spec, away, board, "Away");
+      var right = compareSide(spec, home, board, "Home");
+      var avgText = board.avg == null ? "—" : statText(spec, HockeyStats.round(board.avg, deltaDigits(spec) === 2 ? 2 : 1));
+      var avgTitle = "League average of " + (board.n || 0) + " teams with a " + spec.label + " number. The average is the mean of those clubs.";
+      return "<tr>" +
+        left.delta + left.rank + left.value +
+        '<td class="stat-label" title="' + esc((PILL_TITLES[spec.kind] || spec.label) + " League average underneath.") + '">' +
+          '<div class="stat-name">' + esc(spec.short || spec.label) + "</div>" +
+          '<div class="lg-avg" title="' + esc(avgTitle) + '">lg avg ' + esc(avgText) + "</div>" +
+        "</td>" +
+        right.value + right.rank + right.delta +
+        "</tr>";
     }).join("");
-    return (
-      '<table class="stat-table">' +
-        "<thead><tr>" +
-          "<th>" + headLabel + "</th>" +
-          "<th class='val'>" + esc(away.abbrev || "Away") + "</th>" +
-          "<th class='val'>" + esc(home.abbrev || "Home") + "</th>" +
-        "</tr></thead><tbody>" + body + "</tbody></table>"
-    );
+    var heads = [
+      ["delta", "5 day delta", "Change versus the snapshot saved about five days earlier for the away team. Green is an improvement. Red is a decline."],
+      ["rank", "league rank", "Where the away team ranks, 1st best. Ties are marked T-. Under the rank is this team minus the league average. Green is better than average. Red is worse."],
+      ["value", "current value", "Away team’s current value for this stat."],
+      ["stat", "stat", "Stat name. The league average of the clubs with a number is underneath."],
+      ["value", "current value", "Home team’s current value for this stat."],
+      ["rank", "league rank", "Where the home team ranks, 1st best. Ties are marked T-. Under the rank is this team minus the league average. Green is better than average. Red is worse."],
+      ["delta", "5 day delta", "Change versus the snapshot saved about five days earlier for the home team. Green is an improvement. Red is a decline."]
+    ];
+    var head = "<tr>" + heads.map(function (h) {
+      var cls = h[0] === "stat" ? "stat-label" : "val";
+      return '<th class="' + cls + '" title="' + esc(h[2]) + '" aria-label="' + esc(h[2]) + '">' + esc(h[1]) + "</th>";
+    }).join("") + "</tr>";
+    return '<div class="compare-scroll"><table class="stat-table compare-table"><thead>' + head + "</thead><tbody>" + body + "</tbody></table></div>";
+  }
+
+  function snapshotNote(away, home) {
+    var a = teamPrior(away && away.abbrev);
+    var h = teamPrior(home && home.abbrev);
+    function stamp(team, entry) {
+      if (!entry || !entry.priorDate) return (team && team.abbrev ? team.abbrev + " n/a" : "n/a");
+      var day = String(entry.priorDate).slice(5).replace("-", "/").replace(/^0/, "").replace("/0", "/");
+      return (team && team.abbrev ? team.abbrev + " " : "") + day;
+    }
+    var n = 0;
+    leagueTeams().forEach(function (team) {
+      if (team && team.values) n += 1;
+    });
+    var counted = n || 32;
+    return "5-day delta vs saved snapshot: " + stamp(away, a) + " · " + stamp(home, h) +
+      ". Rank of " + counted + " teams; avg = " + counted + "-team mean.";
   }
 
   var TOP_THREE_KEYS = { sogShare: true, xgfPct5v5: true, cf: true };
@@ -481,8 +655,9 @@
     var root = $("cards");
     if (!matchups.length) {
       var any = state.data && state.data.matchups && state.data.matchups.length;
-      var emptyText = any && state.tier && state.tier !== "all"
-        ? "No games in this pick tier."
+      var filtered = any && ((state.tier && state.tier !== "all") || state.b2b === "b2b");
+      var emptyText = filtered
+        ? "No games match these filters."
         : "No games on the current NHL scoreboard. The board will pick up the next published slate.";
       root.innerHTML = '<div class="empty">' + emptyText + "</div>";
       return;
@@ -504,19 +679,17 @@
       var more = rest.length
         ? '<details class="more-stats"' + (state.cardsExpanded ? " open" : "") + ">" +
             "<summary>More stats</summary>" +
-            statTable(rest, m.away, m.home, '<span class="stat-kicker">Stat</span>') +
+            statTable(rest, m.away, m.home) +
           "</details>"
         : "";
+      var whyHtml = state.showWhy ? '<p class="why">' + esc(why) + "</p>" : "";
       return (
         '<article class="card" id="game-' + m.id + '">' +
+          splitBanner(m) +
           '<div class="card-head">' +
-            '<div class="head-top">' +
-              "<span>" + esc(fmtTime(m.startTimeUTC)) +
-                (m.gameTypeLabel ? " · " + esc(m.gameTypeLabel) : "") + "</span>" +
-            "</div>" +
+            '<div class="score-block" data-score="' + m.id + '">' + cardScoreInner(m) + "</div>" +
             '<p class="est-row"><span class="est-label">Est.</span> ' +
               esc(m.away.abbrev) + " " + proj.away + " – " + proj.home + " " + esc(m.home.abbrev) + "</p>" +
-            '<div class="score-block" data-score="' + m.id + '">' + cardScoreInner(m) + "</div>" +
             '<div class="pick-row">' +
               edgeBadge(m) +
               labelTag(model) +
@@ -526,12 +699,14 @@
             "</div>" +
             oddsLine(m) +
             '<p class="result-line" data-result="' + m.id + '">' + resultInner(m) + "</p>" +
-            '<p class="why">' + esc(why) + "</p>" +
+            whyHtml +
             notesLine(m) +
           "</div>" +
           '<div class="card-stats">' +
-            statTable(featured, m.away, m.home, head) +
+            '<div class="stat-head-row">' + head + "</div>" +
+            statTable(featured, m.away, m.home) +
             more +
+            '<p class="snapshot-note">' + esc(snapshotNote(m.away, m.home)) + "</p>" +
           "</div>" +
         "</article>"
       );
@@ -606,12 +781,17 @@
     return "";
   }
 
+  function teamOnB2b(team) {
+    return !!(team && (team.b2b || team.restDays === 1));
+  }
+
   function passesFilters(m) {
     if (state.tier && state.tier !== "all") {
       var model = modelOf(m);
       var label = model && model.label ? String(model.label).toLowerCase() : "";
       if (label !== state.tier) return false;
     }
+    if (state.b2b === "b2b" && !teamOnB2b(m.away) && !teamOnB2b(m.home)) return false;
     if (!window.TableFilter) return true;
     var display = {};
     Object.keys(state.filters).forEach(function (key) {
@@ -974,13 +1154,45 @@
     if (btn) btn.textContent = state.cardsExpanded ? "Collapse all" : "Expand all";
   }
 
+  function readViewPrefs() {
+    try {
+      var b2b = localStorage.getItem(B2B_KEY);
+      if (b2b === "b2b" || b2b === "all") state.b2b = b2b;
+      var why = localStorage.getItem(WHY_KEY);
+      if (why === "0") state.showWhy = false;
+      if (why === "1") state.showWhy = true;
+    } catch (e) {}
+    syncViewControls();
+  }
+
+  function writeViewPrefs() {
+    try {
+      localStorage.setItem(B2B_KEY, state.b2b);
+      localStorage.setItem(WHY_KEY, state.showWhy ? "1" : "0");
+    } catch (e) {}
+  }
+
+  function syncViewControls() {
+    var b2b = $("b2b");
+    if (b2b) b2b.value = state.b2b === "b2b" ? "b2b" : "all";
+    var why = $("show-why");
+    if (why) why.checked = !!state.showWhy;
+  }
+
   function saveBoardPrefs() {
     if (!window.HockeyPrefs) return;
     HockeyPrefs.patch("matchups", {
       sortKey: state.sortKey,
       sortDir: state.sortDir,
-      cardsExpanded: !!state.cardsExpanded
+      cardsExpanded: !!state.cardsExpanded,
+      b2b: state.b2b,
+      showWhy: !!state.showWhy
     });
+  }
+
+  function saveViewPrefs() {
+    writeViewPrefs();
+    saveBoardPrefs();
   }
 
   function setCardsExpanded(open) {
@@ -1004,6 +1216,10 @@
           state.cardsExpanded = true;
           writeStoredCards(true);
         }
+        if (saved.b2b === "all" || saved.b2b === "b2b") state.b2b = saved.b2b;
+        if (saved.showWhy === true || saved.showWhy === false) state.showWhy = saved.showWhy;
+        writeViewPrefs();
+        syncViewControls();
       }
     }
     fillSortControl();
@@ -1044,6 +1260,7 @@
 
   function startBoard() {
     state.cardsExpanded = readStoredCards();
+    readViewPrefs();
     syncCardsButton();
     var cached = recallBoard();
     if (cached) render(cached);
@@ -1081,6 +1298,18 @@
   var tierSel = $("tier");
   if (tierSel) tierSel.addEventListener("change", function () {
     state.tier = tierSel.value || "all";
+    if (state.data) render(state.data);
+  });
+  var b2bSel = $("b2b");
+  if (b2bSel) b2bSel.addEventListener("change", function () {
+    state.b2b = b2bSel.value === "b2b" ? "b2b" : "all";
+    saveViewPrefs();
+    if (state.data) render(state.data);
+  });
+  var whyBox = $("show-why");
+  if (whyBox) whyBox.addEventListener("change", function () {
+    state.showWhy = !!whyBox.checked;
+    saveViewPrefs();
     if (state.data) render(state.data);
   });
   var prevBtn = $("prev-date");
