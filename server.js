@@ -25,13 +25,13 @@ var xgLogMemory = Object.create(null);
 
 function productVersion() {
   try {
-    var parts = String(require("./package.json").version || "2.5").split(".");
+    var parts = String(require("./package.json").version || "2.6").split(".");
     var major = parts[0] || "2";
     var minor = parts[1] || "0";
     if (parts.length < 3 || parts[2] === "") return major + "." + minor;
     return major + "." + minor + "." + parts[2];
   } catch (e) {
-    return "2.5";
+    return "2.6";
   }
 }
 
@@ -1054,6 +1054,24 @@ async function overlayScores(body, date) {
   return body;
 }
 
+function modelEdgePick(matchup, awayAbbrev, homeAbbrev) {
+  if (!matchup) return null;
+  try {
+    var model = edgeModel.fromMatchup(matchup);
+    if (!model || (model.pick !== "away" && model.pick !== "home")) return null;
+    return {
+      winner: model.pick,
+      score: matchup.edge && matchup.edge.score != null ? matchup.edge.score : null,
+      abbrev: model.pickAbbrev || (model.pick === "away" ? awayAbbrev : homeAbbrev),
+      tossUp: model.label === "Toss-up",
+      pickPct: model.pickPct,
+      source: "model"
+    };
+  } catch (e) {
+    return null;
+  }
+}
+
 function edgePickFrom(row, archRow, awayAbbrev, homeAbbrev) {
   if (row && row.edgeWinner) {
     return {
@@ -1112,7 +1130,8 @@ function performanceView(matchup, row, archRow) {
       actualHome: actualHome
     });
   }
-  var pick = edgePickFrom(row, archRow, matchup.away && matchup.away.abbrev, matchup.home && matchup.home.abbrev);
+  var pick = modelEdgePick(matchup, matchup.away && matchup.away.abbrev, matchup.home && matchup.home.abbrev) ||
+    edgePickFrom(row, archRow, matchup.away && matchup.away.abbrev, matchup.home && matchup.home.abbrev);
   var actualWinner = archive.winnerOf(actualAway, actualHome);
   var edgeCorrect = null;
   if (pick && !pick.tossUp && pick.winner && pick.winner !== "even" && actualWinner && actualWinner !== "tie") {
@@ -1185,6 +1204,8 @@ function annotateReviewRow(row, archRow, oddsRow) {
   var hasTotal = !!(lines && lines.total != null);
   row.savedOdds = hasMl || hasTotal;
   row.oddsMissing = !row.savedOdds;
+  row.awayMl = hasMl ? lines.awayMl : null;
+  row.homeMl = hasMl ? lines.homeMl : null;
   row.marketSide = hasMl ? stats.marketSide(lines) : null;
   row.ouLine = hasTotal ? lines.total : null;
   var actualWinner = row.graded ? archive.winnerOf(row.actualAway, row.actualHome) : null;
@@ -1830,24 +1851,28 @@ async function loadTeamTrendGames(team, seasons, cachedGames) {
 function trendsPayloadFromCache(cache) {
   var currentSeason = cache.currentSeason;
   var previousSeason = cache.previousSeason;
-  var teams = stats.TEAMS.map(function (t) {
+  var prepared = stats.TEAMS.map(function (t) {
     var saved = (cache.teams && cache.teams[t.abbrev]) || { games: [] };
     var snap = trends.snapshots(saved.games || [], currentSeason);
+    return { team: t, saved: saved, gp: snap.gp || 0 };
+  });
+  var maxGp = 0;
+  prepared.forEach(function (row) { if (row.gp > maxGp) maxGp = row.gp; });
+  var offsets = trends.agoOffsets(maxGp);
+  var teams = prepared.map(function (row) {
+    var saved = row.saved;
+    var snap = trends.snapshots(saved.games || [], currentSeason, offsets);
     var through = "";
     (saved.games || []).forEach(function (g) {
       if (String(g.season) === String(currentSeason) && g.date && String(g.date) > through) through = String(g.date);
     });
     return {
-      abbrev: t.abbrev,
-      name: t.name,
+      abbrev: row.team.abbrev,
+      name: row.team.name,
       logo: saved.logo || null,
       throughDate: through || null,
       current: snap.current,
-      ago1: snap.ago1,
-      ago5: snap.ago5,
-      ago10: snap.ago10,
-      ago15: snap.ago15,
-      ago20: snap.ago20
+      ago: snap.ago
     };
   });
   var through = "";
@@ -1864,8 +1889,8 @@ function trendsPayloadFromCache(cache) {
     currentSeasonLabel: formatSeason(currentSeason),
     previousSeasonLabel: formatSeason(previousSeason),
     throughDate: through || null,
-    earlyDeltaGp: trends.EARLY_DELTA_GP,
-    definition: trends.definition(formatSeason(currentSeason), formatSeason(previousSeason)),
+    ago: offsets,
+    definition: trends.definition(formatSeason(currentSeason)),
     teams: teams
   };
 }
@@ -3650,7 +3675,9 @@ async function downloadPayload() {
     var pickSide = model && (model.pick === "away" || model.pick === "home") ? model.pick : storedSide;
     var edgePick = pickSide === "away" ? awayAbbrev : pickSide === "home" ? homeAbbrev : storedPick;
     var why = stats.explainEdge(edge, away, home, pickSide || undefined);
-    var winPct = model && pickSide ? (pickSide === "away" ? model.awayProb : model.homeProb) : null;
+    var winPct = model && model.pickPct != null ? model.pickPct : null;
+    var resultToss = model ? model.label === "Toss-up" : toss;
+    var resultPick = model ? edgePick : storedPick;
     var shared = {
       id: id,
       when: (gameDate || "") + " " + (start || ""),
@@ -3661,12 +3688,12 @@ async function downloadPayload() {
       estimatedScore: scorePair(awayAbbrev, homeAbbrev, estAway, estHome),
       actualScore: scorePair(awayAbbrev, homeAbbrev, actAway, actHome),
       edgePick: edgePick,
-      edgeLabel: model && model.pick === pickSide ? model.label : "",
+      edgeLabel: model ? model.label : "",
       winChance: winPct == null ? "" : edgePick + " " + winPct + "%",
       why: why,
       notes: (btRow && btRow.notes) || "",
       odds: oddsText(odds, awayAbbrev, homeAbbrev),
-      result: downloadResult(estAway, estHome, actAway, actHome, storedPick, toss, awayAbbrev, homeAbbrev)
+      result: downloadResult(estAway, estHome, actAway, actHome, resultPick, resultToss, awayAbbrev, homeAbbrev)
     };
     return [downloadRow(away, "Away", shared), downloadRow(home, "Home", shared)];
   }).filter(Boolean);

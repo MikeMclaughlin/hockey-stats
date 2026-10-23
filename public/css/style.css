@@ -1366,6 +1366,10 @@ body[data-page="teams"] .table-wrap.scroll-port {
   letter-spacing: 0.03em;
   font-size: 0.72rem;
   color: var(--muted);
+  white-space: nowrap;
+}
+#trends td.trend-cell {
+  white-space: nowrap;
 }
 #trends td.trend-cell,
 #trends th.num {

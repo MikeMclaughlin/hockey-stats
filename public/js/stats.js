@@ -457,6 +457,10 @@
       byTeam[team].sogShare = sogShare(sf, sa);
       byTeam[team].hdcfPct = sogShare(hdf, hda);
       byTeam[team].pdo = pdoFromShots(gf, ga, sf, sa);
+      // Team goals minus team expected goals. Positive means the club
+      // outscored its shot quality. 2026-27 uses this same difference;
+      // an early-season sample where the lower side wins more often is
+      // the luck stat, not a swapped home/away sign.
       byTeam[team].gfMinusXg = round(gf - xgf, 2);
       byTeam[team].gaMinusXga = round(ga - xga, 2);
     }

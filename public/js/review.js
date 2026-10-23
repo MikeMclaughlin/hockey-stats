@@ -88,6 +88,34 @@
       stat(sum.meanMarginError == null ? "—" : sum.meanMarginError, "goal-margin error");
   }
 
+  function marketPickPct(r, side) {
+    if (!window.HockeyStats || (side !== "away" && side !== "home")) return null;
+    var ml = side === "away" ? r.awayMl : r.homeMl;
+    if (ml == null || ml === "") return null;
+    return HockeyStats.impliedWinPct(Number(ml));
+  }
+
+  function edgeView(r) {
+    var actual = null;
+    if (r.graded && r.actualAway != null && r.actualHome != null && window.HockeyArchive) {
+      actual = HockeyArchive.winnerOf(r.actualAway, r.actualHome);
+    }
+    var bt = state.backtestById && state.backtestById[String(r.id)];
+    var model = bt && window.HockeyEdgeModel ? HockeyEdgeModel.fromBacktestRow(bt) : null;
+    if (model) {
+      var modelToss = model.label === "Toss-up";
+      var modelWon = null;
+      if (!modelToss && model.pick && actual && actual !== "tie") modelWon = model.pick === actual;
+      return { toss: modelToss, side: model.pick, won: modelWon, pct: model.pickPct, row: r };
+    }
+    var side = r.edgeWinnerView;
+    var tossUp = !!r.edgeTossUpView;
+    var won = null;
+    if (!tossUp && (r.edgePickWon === true || r.edgePickWon === false)) won = r.edgePickWon === true;
+    else if (!tossUp && side && actual && actual !== "tie") won = side === actual;
+    return { toss: tossUp, side: side, won: won, pct: marketPickPct(r, side), row: r };
+  }
+
   function renderMarket(rows) {
     var box = $("market");
     if (!box) return;
@@ -97,22 +125,32 @@
       return;
     }
     var noOdds = graded.filter(function (r) { return r.oddsMissing; }).length;
-    var toss = graded.filter(function (r) { return r.edgeTossUpView; }).length;
-    var picks = graded.filter(function (r) { return r.edgePickWon === true || r.edgePickWon === false; });
-    var pickWins = picks.filter(function (r) { return r.edgePickWon; }).length;
+    var views = graded.map(edgeView);
+    var toss = views.filter(function (v) { return v.toss; }).length;
+    var picks = views.filter(function (v) { return v.won === true || v.won === false; });
+    var pickWins = picks.filter(function (v) { return v.won; }).length;
+    var hi = picks.filter(function (v) { return v.pct != null && v.pct >= 60; });
+    var hiWins = hi.filter(function (v) { return v.won; }).length;
     var favs = graded.filter(function (r) { return r.favoriteWon === true || r.favoriteWon === false; });
     var favWins = favs.filter(function (r) { return r.favoriteWon; }).length;
-    var both = picks.filter(function (r) { return r.edgeAgreesFavorite === true || r.edgeAgreesFavorite === false; });
-    var same = both.filter(function (r) { return r.edgeAgreesFavorite; }).length;
+    var both = picks.filter(function (v) {
+      return v.row.marketSide && v.row.marketSide !== "even" && v.side && v.side !== "even";
+    });
+    var same = both.filter(function (v) { return v.side === v.row.marketSide; }).length;
     var ou = graded.filter(function (r) { return r.ouHit === true || r.ouHit === false; });
     var ouHits = ou.filter(function (r) { return r.ouHit; }).length;
-    var agree = both.filter(function (r) { return r.edgeAgreesFavorite === true; });
-    var disagree = both.filter(function (r) { return r.edgeAgreesFavorite === false; });
-    var agreeWins = agree.filter(function (r) { return r.edgePickWon; }).length;
-    var disagreeWins = disagree.filter(function (r) { return r.edgePickWon; }).length;
+    var agree = both.filter(function (v) { return v.side === v.row.marketSide; });
+    var disagree = both.filter(function (v) { return v.side !== v.row.marketSide; });
+    var agreeWins = agree.filter(function (v) { return v.won; }).length;
+    var disagreeWins = disagree.filter(function (v) { return v.won; }).length;
     function rate(hit, total) {
       if (!total) return "—";
       return hit + " of " + total + " (" + (Math.round((1000 * hit) / total) / 10) + "%)";
+    }
+    function record(wins, losses) {
+      var n = wins + losses;
+      if (!n) return "—";
+      return wins + "–" + losses + " (" + (Math.round((1000 * wins) / n) / 10) + "%)";
     }
     var modelLine = "";
     if (window.HockeyEdgeModel && state.backtestById) {
@@ -159,6 +197,7 @@
     }
     box.innerHTML =
       "Edge pick won " + pickWins + " of " + picks.length +
+      ". 60%+ win chance " + record(hiWins, hi.length - hiWins) +
       ". Market favorite won " + favWins + " of " + favs.length +
       ". Agreed with the market and won " + rate(agreeWins, agree.length) +
       ". Disagreed and won " + rate(disagreeWins, disagree.length) +

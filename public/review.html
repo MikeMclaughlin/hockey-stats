@@ -76,13 +76,13 @@
         <li><strong>Total error</strong> — absolute difference between projected total goals and actual total goals.</li>
         <li><strong>Margin error</strong> — absolute difference between the projected goal margin (away minus home) and the actual margin.</li>
         <li><strong>Range</strong> — 2026-27 so far, or the last 7 days ending on the NHL scoreboard date. Counts use graded games in that range only. If none are graded, the accuracy line says no graded games yet.</li>
-        <li><strong>Edge vs market</strong> — the saved Edge pick (or the pick rebuilt from saved pre-game stats) against the saved moneyline favorite, and the locked total against the saved over/under. The card’s Toss-up label means no firm pick: the win chance is under 55%, the Lean’s absolute Edge score is under 0.50, or the side is a market underdog the model will not fade. The previous Edge rule still leaves its own toss-up out of the firm-pick rate. Games with neither a moneyline nor a total are left out and counted on their own.</li>
+        <li><strong>Edge vs market</strong> — the Edge pick, graded with the same rules as the matchup card, against the saved moneyline favorite, and the locked total against the saved over/under. Toss-up means no firm pick: the win chance is under 55%, the Lean’s absolute Edge score is under 0.50, the side trails on last-five expected-goals share, the side disagrees with the moneyline favorite, or the combined filter fails. Next to the overall Edge record, the line shows wins and losses for firm picks whose win chance is 60% or higher. That chance is the model’s, or the market’s implied chance for the picked side when the model has none. Games with neither a moneyline nor a total are left out of the odds counts and counted on their own.</li>
         <li><strong>Lock</strong> — the estimate updates when the model changes until puck drop (start time). After that it stays put, even if the live projection moves. Review shows the locked score beside the current model. A row marked “locked ≠ live” was frozen earlier (for example on Sep 10) and the model has since moved.</li>
       </ul>
     </section>
   </main>
   <footer>
-    <span>v2.5</span>
+    <span>v2.6</span>
   </footer>
   <script src="/js/dates.js"></script>
   <script src="/js/prefs.js"></script>

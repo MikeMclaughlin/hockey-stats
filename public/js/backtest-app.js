@@ -195,11 +195,20 @@
       "% " + model.label + "</div><div class='edge-meta'>Old " + oldPct + "</div>";
   }
 
-  function edgeWasRight(r) {
+  function storedEdgeWasRight(r) {
     if (!r.graded || r.edgeTossUp || !r.edgeAbbrev) return null;
     if (r.actualAway == null || r.actualHome == null || r.actualAway === r.actualHome) return null;
     var winner = r.actualAway > r.actualHome ? r.awayAbbrev : r.homeAbbrev;
     return r.edgeAbbrev === winner;
+  }
+
+  function edgeWasRight(r) {
+    if (!r.graded || r.actualAway == null || r.actualHome == null || r.actualAway === r.actualHome) return null;
+    if (!window.HockeyEdgeModel) return storedEdgeWasRight(r);
+    var model = HockeyEdgeModel.fromBacktestRow(r);
+    if (!model || model.label === "Toss-up" || !model.pickAbbrev) return null;
+    var winner = r.actualAway > r.actualHome ? r.awayAbbrev : r.homeAbbrev;
+    return model.pickAbbrev === winner;
   }
 
   function bump(map, key, right) {
@@ -264,7 +273,7 @@
       var model = HockeyEdgeModel.fromBacktestRow(r);
       var homeWon = r.actualHome > r.actualAway;
       var ok = (model.pick === "home") === homeWon;
-      var oldRight = edgeWasRight(r);
+      var oldRight = storedEdgeWasRight(r);
       if (oldRight == null) return;
       n += 1;
       if (ok) fresh += 1;

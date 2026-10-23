@@ -198,6 +198,8 @@
       last5AvgGd: snap.last5AvgGd,
       pdo: snap.pdo,
       sogShare: mp && st.sf ? stats.sogShare(st.sf, st.sa) : null,
+      // Same sign as the season profile: this team's goals minus its
+      // expected goals. Not home minus away, and not opponent minus team.
       gfMinusXg: mp ? stats.round(st.gf - st.xgf, 2) : null,
       cfPct: mp && (st.cf + st.ca) ? stats.sogShare(st.cf, st.ca) : null,
       hdcfPct: mp && (st.hdf + st.hda) ? stats.sogShare(st.hdf, st.hda) : null,
