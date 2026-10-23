@@ -15,6 +15,7 @@ var auth = require("./lib/auth.js");
 var streaks = require("./public/js/streaks.js");
 var teamStats = require("./public/js/teamStats.js");
 var trends = require("./public/js/trends.js");
+var cardLeague = require("./public/js/card-league.js");
 
 var ROOT = __dirname;
 var PORT = Number(process.env.PORT || 3080);
@@ -25,13 +26,13 @@ var xgLogMemory = Object.create(null);
 
 function productVersion() {
   try {
-    var parts = String(require("./package.json").version || "2.6").split(".");
+    var parts = String(require("./package.json").version || "2.7").split(".");
     var major = parts[0] || "2";
     var minor = parts[1] || "0";
     if (parts.length < 3 || parts[2] === "") return major + "." + minor;
     return major + "." + minor + "." + parts[2];
   } catch (e) {
-    return "2.6";
+    return "2.7";
   }
 }
 
@@ -688,6 +689,7 @@ async function buildMatchups(date) {
     if (g.awayTeam && g.awayTeam.abbrev) needed[g.awayTeam.abbrev] = true;
     if (g.homeTeam && g.homeTeam.abbrev) needed[g.homeTeam.abbrev] = true;
   });
+  var leagueAbbrevs = stats.TEAMS.map(function (t) { return t.abbrev; });
 
   var mpGamesCache = mpSeasonYear(statsSeason) === "2025"
     ? await store.readJson(store.KEYS.mpGames, [])
@@ -696,26 +698,24 @@ async function buildMatchups(date) {
   var formMap = {};
   var schedMap = {};
   var abbrevs = Object.keys(needed);
-  await Promise.all(
-    abbrevs.map(function (ab) {
-      var url = "https://api-web.nhle.com/v1/club-schedule-season/" + ab + "/" + statsSeason;
-      return getJson(url)
-        .then(function (sched) {
-          var games = sched.games || [];
-          schedMap[ab] = games;
-          var regular = games.filter(function (g) {
-            return !g.gameType || Number(g.gameType) === 2;
-          });
-          last5Map[ab] = last5FromSchedule({ games: regular }, ab);
-          formMap[ab] = backtest.scheduleForm(games, ab, day);
-        })
-        .catch(function () {
-          schedMap[ab] = [];
-          last5Map[ab] = null;
-          formMap[ab] = { lastDate: null, dates: [], results: [] };
+  await mapPool(leagueAbbrevs, 6, function (ab) {
+    var url = "https://api-web.nhle.com/v1/club-schedule-season/" + ab + "/" + statsSeason;
+    return getJson(url)
+      .then(function (sched) {
+        var games = sched.games || [];
+        schedMap[ab] = games;
+        var regular = games.filter(function (g) {
+          return !g.gameType || Number(g.gameType) === 2;
         });
-    })
-  );
+        last5Map[ab] = last5FromSchedule({ games: regular }, ab);
+        formMap[ab] = backtest.scheduleForm(games, ab, day);
+      })
+      .catch(function () {
+        schedMap[ab] = [];
+        last5Map[ab] = null;
+        formMap[ab] = { lastDate: null, dates: [], results: [] };
+      });
+  });
 
   function teamRecord(ab) {
     return teamStats.recordFromSources(
@@ -808,11 +808,9 @@ async function buildMatchups(date) {
     var away = profile(g.awayTeam || {});
     var home = profile(g.homeTeam || {});
     var edge = stats.matchupEdge(away, home);
-    var winnerTeam = edge.winner === "away" ? away : edge.winner === "home" ? home : null;
     var projected = stats.estimateScore(away, home);
     var odds = liveOdds[String(g.id)] || null;
     var market = stats.marketSide(odds);
-    var marketDisagree = !!(market && market !== "even" && edge.winner && edge.winner !== market);
     return {
       id: g.id,
       gameDate: g.gameDate || day,
@@ -825,19 +823,11 @@ async function buildMatchups(date) {
       away: away,
       home: home,
       edge: edge,
-      edgeTeam: winnerTeam ? winnerTeam.abbrev : "EVEN",
-      edgeName: winnerTeam ? winnerTeam.name : "Even matchup",
-      why: stats.explainEdge(edge, away, home, edgeModel.fromMatchup({
-        away: away,
-        home: home,
-        projected: projected,
-        edge: edge,
-        gameDate: g.gameDate || day
-      }).pick),
+      pointsEdgeWinner: edge.winner,
       projected: projected,
       odds: odds,
       marketSide: market,
-      marketDisagree: marketDisagree,
+      marketDisagree: false,
       notes: backtest.buildNotes(
         { gameDate: g.gameDate, awayAbbrev: away.abbrev, homeAbbrev: home.abbrev },
         formMap[away.abbrev] || { lastDate: null, dates: [], results: [] },
@@ -850,14 +840,12 @@ async function buildMatchups(date) {
 
   await applyOddsSnapshots(matchups, liveOdds);
   var xgYear = mpSeasonYear(statsSeason);
-  await mapPool(abbrevs, 4, function (ab) { return loadTeamXgLog(ab, xgYear); });
+  await mapPool(leagueAbbrevs, 4, function (ab) { return loadTeamXgLog(ab, xgYear); });
   matchups.forEach(function (m) {
     var before = m.gameDate || day;
     m.away.last5XgfPct = last5XgShare(xgLogMemory[xgYear + ":" + m.away.abbrev], m.away.abbrev, before);
     m.home.last5XgfPct = last5XgShare(xgLogMemory[xgYear + ":" + m.home.abbrev], m.home.abbrev, before);
-    var market = stats.marketSide(m.odds);
-    m.marketSide = market;
-    m.marketDisagree = !!(market && market !== "even" && m.edge && m.edge.winner && m.edge.winner !== market);
+    applyListedEdge(m);
     m.notes = backtest.buildNotes(
       { gameDate: m.gameDate, awayAbbrev: m.away.abbrev, homeAbbrev: m.home.abbrev },
       formMap[m.away.abbrev] || { lastDate: null, dates: [], results: [] },
@@ -865,6 +853,14 @@ async function buildMatchups(date) {
       m.projected,
       m.odds
     );
+  });
+  var cardLeagueBody = await buildCardLeague({
+    day: day,
+    mp: mp,
+    schedMap: schedMap,
+    last5Map: last5Map,
+    xgYear: xgYear,
+    matchups: matchups
   });
 
   var seasons = seasonMeta(seasonId, statsSeason, standingsSnapshot(standings, statsSeason).maxGp);
@@ -884,7 +880,118 @@ async function buildMatchups(date) {
     note: seasons.note,
     preseasonLabel: formatSeason(statsSeason) + " preseason",
     matchupCount: matchups.length,
+    cardLeague: cardLeagueBody,
     matchups: matchups
+  };
+}
+
+function applyListedEdge(m) {
+  var model = edgeModel.fromMatchup(m);
+  var pick = model && (model.pick === "away" || model.pick === "home") ? model.pick : null;
+  var team = pick === "away" ? m.away : pick === "home" ? m.home : null;
+  m.edgeSide = pick;
+  m.edgeTeam = team ? team.abbrev : "EVEN";
+  m.edgeName = team ? team.name : "Even matchup";
+  m.edgeLabel = model ? model.label : null;
+  m.edgeTossUp = !!(model && model.label === "Toss-up");
+  var market = stats.marketSide(m.odds);
+  m.marketSide = market;
+  m.marketDisagree = !!(market && market !== "even" && pick && pick !== market);
+  m.why = stats.explainEdge(m.edge, m.away, m.home, pick || undefined);
+  m.pointsEdgeWinner = m.edge && m.edge.winner;
+  return model;
+}
+
+function priorOrNull(obj) {
+  if (!obj) return null;
+  var any = cardLeague.FIELDS.some(function (key) {
+    return obj[key] != null && obj[key] !== "" && isFinite(Number(obj[key]));
+  });
+  return any ? obj : null;
+}
+
+async function saveCardSnapshots(day, cutoff, teams) {
+  var data = { version: 1, days: {} };
+  try {
+    var stored = await store.readJson(store.KEYS.cardSnapshots, null);
+    if (stored && stored.days) data = stored;
+  } catch (e) {
+    data = { version: 1, days: {} };
+  }
+  data.version = 1;
+  data.days = data.days || {};
+  var todayTeams = {};
+  teams.forEach(function (team) { todayTeams[team.abbrev] = team.values || {}; });
+  data.days[day] = { savedAt: new Date().toISOString(), teams: todayTeams };
+  var priorDate = null;
+  Object.keys(data.days).forEach(function (date) {
+    if (date !== day && date <= cutoff && (!priorDate || date > priorDate)) priorDate = date;
+  });
+  if (!priorDate) {
+    var priorTeams = {};
+    var any = false;
+    teams.forEach(function (team) {
+      var prior = priorOrNull(team.prior);
+      if (prior) any = true;
+      priorTeams[team.abbrev] = prior || {};
+    });
+    if (any) {
+      data.days[cutoff] = {
+        savedAt: new Date().toISOString(),
+        synthesized: true,
+        teams: priorTeams
+      };
+      priorDate = cutoff;
+    }
+  }
+  try { await store.writeJson(store.KEYS.cardSnapshots, data); }
+  catch (e) { /* the board still returns the in-memory comparison */ }
+  var saved = priorDate && data.days[priorDate] ? data.days[priorDate].teams : null;
+  return { priorDate: priorDate, priorByAbbrev: saved };
+}
+
+async function buildCardLeague(ctx) {
+  var day = ctx.day;
+  var cutoff = shiftDate(day, -5);
+  var onSlate = {};
+  (ctx.matchups || []).forEach(function (m) {
+    if (m.away && m.away.abbrev) onSlate[m.away.abbrev] = m.away;
+    if (m.home && m.home.abbrev) onSlate[m.home.abbrev] = m.home;
+  });
+  var teams = stats.TEAMS.map(function (t) {
+    var profile = onSlate[t.abbrev];
+    var values = profile ? cardLeague.valuesFromProfile(profile) : null;
+    if (!values) {
+      var mpRow = (ctx.mp && ctx.mp[t.abbrev]) || {};
+      var last5 = ctx.last5Map && ctx.last5Map[t.abbrev];
+      values = {
+        sogShare: mpRow.sogShare != null ? mpRow.sogShare : null,
+        xgfPct5v5: mpRow.xgfPct5v5 != null ? mpRow.xgfPct5v5 : null,
+        cfPct: mpRow.cfPct != null ? mpRow.cfPct : null,
+        pdo: mpRow.pdo != null ? mpRow.pdo : null,
+        last5SvPct: null,
+        last5AvgGd: last5 ? last5.avg : null,
+        gfMinusXg: mpRow.gfMinusXg != null ? mpRow.gfMinusXg : null,
+        hdcfPct: mpRow.hdcfPct != null ? mpRow.hdcfPct : null,
+        stXg: mpRow.stXg != null ? mpRow.stXg : null
+      };
+    }
+    var log = xgLogMemory[ctx.xgYear + ":" + t.abbrev] || [];
+    var prior = cardLeague.priorStats(log, (ctx.schedMap && ctx.schedMap[t.abbrev]) || [], t.abbrev, cutoff);
+    return { abbrev: t.abbrev, values: values, prior: prior };
+  });
+  var snap = await saveCardSnapshots(day, cutoff, teams);
+  teams.forEach(function (team) {
+    if (snap.priorByAbbrev && snap.priorByAbbrev[team.abbrev]) {
+      team.prior = priorOrNull(snap.priorByAbbrev[team.abbrev]);
+    } else {
+      team.prior = priorOrNull(team.prior);
+    }
+    team.priorDate = team.prior ? (snap.priorDate || cutoff) : null;
+  });
+  return {
+    snapshotDate: snap.priorDate || null,
+    teams: teams
   };
 }
 
@@ -927,15 +1034,14 @@ async function persistMatchups(body) {
     if (row && archive.isFinalState(m.gameState) && as != null && hs != null) {
       archive.applyResult(row, as, hs, m.gameState);
     }
-    if (row && m.edge && m.edge.winner) {
-      var edgeAbbrev = m.edge.winner === "away"
-        ? (m.away && m.away.abbrev)
-        : (m.home && m.home.abbrev);
+    if (row && m.edgeSide) {
       archive.rememberEdge(row, {
-        edgeWinner: m.edge.winner,
-        edgeScore: m.edge.score,
-        edgeAbbrev: edgeAbbrev,
-        edgeTossUp: stats.isTossUp(m.edge),
+        edgeWinner: m.edgeSide,
+        edgeScore: m.edge && m.edge.score,
+        edgeAbbrev: m.edgeTeam,
+        edgeTossUp: !!m.edgeTossUp,
+        edgeLabel: m.edgeLabel || null,
+        pointsEdgeWinner: m.pointsEdgeWinner || (m.edge && m.edge.winner) || null,
         gameState: m.gameState,
         startTimeUTC: m.startTimeUTC
       }, Date.now());
@@ -1072,27 +1178,57 @@ function modelEdgePick(matchup, awayAbbrev, homeAbbrev) {
   }
 }
 
-function edgePickFrom(row, archRow, awayAbbrev, homeAbbrev) {
+function pillsWithB2b(pills, abbrev) {
+  pills = pills || {};
+  return Object.assign({}, pills, {
+    abbrev: abbrev,
+    b2b: !!pills.b2b || pills.restDays === 1
+  });
+}
+
+function edgePickFrom(row, archRow, awayAbbrev, homeAbbrev, oddsRow) {
+  var awayPills = archRow && archRow.awayPills;
+  var homePills = archRow && archRow.homePills;
+  var projectedAway = row && row.projectedAway != null ? row.projectedAway : (archRow && archRow.estimatedAway);
+  var projectedHome = row && row.projectedHome != null ? row.projectedHome : (archRow && archRow.estimatedHome);
+  var canModel = projectedAway != null && projectedHome != null && (awayPills || homePills || (row && row.edgeScore != null));
+  if (canModel) {
+    var odds = null;
+    if (oddsRow && !archive.oddsCapturedAfterStart(oddsRow)) odds = archive.oddsLines(oddsRow);
+    var legacyWinner = (row && row.pointsEdgeWinner) || (row && !row.edgeLabel ? row.edgeWinner : null);
+    var model = edgeModel.fromMatchup({
+      away: pillsWithB2b(awayPills, awayAbbrev),
+      home: pillsWithB2b(homePills, homeAbbrev),
+      projected: { away: projectedAway, home: projectedHome },
+      edge: {
+        score: row && row.edgeScore != null ? row.edgeScore : null,
+        winner: legacyWinner
+      },
+      odds: odds,
+      gameDate: row && row.gameDate
+    });
+    if (model && (model.pick === "away" || model.pick === "home")) {
+      return {
+        winner: model.pick,
+        score: row && row.edgeScore != null ? row.edgeScore : null,
+        abbrev: model.pickAbbrev || (model.pick === "away" ? awayAbbrev : homeAbbrev),
+        tossUp: model.label === "Toss-up",
+        label: model.label,
+        source: "model"
+      };
+    }
+  }
   if (row && row.edgeWinner) {
     return {
       winner: row.edgeWinner,
       score: row.edgeScore != null ? row.edgeScore : null,
       abbrev: row.edgeAbbrev || (row.edgeWinner === "away" ? awayAbbrev : homeAbbrev),
       tossUp: !!row.edgeTossUp,
+      label: row.edgeLabel || null,
       source: "saved"
     };
   }
-  if (!archRow || !archRow.awayPills || !archRow.homePills) return null;
-  var edge = stats.matchupEdge(archRow.awayPills, archRow.homePills);
-  if (!edge || edge.score == null) return null;
-  var winner = edge.winner === "away" ? "away" : "home";
-  return {
-    winner: winner,
-    score: edge.score,
-    abbrev: winner === "away" ? awayAbbrev : homeAbbrev,
-    tossUp: stats.isTossUp(edge),
-    source: "archive"
-  };
+  return null;
 }
 
 function performanceView(matchup, row, archRow) {
@@ -1163,7 +1299,7 @@ async function attachHistory(body) {
     var archRow = arch.byId && arch.byId[id];
     var awayAbbrev = m.away && m.away.abbrev;
     var homeAbbrev = m.home && m.home.abbrev;
-    var pick = edgePickFrom(row, archRow, awayAbbrev, homeAbbrev);
+    var pick = edgePickFrom(row, archRow, awayAbbrev, homeAbbrev, m.odds);
     if (!row && !pick) {
       m.saved = null;
       m.performance = null;
@@ -1193,13 +1329,15 @@ function annotateReviewRow(row, archRow, oddsRow) {
   row.marginError = errs.marginError;
   row.projectedTotal = errs.projectedTotal;
   row.actualTotal = errs.actualTotal;
-  var pick = edgePickFrom(row, archRow, row.awayAbbrev, row.homeAbbrev);
+  var pick = edgePickFrom(row, archRow, row.awayAbbrev, row.homeAbbrev, oddsRow);
   row.edgeWinnerView = pick ? pick.winner : null;
   row.edgeAbbrevView = pick ? pick.abbrev : null;
   row.edgeScoreView = pick ? pick.score : null;
   row.edgeTossUpView = !!(pick && pick.tossUp);
+  row.edgeLabelView = pick ? pick.label || null : null;
   row.edgeSource = pick ? pick.source : null;
-  var lines = oddsRow ? archive.oddsLines(oddsRow) : null;
+  var legacySide = row.pointsEdgeWinner || (!row.edgeLabel ? row.edgeWinner : null);
+  var lines = oddsRow && !archive.oddsCapturedAfterStart(oddsRow) ? archive.oddsLines(oddsRow) : null;
   var hasMl = !!(lines && lines.awayMl != null && lines.homeMl != null);
   var hasTotal = !!(lines && lines.total != null);
   row.savedOdds = hasMl || hasTotal;
@@ -1212,6 +1350,11 @@ function annotateReviewRow(row, archRow, oddsRow) {
   row.edgePickWon = null;
   if (row.graded && pick && !pick.tossUp && pick.winner && pick.winner !== "even" && actualWinner && actualWinner !== "tie") {
     row.edgePickWon = pick.winner === actualWinner;
+  }
+  row.pointsEdgePickWon = null;
+  if (row.graded && legacySide && legacySide !== "even" && actualWinner && actualWinner !== "tie") {
+    var legacyToss = !row.pointsEdgeWinner && row.edgeTossUp && !row.edgeLabel;
+    if (!legacyToss) row.pointsEdgePickWon = legacySide === actualWinner;
   }
   row.favoriteWon = null;
   if (row.graded && hasMl && row.marketSide && row.marketSide !== "even" && actualWinner && actualWinner !== "tie") {
@@ -1271,6 +1414,107 @@ async function estimatesPayload(est) {
     payload.asOf = score.currentDate || null;
   } catch (e) { /* review still loads without the season line */ }
   return payload;
+}
+
+/**
+ * One-time, idempotent repair for items 8 and 9.
+ * Voids moneyline/total rows first captured after puck drop (and impossible
+ * prices), clears those lines on the matchup archive and backtest opening
+ * columns, and rewrites saved Edge side / toss-up / label to the 2.6 model.
+ * Projected scores and score grades are left alone. Safe to run again.
+ */
+async function repairStoredEdges() {
+  var oddsStore = await loadOddsStore();
+  var voidIds = {};
+  var oddsVoided = 0;
+  Object.keys(oddsStore.byId || {}).forEach(function (id) {
+    var row = oddsStore.byId[id];
+    if (!row || !archive.oddsCapturedAfterStart(row)) return;
+    voidIds[id] = true;
+    if (row.awayMl == null && row.homeMl == null && row.total == null && row.voidedReason) return;
+    archive.clearOddsLines(row);
+    oddsVoided += 1;
+  });
+
+  var arch = await store.readJson(store.KEYS.matchupArchive, archive.emptyStore());
+  arch.byId = arch.byId || {};
+  var archiveOddsCleared = 0;
+  Object.keys(arch.byId).forEach(function (id) {
+    var row = arch.byId[id];
+    if (!row || !row.odds) return;
+    var bad = !!voidIds[id] || archive.priceImpossible(row.odds.awayMl) || archive.priceImpossible(row.odds.homeMl);
+    if (!bad) return;
+    row.odds = null;
+    archiveOddsCleared += 1;
+  });
+
+  var est = await loadEstimates();
+  var estimatesUpdated = 0;
+  Object.keys(est.byId || {}).forEach(function (id) {
+    var row = est.byId[id];
+    if (!row) return;
+    if (!row.pointsEdgeWinner && row.edgeWinner && !row.edgeLabel) row.pointsEdgeWinner = row.edgeWinner;
+    var pick = edgePickFrom(row, arch.byId[id], row.awayAbbrev, row.homeAbbrev, oddsStore.byId && oddsStore.byId[id]);
+    if (!pick || !pick.winner) return;
+    var nextToss = !!pick.tossUp;
+    var same = row.edgeWinner === pick.winner &&
+      row.edgeAbbrev === pick.abbrev &&
+      !!row.edgeTossUp === nextToss &&
+      (row.edgeLabel || null) === (pick.label || null);
+    if (same) return;
+    row.edgeWinner = pick.winner;
+    row.edgeAbbrev = pick.abbrev;
+    row.edgeTossUp = nextToss;
+    row.edgeLabel = pick.label || null;
+    estimatesUpdated += 1;
+  });
+
+  var bt = null;
+  try {
+    var storedBt = await store.readJsonResult(store.KEYS.liveBacktest, null);
+    if (storedBt && storedBt.value && Array.isArray(storedBt.value.rows) && storedBt.value.rows.length &&
+        (storedBt.source === "blob" || storedBt.source === "local")) {
+      bt = storedBt.value;
+    }
+  } catch (e) { bt = null; }
+  if (!bt) bt = readBacktestFile(LIVE_BACKTEST_SEASON);
+  var backtestUpdated = 0;
+  if (bt && Array.isArray(bt.rows)) {
+    bt.rows.forEach(function (r) {
+      if (!r) return;
+      var before = [
+        r.openingAwayMl, r.openingHomeMl, r.openingTotal,
+        r.edgeAbbrev, r.edgeTossUp ? 1 : 0, r.edgeLabel || "", r.edgeRole || ""
+      ].join("|");
+      var badOpen = !!voidIds[String(r.id)] ||
+        archive.priceImpossible(r.openingAwayMl) ||
+        archive.priceImpossible(r.openingHomeMl);
+      if (badOpen) {
+        r.openingAwayMl = null;
+        r.openingHomeMl = null;
+        r.openingTotal = null;
+      }
+      edgeModel.stampRow(r);
+      var after = [
+        r.openingAwayMl, r.openingHomeMl, r.openingTotal,
+        r.edgeAbbrev, r.edgeTossUp ? 1 : 0, r.edgeLabel || "", r.edgeRole || ""
+      ].join("|");
+      if (before !== after) backtestUpdated += 1;
+    });
+  }
+
+  if (oddsVoided) await store.writeJson(store.KEYS.odds, oddsStore);
+  if (archiveOddsCleared) await store.writeJson(store.KEYS.matchupArchive, arch);
+  if (estimatesUpdated) await store.writeJson(store.KEYS.estimates, est);
+  if (backtestUpdated && bt) await store.writeJson(store.KEYS.liveBacktest, bt);
+  return {
+    ok: true,
+    oddsVoided: oddsVoided,
+    archiveOddsCleared: archiveOddsCleared,
+    estimatesUpdated: estimatesUpdated,
+    backtestUpdated: backtestUpdated,
+    idempotent: true
+  };
 }
 
 async function gradeEstimates() {
@@ -1375,6 +1619,11 @@ async function runScheduledUpdate() {
     hint: storageError ? (store.blobHint() || storageError) : store.blobHint(),
     storageError: storageError
   };
+  try {
+    status.repair = await repairStoredEdges();
+  } catch (e) {
+    status.repairError = String(e.message || e);
+  }
   try {
     var liveBt = await refreshLiveBacktest({ writeStore: true });
     status.liveBacktest = liveBt;
@@ -2971,7 +3220,8 @@ function backtestSignature(rows) {
       r.id, r.projectedLabel, r.actualLabel, r.awayPdo, r.homePdo,
       r.awayXgf5, r.homeXgf5, r.awayLast5, r.homeLast5, r.graded ? 1 : 0,
       r.awayPtsPct == null ? "" : r.awayPtsPct,
-      r.openingAwayMl == null ? "" : r.openingAwayMl
+      r.openingAwayMl == null ? "" : r.openingAwayMl,
+      r.edgeAbbrev || "", r.edgeTossUp ? 1 : 0, r.edgeLabel || ""
     ].join(":");
   }).join("|");
 }
@@ -2980,7 +3230,8 @@ async function readServedBacktest(season) {
   if (String(season) === LIVE_BACKTEST_SEASON) {
     try {
       var stored = await store.readJsonResult(store.KEYS.liveBacktest, null);
-      if (stored && stored.source === "blob" && stored.value && Array.isArray(stored.value.rows)) {
+      if (stored && (stored.source === "blob" || stored.source === "local") && stored.value &&
+          Array.isArray(stored.value.rows) && stored.value.rows.length) {
         return stored.value;
       }
     } catch (e) { /* public file */ }
@@ -3001,7 +3252,8 @@ async function refreshLiveBacktest(opts) {
   if (opts.writeStore) {
     try {
       var storedPrev = await store.readJsonResult(store.KEYS.liveBacktest, null);
-      if (storedPrev && storedPrev.source === "blob" && storedPrev.value && Array.isArray(storedPrev.value.rows)) {
+      if (storedPrev && (storedPrev.source === "blob" || storedPrev.source === "local") && storedPrev.value &&
+          Array.isArray(storedPrev.value.rows) && storedPrev.value.rows.length) {
         prev = storedPrev.value;
       }
     } catch (e) { prev = null; }
@@ -3013,19 +3265,32 @@ async function refreshLiveBacktest(opts) {
   ((prev && prev.rows) || []).forEach(function (r) { prevById[String(r.id)] = r; });
   (out.rows || []).forEach(function (r) {
     var earlier = prevById[String(r.id)];
-    if (earlier && earlier.openingAwayMl != null) {
+    var saved = oddsStore.byId && oddsStore.byId[String(r.id)];
+    var savedOk = saved && !archive.oddsCapturedAfterStart(saved);
+    var savedLines = savedOk ? archive.oddsLines(saved) : null;
+    var earlierOk = earlier &&
+      earlier.openingAwayMl != null &&
+      !archive.priceImpossible(earlier.openingAwayMl) &&
+      !archive.priceImpossible(earlier.openingHomeMl) &&
+      !(saved && archive.oddsCapturedAfterStart(saved) && !savedOk);
+    if (earlierOk) {
       r.openingAwayMl = earlier.openingAwayMl;
       r.openingHomeMl = earlier.openingHomeMl;
       r.openingTotal = earlier.openingTotal != null ? earlier.openingTotal : null;
-      return;
+    } else if (savedLines && savedLines.awayMl != null && savedLines.homeMl != null &&
+        !archive.priceImpossible(savedLines.awayMl) && !archive.priceImpossible(savedLines.homeMl)) {
+      r.openingAwayMl = savedLines.awayMl;
+      r.openingHomeMl = savedLines.homeMl;
+      r.openingTotal = savedLines.total;
+    } else {
+      r.openingAwayMl = null;
+      r.openingHomeMl = null;
+      r.openingTotal = null;
     }
-    var saved = oddsStore.byId && oddsStore.byId[String(r.id)];
-    var lines = saved ? archive.oddsLines(saved) : null;
-    if (lines && lines.awayMl != null && lines.homeMl != null) {
-      r.openingAwayMl = lines.awayMl;
-      r.openingHomeMl = lines.homeMl;
-      r.openingTotal = lines.total;
+    if (earlier && earlier.pointsEdgeAbbrev && !r.pointsEdgeAbbrev) {
+      r.pointsEdgeAbbrev = earlier.pointsEdgeAbbrev;
     }
+    edgeModel.stampRow(r);
   });
   var body = packLiveBacktest(season, out.rows, generatedAt);
   var changed = !prev || backtestSignature(prev.rows) !== backtestSignature(body.rows);
@@ -3079,6 +3344,7 @@ function detectRoute(req, url) {
   if (blob.indexOf("/api/scorers") !== -1 || blob.indexOf("api/scorers") !== -1) return "/api/scorers";
   if (blob.indexOf("/api/scores") !== -1 || blob.indexOf("api/scores") !== -1) return "/api/scores";
   if (blob.indexOf("cron") !== -1) return "/api/cron";
+  if (blob.indexOf("repair") !== -1) return "/api/repair";
   if (blob.indexOf("grade") !== -1) return "/api/estimates/grade";
   if (blob.indexOf("seed") !== -1) return "/api/seed";
   if (blob.indexOf("version") !== -1) return "/api/version";
@@ -3455,6 +3721,18 @@ function handleApi(req, res, url) {
     loadEstimatesView.then(function (body) { sendJson(res, 200, body); });
     return true;
   }
+  if (pathname === "/api/repair" && (req.method === "POST" || req.method === "GET")) {
+    if (!cronAuthorized(req)) {
+      sendJson(res, 401, { ok: false, error: "unauthorized" });
+      return true;
+    }
+    repairStoredEdges()
+      .then(function (body) { sendJson(res, 200, body); })
+      .catch(function (err) {
+        sendJson(res, 502, { ok: false, error: String(err.message || err) });
+      });
+    return true;
+  }
   if (pathname === "/api/estimates/grade" && (req.method === "POST" || req.method === "GET")) {
     if (!requireAdmin(req, res)) return true;
     gradeEstimates()
@@ -3742,6 +4020,7 @@ function routeKey(pathname) {
   if (p === "/trends" || p === "/api/trends") return "/api/trends";
   if (p === "/teams" || p === "/api/teams") return "/api/teams";
   if (p === "/api/estimates/grade") return "/api/estimates/grade";
+  if (p === "/api/repair") return "/api/repair";
   if (p === "/api/download") return "/api/download";
   if (p === "/estimates" || p === "/api/estimates") return "/api/estimates";
   return p;

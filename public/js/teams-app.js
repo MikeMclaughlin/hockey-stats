@@ -42,6 +42,11 @@
     return "<td class='num'>" + (v != null && v !== "" ? v : "—") + preHtml(pre) + "</td>";
   }
 
+  function ptsPctCell(v, pre) {
+    if (v == null || v === "" || !isFinite(Number(v))) return numCell(v, pre);
+    return "<td class='num'>" + Number(v).toFixed(3) + preHtml(pre) + "</td>";
+  }
+
   function pdoCell(v, pre) {
     if (v == null || !isFinite(Number(v))) return "<td class='num'>—" + preHtml(pre) + "</td>";
     var n = Number(v);
@@ -99,7 +104,7 @@
         numCell(r.wins, pre.record) +
         numCell(r.losses, pre.record) +
         numCell(r.otl, pre.record) +
-        numCell(r.ptsPct, pre.ptsPct) +
+        ptsPctCell(r.ptsPct, pre.ptsPct) +
         numCell(r.goalDiff, pre.goalDiff) +
         numCell(r.goalsP1) +
         numCell(r.goalsP2) +

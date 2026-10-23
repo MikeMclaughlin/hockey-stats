@@ -29,7 +29,8 @@
     scorers: "scorers-20262027.json",
     liveBacktest: "backtest-20262027.json",
     periodGoals: "period-goals.json",
-    teamTrends: "team-trends.json"
+    teamTrends: "team-trends.json",
+    cardSnapshots: "card-snapshots.json"
   };
 
   var lastWrite = { at: null, name: null, error: null };

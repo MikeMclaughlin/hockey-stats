@@ -55,7 +55,7 @@
         </select>
       </label>
     </div>
-    <p class="note" id="fav-note">Favorite is the club with the higher points percentage before the game. Historical moneylines are not in this file, so this is a standings proxy, not a betting line. The previous Edge rule leaves its toss-up out of the favorite and underdog filters. The Toss-up label on a win chance means under 55% or a weak Edge score. This page has no moneyline, so the underdog gate does not apply here.</p>
+    <p class="note" id="fav-note">Favorite is the club with the higher points percentage before the game. The favorite and underdog filters use the 2.6 Edge pick against that favorite. A Toss-up is left out of those filters. When a row has an opening moneyline, a pick that disagrees with that favorite is a Toss-up. Older seasons have no moneylines, so that market check does not apply there.</p>
     <section id="summary" class="summary"></section>
     <p id="model-note" class="model-note"></p>
     <section id="edge-splits" class="edge-splits"></section>
@@ -79,8 +79,8 @@
               <th data-key="homeLast5Sv" class="num" title="Home last-five save percentage. Click to sort." aria-label="Home last-five save percentage. Click to sort.">Home L5 SV%</th>
               <th data-key="awayXgf5" class="num" title="Away even-strength expected-goals share before the game. Click to sort." aria-label="Away even-strength expected-goals share before the game. Click to sort.">Away 5v5 xGF%</th>
               <th data-key="homeXgf5" class="num" title="Home even-strength expected-goals share before the game. Click to sort." aria-label="Home even-strength expected-goals share before the game. Click to sort.">Home 5v5 xGF%</th>
-              <th data-key="edgeAbbrev" title="Saved Edge pick. Click to sort." aria-label="Saved Edge pick. Click to sort.">Edge</th>
-              <th data-key="edgeRole" title="Favorite or underdog by points percentage. Click to sort." aria-label="Favorite or underdog by points percentage. Click to sort.">Side</th>
+              <th data-key="edgeAbbrev" title="Edge pick and tier from the 2.6 model: projected-score winner, then the toss-up gates. Click to sort." aria-label="Edge pick and tier from the 2.6 model: projected-score winner, then the toss-up gates. Click to sort.">Edge</th>
+              <th data-key="edgeRole" title="Whether the 2.6 Edge pick is the points-percentage favorite or the underdog. Toss-up when the model says Toss-up. Click to sort." aria-label="Whether the 2.6 Edge pick is the points-percentage favorite or the underdog. Toss-up when the model says Toss-up. Click to sort.">Side</th>
               <th data-key="notes" title="Rest, streak, and fatigue notes. Click to sort." aria-label="Rest, streak, and fatigue notes. Click to sort.">Notes</th>
             </tr>
             <tr class="filters">
@@ -109,7 +109,7 @@
     </section>
   </main>
   <footer>
-    <span>v2.6</span>
+    <span>v2.7</span>
   </footer>
   <script src="/js/dates.js"></script>
   <script src="/js/prefs.js"></script>

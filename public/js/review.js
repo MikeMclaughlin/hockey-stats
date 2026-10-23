@@ -175,10 +175,12 @@
           hiN += 1;
           if (ok) hiR += 1;
         }
-        if (r.edgePickWon === true || r.edgePickWon === false) {
+        var oldFirm = r.pointsEdgePickWon === true || r.pointsEdgePickWon === false;
+        var firm = oldFirm || r.edgePickWon === true || r.edgePickWon === false;
+        if (firm) {
           sameN += 1;
           if (ok) sameNew += 1;
-          if (r.edgePickWon) sameOld += 1;
+          if (oldFirm ? r.pointsEdgePickWon : r.edgePickWon) sameOld += 1;
           if (r.marketSide && r.marketSide !== "even" && !r.edgeTossUpView) {
             var bucket = (model.pick === r.marketSide) ? newAgree : newDisagree;
             bucket.n += 1;

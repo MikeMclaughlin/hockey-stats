@@ -119,13 +119,13 @@
     return round((gf / sf) + ((sa - ga) / sa), 3);
   }
 
-  // 1, then 2, 4, 6, … while the offset is still inside the longest
-  // current-season log (k < max games played).
+  // Every completed game this season: 1, 2, 3, … while the offset is still
+  // inside the longest current-season log (k < max games played).
   function agoOffsets(maxGp) {
     var gp = Number(maxGp);
     if (!isFinite(gp) || gp < 0) gp = 0;
-    var list = [1];
-    for (var k = 2; k < gp; k += 2) list.push(k);
+    var list = [];
+    for (var k = 1; k < gp; k += 1) list.push(k);
     return list;
   }
 
@@ -162,7 +162,8 @@
       "A share is n/a only when that span has no MoneyPuck game. " +
       "MoneyPuck can lag the NHL log by a game. " +
       "Current is the " + currentLabel + " regular season to date. " +
-      "1 game ago, then every second game (2, 4, 6, and so on), is that same season-to-date rate through the game that many games before the team’s most recent " + currentLabel + " regular-season game. " +
+      "1, 2, 3, 4, and so on games ago is that same season-to-date rate through the game that many games before the team’s most recent " + currentLabel + " regular-season game. " +
+      "n/a means that team has not played that many " + currentLabel + " games. " +
       "The count stops at the first game of " + currentLabel + ". Earlier seasons are not used. " +
       "A column is shown when at least one team has played more games than that offset. " +
       "Playoffs and preseason are excluded. " +

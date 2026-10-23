@@ -385,6 +385,31 @@
     });
   }
 
+  function edgeRoleFor(row, model) {
+    if (!model || model.label === "Toss-up") return "toss-up";
+    var away = num(row && row.awayPtsPct);
+    var home = num(row && row.homePtsPct);
+    if (away == null || home == null || away === home) return "even";
+    var favorite = away > home ? "away" : "home";
+    return model.pick === favorite ? "favorite" : "underdog";
+  }
+
+  /**
+   * Write the 2.6 pick onto a backtest row. The points-score abbrev is kept
+   * once as pointsEdgeAbbrev. Projected scores and grading fields stay put.
+   * Opening moneylines must already be the pregame lines (or blank).
+   */
+  function stampRow(row) {
+    row = row || {};
+    if (!row.pointsEdgeAbbrev && row.edgeAbbrev) row.pointsEdgeAbbrev = row.edgeAbbrev;
+    var model = fromBacktestRow(row);
+    row.edgeAbbrev = model.pickAbbrev;
+    row.edgeTossUp = model.label === "Toss-up";
+    row.edgeLabel = model.label;
+    row.edgeRole = edgeRoleFor(row, model);
+    return row;
+  }
+
   function fromMatchup(m) {
     m = m || {};
     var away = m.away || {};
@@ -447,6 +472,8 @@
     labelTitle: labelTitle,
     fromBacktestRow: fromBacktestRow,
     fromMatchup: fromMatchup,
+    stampRow: stampRow,
+    edgeRoleFor: edgeRoleFor,
     coefficients: coefficients
   };
 });

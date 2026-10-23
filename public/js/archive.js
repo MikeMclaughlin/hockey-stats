@@ -241,6 +241,7 @@
   /**
    * Keep the pre-game Edge pick until puck drop, then lock it.
    * A game that has already started does not gain a new pick.
+   * edgeWinner is the 2.6 side. pointsEdgeWinner is the older points score side.
    */
   function rememberEdge(existing, row, nowMs) {
     if (!existing || !row || !row.edgeWinner) return existing;
@@ -249,12 +250,50 @@
       if (existing.edgeWinner) existing.edgeLocked = true;
       return existing;
     }
+    if (!existing.pointsEdgeWinner && row.pointsEdgeWinner) {
+      existing.pointsEdgeWinner = row.pointsEdgeWinner;
+    }
     existing.edgeWinner = row.edgeWinner;
     existing.edgeScore = row.edgeScore != null ? row.edgeScore : null;
     existing.edgeAbbrev = row.edgeAbbrev || null;
     existing.edgeTossUp = !!row.edgeTossUp;
+    existing.edgeLabel = row.edgeLabel || null;
     existing.edgeLocked = false;
     return existing;
+  }
+
+  // American prices at or beyond this size are live-board junk, not a pregame line.
+  var IMPOSSIBLE_ML = 10000;
+
+  function priceImpossible(ml) {
+    if (ml == null || ml === "" || !isFinite(Number(ml))) return false;
+    return Math.abs(Number(ml)) >= IMPOSSIBLE_ML;
+  }
+
+  /**
+   * True when this saved line was first captured at or after puck drop,
+   * or the price itself cannot be a pregame moneyline.
+   */
+  function oddsCapturedAfterStart(row) {
+    if (!row) return false;
+    if (priceImpossible(row.awayMl) || priceImpossible(row.homeMl)) return true;
+    if (row.voidedReason) return true;
+    var start = parseTime(row.startTimeUTC);
+    var captured = parseTime(row.capturedAt);
+    if (start != null && captured != null && captured >= start) return true;
+    return false;
+  }
+
+  function clearOddsLines(row) {
+    if (!row) return row;
+    row.awayMl = null;
+    row.homeMl = null;
+    row.total = null;
+    row.overPrice = null;
+    row.underPrice = null;
+    row.voidedReason = "captured-after-start";
+    row.locked = true;
+    return row;
   }
 
   function oddsLines(odds) {
@@ -280,8 +319,9 @@
 
   /**
    * Keep the moneyline and total until puck drop. After the game starts,
-   * the saved line is locked and later prices do not replace it.
-   * A first write is still allowed after start so a recovered line can be stored.
+   * a line captured before the start is locked and later prices do not
+   * replace it. A first line seen only after the start is not saved.
+   * A line already stored from after the start is wiped.
    */
   function snapshotOdds(store, row, nowIso) {
     store = store || { version: 1, byId: {} };
@@ -290,8 +330,18 @@
     var existing = store.byId[id];
     var nowMs = parseTime(nowIso);
     if (nowMs == null) nowMs = Date.now();
+    if (existing && oddsCapturedAfterStart(existing)) {
+      var hadLine = existing.awayMl != null || existing.homeMl != null || existing.total != null;
+      clearOddsLines(existing);
+      if (row && row.gameState) existing.gameState = row.gameState;
+      if (row && row.startTimeUTC && !existing.startTimeUTC) existing.startTimeUTC = row.startTimeUTC;
+      return { store: store, row: existing, wrote: hadLine };
+    }
     var started = hasStarted(row, nowMs) || (existing && hasStarted(existing, nowMs));
-    if (existing && (existing.locked || started)) {
+    if (started && !existing) {
+      return { store: store, row: null, wrote: false };
+    }
+    if (existing && (existing.locked || existing.voidedReason || started)) {
       var changed = !existing.locked;
       existing.locked = true;
       if (row.gameState) existing.gameState = row.gameState;
@@ -299,6 +349,9 @@
       return { store: store, row: existing, wrote: changed };
     }
     var lines = oddsLines(row && row.odds);
+    if (lines && (priceImpossible(lines.awayMl) || priceImpossible(lines.homeMl))) {
+      return { store: store, row: existing || null, wrote: false };
+    }
     if (!lines) return { store: store, row: existing || null, wrote: false };
     var now = nowIso || new Date().toISOString();
     var saved = {
@@ -345,6 +398,10 @@
     hasStarted: hasStarted,
     oddsLines: oddsLines,
     snapshotOdds: snapshotOdds,
-    shouldRelock: shouldRelock
+    shouldRelock: shouldRelock,
+    priceImpossible: priceImpossible,
+    oddsCapturedAfterStart: oddsCapturedAfterStart,
+    clearOddsLines: clearOddsLines,
+    IMPOSSIBLE_ML: IMPOSSIBLE_ML
   };
 });

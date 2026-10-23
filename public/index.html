@@ -48,6 +48,15 @@
             <option value="strong">Strong</option>
           </select>
         </label>
+        <label class="sort-control">B2B
+          <select id="b2b" aria-label="Filter by back-to-back" title="Show every game, or only games where a team is on a back-to-back.">
+            <option value="all">All</option>
+            <option value="b2b">Back-to-back</option>
+          </select>
+        </label>
+        <label class="sort-control why-flag" title="Show or hide the Why section on the matchup cards.">
+          <input type="checkbox" id="show-why" checked> Why
+        </label>
       </div>
       <p id="meta" class="meta meta-line">Loading…</p>
     </div>
@@ -122,7 +131,7 @@
         <li><strong>HDCF%</strong> — high-danger chances for / (HDCF + HDCA).</li>
         <li><strong>5v5 xGF%</strong> — MoneyPuck 5-on-5 expected goals for / (xGF + xGA).</li>
         <li><strong>Estimated score</strong> — projected goals from season scoring rate, xG rate, last-5 form, HDCF tilt, and a small home-ice bump.</li>
-        <li><strong>Moneyline / O/U</strong> — NHL partner board for the US (DraftKings when posted). The line is saved for every game and kept after puck drop. A played game with no saved line says so. A “≠ DK” mark means the model edge and the DraftKings favorite are different teams.</li>
+        <li><strong>Moneyline / O/U</strong> — NHL partner board for the US (DraftKings when posted). The line is saved before puck drop and locked at the start time. A price that first appears after the game has started is not saved. A played game with no saved line says so. A “≠ DK” mark means the model edge and the DraftKings favorite are different teams.</li>
         <li><strong>Seasons</strong> — the scoreboard season is the slate on the board. Records and rates use the latest season that already has a final regular-season game, for every date, and that choice stays. Before any final, they stay on the previous regular season. Early in the season the sample is small. A team with no regular-season games yet shows 2026-27 preseason for record, goals, shots, PDO, last five, and rest, marked pre. A stat with no preseason source stays blank. MoneyPuck does not publish 2026-27 preseason, so shot-attempt share, high-danger chances, expected goals, and special-teams expected goals stay blank until a regular-season MoneyPuck row exists. Regular-season numbers replace preseason as soon as that stat has them.</li>
         <li><strong>Edge sample</strong> — the board’s Edge cell counts how many of the 11 measures had a number for both teams. A blank on either side scores zero and is not counted. Fewer than 6 of 11 is marked low data. The matchup card does not repeat that count.</li>
         <li><strong>Win chance</strong> — the card’s percentage is a logistic model fit on 2021-22 through 2024-25 (home ice, 5-on-5 xG share, last-five goal differential, back-to-back, and projected margin). PDO and last-five save percentage stay on the card and add nothing to this percentage or to the Edge score. The percentage is the model’s confidence. If the projected score picks the other team, the card shows that team and keeps this confidence. Strong means 65% or more and the pick leads shots-on-goal share, even-strength expected-goals share, and shot-attempt share by an average of 3 points or more. Confident is 65% or more and leads all three, with a smaller average lead. Lean is 55% up to 65% when the absolute Edge score is at least 0.50. After the side is chosen, a firm pick becomes a Toss-up when it trails on last-five expected-goals share, disagrees with the moneyline favorite, or fails the combined filter. The combined filter keeps a pick only when the projected score agrees, the side is not behind on last-five expected-goals share, and the side is not on a back-to-back against a rested opponent. If there is no moneyline, the market check does not apply. The Pick menu filters the cards and the board by that label. Review and Backtest grade the same rules.</li>
@@ -134,7 +143,7 @@
     </section>
   </main>
   <footer>
-    <span>v2.6</span>
+    <span>v2.7</span>
   </footer>
   <script src="/js/dates.js"></script>
   <script src="/js/prefs.js"></script>
@@ -143,6 +152,7 @@
   <script src="/js/stats.js"></script>
   <script src="/js/table-filter.js"></script>
   <script src="/js/edge-model.js"></script>
+  <script src="/js/card-league.js"></script>
   <script src="/js/app.js"></script>
 </body>
 </html>
