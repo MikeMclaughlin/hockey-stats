@@ -100,50 +100,39 @@
     return "Toss-up";
   }
 
-  function downgrade(label) {
-    if (label === "Confident") return "Lean";
-    if (label === "Lean") return "Toss-up";
-    return "Toss-up";
-  }
-
-  // A last-5 xG downgrade keeps the win chance and changes the word.
-  // Quote a band only when the chance actually sits in it.
+  // The side is chosen first. Toss-up gates run after that and do not
+  // change the displayed confidence.
   function labelTitle(model) {
     model = model || {};
     var pct = num(model.pickPct);
     var chance = "Calibrated win chance " + (pct == null ? "—" : pct) + "%.";
-    if (model.dogGated) {
-      return "Toss-up. The Edge side is the market underdog, and it does not have an absolute Edge score of " +
-        UNDERDOG_ABS_SCORE + " or a lead in shots-on-goal share, even-strength expected-goals share, and shot-attempt share. " +
-        chance;
-    }
-    if (model.scoreGated) {
-      return "Toss-up. This Lean’s absolute Edge score is under " + scoreCutoff() + ", so it is not a firm pick. " + chance;
-    }
-    if (model.downgraded && model.labelBefore && model.labelBefore !== model.label) {
-      return "Lowered from " + model.labelBefore + " to " + model.label +
-        " because the pick's last-5 xG share is below the opponent. " +
-        chance + " The side was not flipped.";
+    var switched = model.projectionOverride ? " The shown side is the projected-score winner." : "";
+    if (model.label === "Toss-up") {
+      var reasons = [];
+      if (pct != null && pct < 55) reasons.push("the win chance is under 55%");
+      if (model.scoreGated) reasons.push("this Lean’s absolute Edge score is under " + scoreCutoff());
+      if (model.xgToss) reasons.push("the pick trails on last-5 expected-goals share");
+      if (model.marketToss) reasons.push("the pick disagrees with the market favorite");
+      if (model.filterToss) reasons.push("the combined filter failed (projected score, last-5 expected-goals share, or rest)");
+      if (!reasons.length) return "Toss-up. " + chance + switched;
+      return "Toss-up. " + reasons.join("; ") + ". " + chance + switched;
     }
     if (model.label === "Strong") {
       return "Strong. Win chance 65% or more, and the pick leads shots-on-goal share, even-strength expected-goals share, and shot-attempt share by an average of " +
-        STRONG_AVG_GAP + " points or more. " + chance;
+        STRONG_AVG_GAP + " points or more. " + chance + switched;
     }
     if (model.label === "Confident" && pct != null && pct >= 65) {
       return "Confident at 65% or more, and the pick leads shots-on-goal share, even-strength expected-goals share, and shot-attempt share. The average lead is under " +
-        STRONG_AVG_GAP + " points. " + chance;
+        STRONG_AVG_GAP + " points. " + chance + switched;
     }
     if (model.top3Demoted) {
       return "Lean. The win chance is in the Confident band, and the pick does not lead all three of shots-on-goal share, even-strength expected-goals share, and shot-attempt share. " +
-        chance;
+        chance + switched;
     }
     if (model.label === "Lean" && pct != null && pct >= 55 && pct < 65) {
-      return "Lean, from 55% up to 65%, with an absolute Edge score of at least " + scoreCutoff() + ". " + chance;
+      return "Lean, from 55% up to 65%, with an absolute Edge score of at least " + scoreCutoff() + ". " + chance + switched;
     }
-    if (model.label === "Toss-up" && pct != null && pct < 55) {
-      return "Toss-up, under 55%. " + chance;
-    }
-    return (model.label || "Pick") + ". " + chance;
+    return (model.label || "Pick") + ". " + chance + switched;
   }
 
   function sideName(side, input) {
@@ -178,8 +167,9 @@
     return fromStats == null ? 0.5 : fromStats;
   }
 
-  // Same band as the old 65% Edge score. A market underdog needs this
-  // absolute score, or a lead in all three top shares.
+  // Previous underdog exception. A firm pick that disagrees with the
+  // moneyline favorite is now a toss-up, with no score or top-share
+  // exception. The constant stays so older comparisons can still quote it.
   var UNDERDOG_ABS_SCORE = 1.75;
   var STRONG_AVG_GAP = 3;
 
@@ -277,18 +267,20 @@
   function assess(input) {
     input = input || {};
     var homeP = homeWinProbability(input);
-    var pick = homeP >= 0.5 ? "home" : "away";
-    var pickP = (pick === "home" ? homeP : 1 - homeP) * 100;
+    var modelSide = homeP >= 0.5 ? "home" : "away";
+    var pickP = (modelSide === "home" ? homeP : 1 - homeP) * 100;
     var pickPct = round1(pickP);
     var label = band(pickPct);
     var labelBefore = label;
-    var pickX = num(pick === "home" ? input.homeLast5Xg : input.awayLast5Xg);
-    var oppX = num(pick === "home" ? input.awayLast5Xg : input.homeLast5Xg);
-    var downgraded = false;
-    if (pickX != null && oppX != null && pickX < oppX) {
-      var dropped = downgrade(label);
-      downgraded = dropped !== label;
-      label = dropped;
+    // Rule 3 first: the projected-score winner becomes the pick. The
+    // displayed confidence stays the model's larger-side chance so a
+    // switched side can still clear the 55% band.
+    var projSide = projectedSide(input);
+    var projectionOverride = false;
+    var pick = modelSide;
+    if (projSide && projSide !== pick) {
+      pick = projSide;
+      projectionOverride = true;
     }
     var top = top3Lead(input, pick);
     var score = num(input.edgeScore);
@@ -304,21 +296,35 @@
       label = "Toss-up";
       scoreGated = true;
     }
+    var pickX = num(pick === "home" ? input.homeLast5Xg : input.awayLast5Xg);
+    var oppX = num(pick === "home" ? input.awayLast5Xg : input.homeLast5Xg);
+    var xgBehind = pickX != null && oppX != null && pickX < oppX;
     var market = marketSideFromMl(input.awayMl, input.homeMl);
-    var dogGated = false;
-    if (label !== "Toss-up" && market && market !== "even" && pick !== market) {
-      var bigScore = absScore != null && absScore >= UNDERDOG_ABS_SCORE;
-      if (!(bigScore || top.all)) {
-        label = "Toss-up";
-        dogGated = true;
-      }
-    }
-    var xgSide = last5Side(input);
-    var projSide = projectedSide(input);
+    var marketDisagree = !!(market && market !== "even" && pick !== market);
     var pickB2B = pick === "home" ? !!input.homeB2B : !!input.awayB2B;
     var oppB2B = pick === "home" ? !!input.awayB2B : !!input.homeB2B;
     var badRest = pickB2B && !oppB2B;
-    var confidentPick = !!(xgSide && projSide && pick === xgSide && pick === projSide && !badRest);
+    var projectionAgrees = !!(projSide && pick === projSide);
+    var combinedOk = projectionAgrees && !xgBehind && !badRest;
+    var xgToss = false;
+    var marketToss = false;
+    var filterToss = false;
+    if (label !== "Toss-up") {
+      if (xgBehind) {
+        label = "Toss-up";
+        xgToss = true;
+      }
+      if (marketDisagree) {
+        label = "Toss-up";
+        marketToss = true;
+      }
+      if (!combinedOk) {
+        label = "Toss-up";
+        filterToss = true;
+      }
+    }
+    var xgSide = last5Side(input);
+    var confidentPick = label === "Confident" && !!(xgSide && projSide && pick === xgSide && pick === projSide && !badRest);
     var month = String(input.gameDate || "").slice(5, 7);
     return {
       homeProb: round1(homeP * 100),
@@ -328,10 +334,14 @@
       pickPct: pickPct,
       label: label,
       labelBefore: labelBefore,
-      downgraded: downgraded,
+      downgraded: false,
+      projectionOverride: projectionOverride,
       top3Demoted: top3Demoted,
       scoreGated: scoreGated,
-      dogGated: dogGated,
+      dogGated: false,
+      xgToss: xgToss,
+      marketToss: marketToss,
+      filterToss: filterToss,
       confidentPick: confidentPick,
       earlySeason: month === "10" || month === "11",
       chips: chipsFor(input, pick),

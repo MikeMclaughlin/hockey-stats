@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var state = { data: null, sortKey: "pdo", sortDir: -1, filters: {}, cardsExpanded: false, featured: null };
+  var state = { data: null, sortKey: "pdo", sortDir: -1, filters: {}, tier: "all", cardsExpanded: false, featured: null };
   var CARDS_KEY = "hs-cards-expanded";
   var STATS_KEY = "hs-card-stats";
   var DEFAULT_FEATURED = ["sogShare", "xgfPct5v5", "cf"];
@@ -301,11 +301,30 @@
     }).join("");
   }
 
+  function applyModelGrade(m, base) {
+    if (!base || !window.HockeyEdgeModel) return base;
+    var model = modelOf(m);
+    if (!model) return base;
+    var sb = m.scoreboard || {};
+    var actualWinner = window.HockeyArchive ? HockeyArchive.winnerOf(Number(sb.away), Number(sb.home)) : null;
+    var toss = model.label === "Toss-up";
+    var edgeCorrect = null;
+    if (!toss && model.pick && actualWinner && actualWinner !== "tie") edgeCorrect = model.pick === actualWinner;
+    return Object.assign({}, base, {
+      edgeAbbrev: model.pickAbbrev,
+      edgeWinner: model.pick,
+      edgeCorrect: edgeCorrect,
+      tossUp: toss,
+      edgeSource: "model",
+      missingEdge: false
+    });
+  }
+
   function performanceOf(m) {
     var sb = m.scoreboard || {};
     if (!sb.final || sb.away == null || sb.home == null) return null;
     var server = m.performance;
-    if (server && server.actualLabel === (sb.away + "–" + sb.home)) return server;
+    if (server && server.actualLabel === (sb.away + "–" + sb.home)) return applyModelGrade(m, server);
     var saved = m.saved || null;
     var actualAway = Number(sb.away);
     var actualHome = Number(sb.home);
@@ -334,7 +353,7 @@
       var actualWinner = HockeyArchive.winnerOf(actualAway, actualHome);
       if (actualWinner && actualWinner !== "tie") edgeCorrect = saved.edgeWinner === actualWinner;
     }
-    return {
+    return applyModelGrade(m, {
       estimateLabel: missingEstimate ? null : projectedAway + "–" + projectedHome,
       actualLabel: actualAway + "–" + actualHome,
       exact: exact,
@@ -347,7 +366,7 @@
       edgeSource: saved ? saved.edgeSource : null,
       missingEstimate: missingEstimate,
       missingEdge: !(saved && saved.edgeWinner)
-    };
+    });
   }
 
   function resultInner(m) {
@@ -461,7 +480,11 @@
   function renderCards(matchups) {
     var root = $("cards");
     if (!matchups.length) {
-      root.innerHTML = '<div class="empty">No games on the current NHL scoreboard. The board will pick up the next published slate.</div>';
+      var any = state.data && state.data.matchups && state.data.matchups.length;
+      var emptyText = any && state.tier && state.tier !== "all"
+        ? "No games in this pick tier."
+        : "No games on the current NHL scoreboard. The board will pick up the next published slate.";
+      root.innerHTML = '<div class="empty">' + emptyText + "</div>";
       return;
     }
     root.innerHTML = matchups.map(function (m) {
@@ -584,6 +607,11 @@
   }
 
   function passesFilters(m) {
+    if (state.tier && state.tier !== "all") {
+      var model = modelOf(m);
+      var label = model && model.label ? String(model.label).toLowerCase() : "";
+      if (label !== state.tier) return false;
+    }
     if (!window.TableFilter) return true;
     var display = {};
     Object.keys(state.filters).forEach(function (key) {
@@ -1050,6 +1078,11 @@
   if (cardsBtn) cardsBtn.addEventListener("click", function () { setCardsExpanded(!state.cardsExpanded); });
   var dirBtn = $("sort-dir");
   if (dirBtn) dirBtn.addEventListener("click", function () { applySort(state.sortKey, state.sortDir * -1); });
+  var tierSel = $("tier");
+  if (tierSel) tierSel.addEventListener("change", function () {
+    state.tier = tierSel.value || "all";
+    if (state.data) render(state.data);
+  });
   var prevBtn = $("prev-date");
   var nextBtn = $("next-date");
   var todayBtn = $("today-date");
