@@ -22,7 +22,11 @@
       "actualAway": null,
       "actualHome": null,
       "actualLabel": null,
-      "gameState": "FUT"
+      "gameState": "FUT",
+      "liveAway": 1,
+      "liveHome": 2,
+      "liveLabel": "1–2",
+      "liveMatchesLock": false
     },
     "2026020002": {
       "id": 2026020002,
@@ -45,7 +49,11 @@
       "actualAway": null,
       "actualHome": null,
       "actualLabel": null,
-      "gameState": "FUT"
+      "gameState": "FUT",
+      "liveAway": 2,
+      "liveHome": 1,
+      "liveLabel": "2–1",
+      "liveMatchesLock": false
     },
     "2026020003": {
       "id": 2026020003,
@@ -68,7 +76,11 @@
       "actualAway": null,
       "actualHome": null,
       "actualLabel": null,
-      "gameState": "FUT"
+      "gameState": "FUT",
+      "liveAway": 1,
+      "liveHome": 2,
+      "liveLabel": "1–2",
+      "liveMatchesLock": false
     },
     "2026020004": {
       "id": 2026020004,
@@ -91,7 +103,11 @@
       "actualAway": null,
       "actualHome": null,
       "actualLabel": null,
-      "gameState": "FUT"
+      "gameState": "FUT",
+      "liveAway": 1,
+      "liveHome": 2,
+      "liveLabel": "1–2",
+      "liveMatchesLock": false
     },
     "2026020005": {
       "id": 2026020005,
@@ -114,7 +130,11 @@
       "actualAway": null,
       "actualHome": null,
       "actualLabel": null,
-      "gameState": "FUT"
+      "gameState": "FUT",
+      "liveAway": 1,
+      "liveHome": 2,
+      "liveLabel": "1–2",
+      "liveMatchesLock": false
     },
     "2026020180": {
       "id": 2026020180,
@@ -129,8 +149,8 @@
       "projectedAway": 3,
       "projectedHome": 2,
       "projectedLabel": "3–2",
-      "createdAt": "2026-10-26T02:07:42.392Z",
-      "lockedAt": "2026-10-26T02:07:42.392Z",
+      "createdAt": "2026-10-26T02:20:30.551Z",
+      "lockedAt": "2026-10-26T02:20:30.551Z",
       "graded": true,
       "correct": true,
       "winnerCorrect": true,
@@ -142,7 +162,12 @@
       "liveHome": 2,
       "liveLabel": "3–2",
       "liveMatchesLock": true,
-      "gradedAt": "2026-10-26T02:07:42.392Z"
+      "totalGoalsError": 0,
+      "marginError": 0,
+      "projectedTotal": 5,
+      "actualTotal": 5,
+      "gradedAt": "2026-10-26T02:20:30.551Z",
+      "lockOpen": false
     },
     "2026020181": {
       "id": 2026020181,
@@ -157,8 +182,8 @@
       "projectedAway": 2,
       "projectedHome": 3,
       "projectedLabel": "2–3",
-      "createdAt": "2026-10-26T02:07:42.392Z",
-      "lockedAt": "2026-10-26T02:07:42.392Z",
+      "createdAt": "2026-10-26T02:20:30.551Z",
+      "lockedAt": "2026-10-26T02:20:30.551Z",
       "graded": true,
       "correct": false,
       "winnerCorrect": true,
@@ -170,7 +195,12 @@
       "liveHome": 3,
       "liveLabel": "2–3",
       "liveMatchesLock": true,
-      "gradedAt": "2026-10-26T02:07:42.392Z"
+      "totalGoalsError": 4,
+      "marginError": 2,
+      "projectedTotal": 5,
+      "actualTotal": 9,
+      "gradedAt": "2026-10-26T02:20:30.551Z",
+      "lockOpen": false
     },
     "2026020182": {
       "id": 2026020182,
@@ -185,8 +215,8 @@
       "projectedAway": 4,
       "projectedHome": 3,
       "projectedLabel": "4–3",
-      "createdAt": "2026-10-26T02:07:42.392Z",
-      "lockedAt": "2026-10-26T02:07:42.392Z",
+      "createdAt": "2026-10-26T02:20:30.551Z",
+      "lockedAt": "2026-10-26T02:20:30.551Z",
       "graded": true,
       "correct": false,
       "winnerCorrect": true,
@@ -198,7 +228,12 @@
       "liveHome": 3,
       "liveLabel": "4–3",
       "liveMatchesLock": true,
-      "gradedAt": "2026-10-26T02:07:42.392Z"
+      "totalGoalsError": 4,
+      "marginError": 0,
+      "projectedTotal": 7,
+      "actualTotal": 3,
+      "gradedAt": "2026-10-26T02:20:30.551Z",
+      "lockOpen": false
     },
     "2026020183": {
       "id": 2026020183,
@@ -213,8 +248,8 @@
       "projectedAway": 4,
       "projectedHome": 3,
       "projectedLabel": "4–3",
-      "createdAt": "2026-10-26T02:07:42.392Z",
-      "lockedAt": "2026-10-26T02:07:42.392Z",
+      "createdAt": "2026-10-26T02:20:30.551Z",
+      "lockedAt": "2026-10-26T02:20:30.551Z",
       "graded": false,
       "correct": null,
       "winnerCorrect": null,
@@ -225,7 +260,8 @@
       "liveAway": 4,
       "liveHome": 3,
       "liveLabel": "4–3",
-      "liveMatchesLock": true
+      "liveMatchesLock": true,
+      "lockOpen": false
     },
     "2026020184": {
       "id": 2026020184,
@@ -240,8 +276,8 @@
       "projectedAway": 4,
       "projectedHome": 2,
       "projectedLabel": "4–2",
-      "createdAt": "2026-10-26T02:07:42.392Z",
-      "lockedAt": "2026-10-26T02:07:42.392Z",
+      "createdAt": "2026-10-26T02:20:30.551Z",
+      "lockedAt": "2026-10-26T02:20:30.551Z",
       "graded": false,
       "correct": null,
       "winnerCorrect": null,
@@ -252,7 +288,8 @@
       "liveAway": 4,
       "liveHome": 2,
       "liveLabel": "4–2",
-      "liveMatchesLock": true
+      "liveMatchesLock": true,
+      "lockOpen": false
     }
   }
 }

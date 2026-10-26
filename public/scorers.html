@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Hockey Stats — Scorers</title>
+  <link rel="icon" href="/favicon.ico?v=1.9" sizes="any">
+  <link rel="icon" href="/favicon.svg?v=1.9" type="image/svg+xml">
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png?v=1.9">
+  <link rel="icon" type="image/png" sizes="192x192" href="/favicon-192x192.png?v=1.9">
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png?v=1.9">
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body data-page="scorers">
+  <header class="top">
+    <script src="/js/site-nav.js"></script>
+    <div class="header-body">
+    <div class="brand">
+      <img class="site-logo" src="/favicon.svg?v=1.9" alt="Hockey Stats">
+      <div>
+        <h1>Scorers</h1>
+        <p class="tag">Cumulative goals or points by each player’s game number</p>
+      </div>
+    </div>
+    <div class="toolbar">
+      <div class="toolbar-row nav-controls">
+        <label>Chart
+          <select id="chart-stat" aria-label="Chart stat">
+            <option value="goals">Goals</option>
+            <option value="points">Points</option>
+          </select>
+        </label>
+      </div>
+      <p id="meta" class="meta meta-line">Loading…</p>
+    </div>
+    </div>
+  </header>
+  <main>
+    <p id="note" class="note"></p>
+    <section class="board">
+      <h2>Top scorers by game number</h2>
+      <div class="chart-wrap">
+        <svg id="chart" role="img" aria-label="Cumulative scoring by game number"></svg>
+      </div>
+      <ul id="legend" class="chart-legend"></ul>
+    </section>
+    <details class="panel" id="goals-panel" open>
+      <summary>Goals per game</summary>
+      <div class="table-wrap">
+        <table id="scorers">
+          <thead id="scorer-head"></thead>
+          <tbody id="scorer-body"></tbody>
+        </table>
+      </div>
+    </details>
+    <details class="panel" id="points-panel" open>
+      <summary>Points per game</summary>
+      <div class="table-wrap">
+        <table id="points-table">
+          <thead id="points-head"></thead>
+          <tbody id="points-body"></tbody>
+        </table>
+      </div>
+    </details>
+  </main>
+  <footer>
+    <span>v2.7</span>
+  </footer>
+  <script src="/js/dates.js"></script>
+  <script src="/js/prefs.js"></script>
+  <script src="/js/loading.js"></script>
+  <script src="/js/scorers-app.js"></script>
+</body>
+</html>

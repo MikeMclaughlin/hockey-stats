@@ -144,13 +144,18 @@
     return { games: used, total: gd, avg: round(gd / used, 2) };
   }
 
+  // Left unchanged after the 2025-26 replay (1,140 games, both clubs at least
+  // 5 GP): Edge picks won 55.8% (636 of 1,140). Modest weight moves changed
+  // that by about three games. cf, hdcf, and stXg are not in that replay.
+  // 2.5 sets PDO and goals-versus-expected (xgDiff) to zero. Last-five save
+  // percentage is not an Edge measure; the win-chance model also ignores it.
   var EDGE_WEIGHTS = {
     ptsPct: 1.2,
     gd: 1.0,
-    pdo: 0.35,
+    pdo: 0,
     last5: 0.4,
     sogShare: 1.0,
-    xgDiff: 1.3,
+    xgDiff: 0,
     cf: 1.2,
     hdcf: 1.15,
     xgf5v5: 1.85,
@@ -172,21 +177,27 @@
    */
   function matchupEdge(away, home) {
     var breakdown = [];
+    var measured = 0;
     function add(key, aVal, hVal, higherBetter) {
       var dir = cmpNum(aVal, hVal);
       if (!higherBetter) dir = -dir;
       var mag = 0;
-      if (aVal != null && hVal != null && isFinite(aVal) && isFinite(hVal)) {
+      var has = aVal != null && hVal != null && isFinite(aVal) && isFinite(hVal);
+      if (has) {
+        measured += 1;
         var span = Math.max(Math.abs(aVal) + Math.abs(hVal), 1);
         mag = Math.abs(aVal - hVal) / span;
       }
-      var pts = dir * mag * (EDGE_WEIGHTS[key] || 1);
+      var weight = EDGE_WEIGHTS[key];
+      if (weight == null) weight = 1;
+      var pts = dir * mag * weight;
       breakdown.push({
         key: key,
         away: aVal,
         home: hVal,
         winner: dir > 0 ? "away" : dir < 0 ? "home" : "even",
-        points: round(pts, 3)
+        points: round(pts, 3),
+        measured: has
       });
       return pts;
     }
@@ -210,12 +221,123 @@
     else if (total < -0.02) winner = "home";
     else winner = "home";
 
+    var totalMeasures = breakdown.length;
     return {
       winner: winner,
       score: round(total, 3),
       awayScore: round(Math.max(0, total), 3),
       homeScore: round(Math.max(0, -total), 3),
-      breakdown: breakdown
+      breakdown: breakdown,
+      measured: measured,
+      totalMeasures: totalMeasures,
+      lowData: measured * 2 < totalMeasures
+    };
+  }
+
+  /**
+   * A matchup is a toss-up when the absolute Edge score is under 0.50.
+   * Raised from 0.25 in 2.5 so a weak Lean is not a firm pick.
+   * Confident and Strong labels are kept even when the score is under this.
+   */
+  var TOSSUP_ABS_SCORE = 0.5;
+
+  /**
+   * P(the nominal Edge side wins), from 1,140 graded 2025-26 games.
+   * The pick won about 55% until |score| reached 1.75, then about 65%
+   * (99 games at or above that). A fitted curve did not beat a flat 55%.
+   */
+  var EDGE_WIN_PROB_HIGH_ABS = 1.75;
+  var EDGE_WIN_PROB_BASE = 55;
+  var EDGE_WIN_PROB_HIGH = 65;
+
+  function isTossUp(edge) {
+    if (!edge || edge.score == null || !isFinite(edge.score)) return false;
+    return Math.abs(edge.score) < TOSSUP_ABS_SCORE;
+  }
+
+  function edgeWinProb(edge) {
+    if (!edge || edge.score == null || !isFinite(edge.score)) return null;
+    var pick = Math.abs(edge.score) >= EDGE_WIN_PROB_HIGH_ABS ? EDGE_WIN_PROB_HIGH : EDGE_WIN_PROB_BASE;
+    var side = edge.winner === "away" ? "away" : "home";
+    var away = side === "away" ? pick : 100 - pick;
+    return {
+      away: away,
+      home: 100 - away,
+      pick: pick,
+      side: side,
+      tossUp: isTossUp(edge)
+    };
+  }
+
+  function noVigProb(odds) {
+    if (!odds || odds.awayMl == null || odds.homeMl == null) return null;
+    var away = impliedWinPct(odds.awayMl);
+    var home = impliedWinPct(odds.homeMl);
+    if (away == null || home == null || away + home <= 0) return null;
+    return {
+      away: round(100 * away / (away + home), 1),
+      home: round(100 * home / (away + home), 1)
+    };
+  }
+
+  function periodLabel(descriptor) {
+    descriptor = descriptor || {};
+    var n = Number(descriptor.number);
+    var type = String(descriptor.periodType || "").toUpperCase();
+    if (type === "SO") return "SO";
+    if (type === "OT") return n > 4 ? "OT" + (n - 3) : "OT";
+    if (n === 1) return "1st";
+    if (n === 2) return "2nd";
+    if (n === 3) return "3rd";
+    if (n > 3) return n + "th";
+    return "";
+  }
+
+  function isLiveState(state) {
+    var st = String(state || "").toUpperCase();
+    return st === "LIVE" || st === "CRIT" || st.indexOf("LIVE") === 0;
+  }
+
+  function isFinalScoreState(state) {
+    var st = String(state || "").toUpperCase();
+    return st === "OFF" || st === "FINAL" || st.indexOf("FINAL") === 0;
+  }
+
+  /**
+   * Final or live score from an NHL scoreboard game.
+   * Future games stay blank even if the feed sends 0–0.
+   */
+  function presentScore(game) {
+    game = game || {};
+    var st = String(game.gameState || "").toUpperCase();
+    var awayRaw = game.awayTeam && game.awayTeam.score;
+    var homeRaw = game.homeTeam && game.homeTeam.score;
+    var final = isFinalScoreState(st);
+    var live = isLiveState(st);
+    var pd = game.periodDescriptor || {};
+    var clock = game.clock || {};
+    var period = periodLabel(pd);
+    var status = null;
+    if (final) {
+      var last = (game.gameOutcome && game.gameOutcome.lastPeriodType) || pd.periodType || "";
+      last = String(last).toUpperCase();
+      status = (last === "OT" || last === "SO") ? "Final/" + last : "Final";
+    } else if (live) {
+      if (clock.inIntermission) status = (period || "Period") + " intermission";
+      else status = [period, clock.timeRemaining].filter(Boolean).join(" ");
+    }
+    var away = Number(awayRaw);
+    var home = Number(homeRaw);
+    var show = (final || live) && isFinite(away) && isFinite(home);
+    return {
+      away: show ? away : null,
+      home: show ? home : null,
+      state: st,
+      live: live,
+      final: final,
+      status: status,
+      period: period || null,
+      clock: clock.timeRemaining || null
     };
   }
 
@@ -235,22 +357,29 @@
 
   /**
    * Plain-language reason the edge team leads this matchup.
+   * side, when "away" or "home", is the Edge badge team. The clauses
+   * then describe that team, using only the three backtested shares.
    */
-  function explainEdge(edge, away, home) {
-    var pick = edge && edge.winner === "away" ? away : home;
-    var other = pick === away ? home : away;
+  function explainEdge(edge, away, home, side) {
+    var named = side === "away" || side === "home";
+    var pickSide = named ? side : (edge && edge.winner === "away" ? "away" : "home");
+    var pick = pickSide === "away" ? away : home;
+    var other = pickSide === "away" ? home : away;
     var bits = [];
-    if (pick && other && pick.xgfPct5v5 != null && other.xgfPct5v5 != null) {
-      bits.push("even-strength expected-goals share " + pick.xgfPct5v5 + "% to " + other.xgfPct5v5 + "%");
+    function shareBit(label, key) {
+      if (!pick || !other || pick[key] == null || other[key] == null) return;
+      if (!isFinite(Number(pick[key])) || !isFinite(Number(other[key]))) return;
+      bits.push(label + " " + pick[key] + "% to " + other[key] + "%");
     }
-    bits.push("home ice");
-    if (other && other.b2b && pick && !pick.b2b) bits.push("the other side played last night");
-    if (pick && pick.pdo != null && pick.pdo > 102) bits.push("a high shooting-plus-save figure that may regress");
+    shareBit("even-strength expected-goals share", "xgfPct5v5");
+    shareBit("shots-on-goal share", "sogShare");
+    shareBit("shot-attempt share", "cfPct");
     var name = pick && pick.name ? pick.name : "The home team";
-    if (!edge || edge.winner === "even") {
-      return name + " is the lean on home ice" + (bits[0] ? " (" + bits[0] + ")" : "") + ".";
+    var clause = bits.length ? ": " + bits.join("; ") : "";
+    if (!named && (!edge || edge.winner === "even")) {
+      return name + " is the lean" + clause + ".";
     }
-    return name + " is the pick: " + bits.join("; ") + ".";
+    return name + " is the pick" + clause + ".";
   }
 
   /**
@@ -328,6 +457,10 @@
       byTeam[team].sogShare = sogShare(sf, sa);
       byTeam[team].hdcfPct = sogShare(hdf, hda);
       byTeam[team].pdo = pdoFromShots(gf, ga, sf, sa);
+      // Team goals minus team expected goals. Positive means the club
+      // outscored its shot quality. 2026-27 uses this same difference;
+      // an early-season sample where the lower side wins more often is
+      // the luck stat, not a swapped home/away sign.
       byTeam[team].gfMinusXg = round(gf - xgf, 2);
       byTeam[team].gaMinusXga = round(ga - xga, 2);
     }
@@ -340,7 +473,44 @@
     var sum = opts.summary || {};
     var mp = opts.moneypuck || {};
     var last5 = opts.last5 || null;
-    var gp = stand.gamesPlayed || sum.gamesPlayed || 0;
+    var gp = stand.gamesPlayed != null ? Number(stand.gamesPlayed) : (sum.gamesPlayed != null ? Number(sum.gamesPlayed) : 0);
+    if (!isFinite(gp) || gp < 0) gp = 0;
+    if (!gp) {
+      var fill = opts.preseasonFill;
+      if (fill && fill.gamesPlayed > 0) return profileFromPreseason(opts, fill);
+      return {
+        abbrev: opts.abbrev,
+        name: opts.name,
+        logo: opts.logo,
+        record: "0–0–0",
+        wins: 0,
+        losses: 0,
+        otLosses: 0,
+        ptsPct: null,
+        goalDiff: null,
+        goalsFor: null,
+        goalsAgainst: null,
+        pdo: null,
+        last5AvgGd: null,
+        last5SvPct: null,
+        last5Games: 0,
+        last5Total: null,
+        sogShare: null,
+        xGoalsFor: null,
+        xGoalsAgainst: null,
+        gfMinusXg: null,
+        cfPct: null,
+        hdcfPct: null,
+        xgfPct5v5: null,
+        stXg: null,
+        gamesPlayed: 0,
+        restDays: opts.restDays != null ? opts.restDays : null,
+        b2b: opts.restDays === 1,
+        homeRecord: opts.homeRecord || null,
+        roadRecord: opts.roadRecord || null,
+        preseason: opts.preseasonFlags || {}
+      };
+    }
     var w = stand.wins != null ? stand.wins : sum.wins;
     var l = stand.losses != null ? stand.losses : sum.losses;
     var otl = stand.otLosses != null ? stand.otLosses : sum.otLosses;
@@ -380,7 +550,57 @@
       stXg: mp.stXg != null ? mp.stXg : null,
       gamesPlayed: gp,
       restDays: opts.restDays != null ? opts.restDays : null,
-      b2b: opts.restDays === 1
+      b2b: opts.restDays === 1,
+      homeRecord: opts.homeRecord || null,
+      roadRecord: opts.roadRecord || null,
+      preseason: opts.preseasonFlags || {}
+    };
+  }
+
+  function profileFromPreseason(opts, fill) {
+    var w = fill.wins || 0;
+    var l = fill.losses || 0;
+    var otl = fill.otl || 0;
+    var gf = fill.goalsFor;
+    var ga = fill.goalsAgainst;
+    var flags = {};
+    if (fill.gamesPlayed > 0) flags.record = true;
+    if (fill.pdo != null) flags.pdo = true;
+    if (fill.last5 && fill.last5.games) flags.last5 = true;
+    if (fill.last5SvPct != null) flags.last5Sv = true;
+    if (fill.sogShare != null) flags.sogShare = true;
+    if (fill.restDays != null) flags.rest = true;
+    return {
+      abbrev: opts.abbrev,
+      name: opts.name,
+      logo: opts.logo,
+      record: recordString(w, l, otl),
+      wins: w,
+      losses: l,
+      otLosses: otl,
+      ptsPct: fill.gamesPlayed ? round(pointsPct(w, l, otl), 4) : null,
+      goalDiff: gf != null && ga != null ? gf - ga : null,
+      goalsFor: gf,
+      goalsAgainst: ga,
+      pdo: fill.pdo != null ? fill.pdo : null,
+      last5AvgGd: fill.last5 ? fill.last5.avg : null,
+      last5SvPct: fill.last5SvPct != null ? fill.last5SvPct : null,
+      last5Games: fill.last5 ? fill.last5.games : 0,
+      last5Total: fill.last5 ? fill.last5.total : null,
+      sogShare: fill.sogShare != null ? fill.sogShare : null,
+      xGoalsFor: null,
+      xGoalsAgainst: null,
+      gfMinusXg: null,
+      cfPct: null,
+      hdcfPct: null,
+      xgfPct5v5: null,
+      stXg: null,
+      gamesPlayed: fill.gamesPlayed || 0,
+      restDays: fill.restDays != null ? fill.restDays : null,
+      b2b: fill.restDays === 1,
+      homeRecord: opts.homeRecord || null,
+      roadRecord: opts.roadRecord || null,
+      preseason: flags
     };
   }
 
@@ -394,6 +614,19 @@
     if (ml == null || !isFinite(ml) || ml === 0) return null;
     var p = ml > 0 ? 100 / (ml + 100) : (-ml) / ((-ml) + 100);
     return round(p * 100, 1);
+  }
+
+  /**
+   * Side the moneyline prices as the favorite. "even" when the two implied
+   * probabilities are within half a point.
+   */
+  function marketSide(odds) {
+    if (!odds || odds.awayMl == null || odds.homeMl == null) return null;
+    var away = impliedWinPct(odds.awayMl);
+    var home = impliedWinPct(odds.homeMl);
+    if (away == null || home == null) return null;
+    if (Math.abs(away - home) < 0.5) return "even";
+    return away > home ? "away" : "home";
   }
 
   function parsePartnerOdds(game) {
@@ -437,11 +670,42 @@
   }
 
   /**
-   * Projected score from GF/GA rates and xG, with 5v5 xGF% tilt,
-   * a small last-5 term, and home ice. Ties are broken toward home
-   * (NHL games in the 2025-26 backtest never finished even).
+   * Defaults match the 1.6 formula. A 1.7 replay may replace a number
+   * only when winner accuracy, total-goals error, and margin error all improve.
+   * goalie is 0 unless that replay says otherwise. goalieSv is save percentage
+   * on a 0–100 scale for the starter's prior games, and is ignored when absent.
    */
-  function estimateScore(away, home) {
+  var SCORE_MODEL = {
+    wGf: 0.40,
+    wXg: 0.35,
+    wOpp: 0.25,
+    last5: 0.04,
+    hdcf: 0.35,
+    xgf5: 1.35,
+    homeIce: 0.32,
+    b2b: 0.15,
+    restBump: 0.08,
+    stXg: 0.25,
+    floor: 1.2,
+    minGoals: 1,
+    goalie: 0,
+    marginMode: "round",
+    marginScale: 1,
+    marginCap: 5
+  };
+
+  function modelValue(opts, key) {
+    if (opts && opts[key] != null && opts[key] !== "") return opts[key];
+    return SCORE_MODEL[key];
+  }
+
+  /**
+   * Projected score from GF/GA rates and xG, with 5v5 xGF% tilt,
+   * a small last-5 term, and home ice. Ties are broken toward the higher
+   * raw side, and toward home when the raw scores match.
+   * Pass opts to override SCORE_MODEL for a replay. Live calls use the defaults.
+   */
+  function estimateScore(away, home, opts) {
     away = away || {};
     home = home || {};
     var agp = away.gamesPlayed || 82;
@@ -452,46 +716,91 @@
     var homeGa = rate(home.goalsAgainst, hgp, 3);
     var awayXg = rate(away.xGoalsFor, agp, awayGf);
     var homeXg = rate(home.xGoalsFor, hgp, homeGf);
-    var awayOff = 0.40 * awayGf + 0.35 * awayXg + 0.25 * homeGa;
-    var homeOff = 0.40 * homeGf + 0.35 * homeXg + 0.25 * awayGa;
-    if (away.last5AvgGd != null) awayOff += 0.04 * away.last5AvgGd;
-    if (home.last5AvgGd != null) homeOff += 0.04 * home.last5AvgGd;
+    var awayOff = modelValue(opts, "wGf") * awayGf + modelValue(opts, "wXg") * awayXg + modelValue(opts, "wOpp") * homeGa;
+    var homeOff = modelValue(opts, "wGf") * homeGf + modelValue(opts, "wXg") * homeXg + modelValue(opts, "wOpp") * awayGa;
+    var last5w = modelValue(opts, "last5");
+    if (away.last5AvgGd != null) awayOff += last5w * away.last5AvgGd;
+    if (home.last5AvgGd != null) homeOff += last5w * home.last5AvgGd;
     if (away.hdcfPct != null && home.hdcfPct != null) {
       var hdTilt = (away.hdcfPct - home.hdcfPct) / 100;
-      awayOff += hdTilt * 0.35;
-      homeOff -= hdTilt * 0.35;
+      awayOff += hdTilt * modelValue(opts, "hdcf");
+      homeOff -= hdTilt * modelValue(opts, "hdcf");
     }
     if (away.xgfPct5v5 != null && home.xgfPct5v5 != null) {
       var xTilt = (away.xgfPct5v5 - home.xgfPct5v5) / 100;
-      awayOff += xTilt * 1.35;
-      homeOff -= xTilt * 1.35;
+      awayOff += xTilt * modelValue(opts, "xgf5");
+      homeOff -= xTilt * modelValue(opts, "xgf5");
     }
-    homeOff += 0.32;
-    if (away.restDays === 1) awayOff -= 0.15;
-    if (home.restDays === 1) homeOff -= 0.15;
-    if (home.restDays >= 3 && away.restDays === 1) homeOff += 0.08;
+    homeOff += modelValue(opts, "homeIce");
+    if (away.restDays === 1) awayOff -= modelValue(opts, "b2b");
+    if (home.restDays === 1) homeOff -= modelValue(opts, "b2b");
+    if (home.restDays >= 3 && away.restDays === 1) homeOff += modelValue(opts, "restBump");
     if (away.stXg != null && home.stXg != null) {
       var stTilt = (away.stXg - home.stXg) / 20;
-      awayOff += stTilt * 0.25;
-      homeOff -= stTilt * 0.25;
+      awayOff += stTilt * modelValue(opts, "stXg");
+      homeOff -= stTilt * modelValue(opts, "stXg");
     }
-    awayOff = Math.max(1.2, awayOff);
-    homeOff = Math.max(1.2, homeOff);
+    var goalieW = modelValue(opts, "goalie");
+    if (goalieW && away.goalieSv != null && home.goalieSv != null) {
+      var gTilt = (Number(away.goalieSv) - Number(home.goalieSv)) / 100;
+      awayOff += gTilt * goalieW;
+      homeOff -= gTilt * goalieW;
+    }
+    var floor = modelValue(opts, "floor");
+    awayOff = Math.max(floor, awayOff);
+    homeOff = Math.max(floor, homeOff);
+    var minGoals = modelValue(opts, "minGoals");
+    var scored;
+    if (modelValue(opts, "marginMode") === "scaled") {
+      scored = scaledMargin(awayOff, homeOff, modelValue(opts, "marginScale"), modelValue(opts, "marginCap"), minGoals);
+    } else {
+      scored = roundedScore(awayOff, homeOff, minGoals);
+    }
+    return {
+      away: scored.away,
+      home: scored.home,
+      awayRaw: round(awayOff, 2),
+      homeRaw: round(homeOff, 2),
+      label: scored.away + "–" + scored.home
+    };
+  }
+
+  function roundedScore(awayOff, homeOff, minGoals) {
     var a = Math.round(awayOff);
     var h = Math.round(homeOff);
-    if (a < 1) a = 1;
-    if (h < 1) h = 1;
+    if (a < minGoals) a = minGoals;
+    if (h < minGoals) h = minGoals;
     if (a === h) {
       if (homeOff >= awayOff) h += 1;
       else a += 1;
     }
-    return {
-      away: a,
-      home: h,
-      awayRaw: round(awayOff, 2),
-      homeRaw: round(homeOff, 2),
-      label: a + "–" + h
-    };
+    return { away: a, home: h };
+  }
+
+  /**
+   * Turn the raw goal difference into a whole-number margin of at least 1,
+   * capped so a lopsided rate cannot invent a blowout the league rarely plays.
+   * The side with the higher raw total gets the margin. An exact raw tie goes to the home team.
+   */
+  function scaledMargin(awayOff, homeOff, scale, cap, minGoals) {
+    var total = Math.max(0, awayOff + homeOff);
+    var diff = homeOff - awayOff;
+    var sign = diff > 0 || diff === 0 ? 1 : -1;
+    var margin = Math.round(Math.abs(diff) * (scale || 1));
+    if (margin < 1) margin = 1;
+    if (margin > cap) margin = cap;
+    var t = Math.round(total);
+    if ((t - margin) % 2 !== 0) t += 1;
+    var win = (t + margin) / 2;
+    var lose = (t - margin) / 2;
+    if (lose < minGoals) {
+      lose = minGoals;
+      win = lose + margin;
+    }
+    win = Math.round(win);
+    lose = Math.round(lose);
+    if (sign > 0) return { away: lose, home: win };
+    return { away: win, home: lose };
   }
 
   return {
@@ -511,9 +820,11 @@
     parseMoneyPuckCsv: parseMoneyPuckCsv,
     buildTeamProfile: buildTeamProfile,
     estimateScore: estimateScore,
+    SCORE_MODEL: SCORE_MODEL,
     parsePartnerOdds: parsePartnerOdds,
     formatAmerican: formatAmerican,
     impliedWinPct: impliedWinPct,
+    marketSide: marketSide,
     twoWayHold: function (a, h) {
       var pa = impliedWinPct(a);
       var ph = impliedWinPct(h);
@@ -542,6 +853,16 @@
     explainEdge: explainEdge,
     pillSign: pillSign,
     METRIC_LABELS: METRIC_LABELS,
-    EDGE_WEIGHTS: EDGE_WEIGHTS
+    EDGE_WEIGHTS: EDGE_WEIGHTS,
+    TOSSUP_ABS_SCORE: TOSSUP_ABS_SCORE,
+    EDGE_WIN_PROB_HIGH_ABS: EDGE_WIN_PROB_HIGH_ABS,
+    EDGE_WIN_PROB_BASE: EDGE_WIN_PROB_BASE,
+    EDGE_WIN_PROB_HIGH: EDGE_WIN_PROB_HIGH,
+    isTossUp: isTossUp,
+    edgeWinProb: edgeWinProb,
+    noVigProb: noVigProb,
+    presentScore: presentScore,
+    isLiveState: isLiveState,
+    isFinalScoreState: isFinalScoreState
   };
 });

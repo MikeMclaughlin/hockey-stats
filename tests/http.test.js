@@ -4,9 +4,9 @@ var assert = require("assert");
 var http = require("http");
 var { server } = require("../server.js");
 
-function get(port, path) {
+function get(port, path, headers) {
   return new Promise(function (resolve, reject) {
-    http.get({ hostname: "127.0.0.1", port: port, path: path }, function (res) {
+    http.get({ hostname: "127.0.0.1", port: port, path: path, headers: headers || {} }, function (res) {
       var chunks = [];
       res.on("data", function (c) { chunks.push(c); });
       res.on("end", function () {
@@ -67,6 +67,20 @@ var srv = server.listen(0, "127.0.0.1", function () {
       var j = JSON.parse(r.body);
       assert.ok(Array.isArray(j.estimates));
       assert.ok(j.summary);
+    })
+    .then(function () {
+      process.env.CRON_SECRET = "test-secret";
+      return get(port, "/api/cron");
+    })
+    .then(function (r) {
+      assert.strictEqual(r.status, 401);
+      var j = JSON.parse(r.body);
+      assert.strictEqual(j.ok, false);
+      return get(port, "/api/cron", { Authorization: "Bearer wrong" });
+    })
+    .then(function (r) {
+      assert.strictEqual(r.status, 401);
+      delete process.env.CRON_SECRET;
     })
     .then(function () {
       console.log("http.test.js ok");

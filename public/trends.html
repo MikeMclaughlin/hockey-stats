@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Hockey Stats — Team Trends</title>
+  <link rel="icon" href="/favicon.ico?v=1.9" sizes="any">
+  <link rel="icon" href="/favicon.svg?v=1.9" type="image/svg+xml">
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png?v=1.9">
+  <link rel="icon" type="image/png" sizes="192x192" href="/favicon-192x192.png?v=1.9">
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png?v=1.9">
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body data-page="trends">
+  <header class="top">
+    <script src="/js/site-nav.js"></script>
+    <div class="header-body">
+    <div class="brand">
+      <img class="site-logo" src="/favicon.svg?v=1.9" alt="Hockey Stats">
+      <div>
+        <h1>Team Trends</h1>
+        <p class="tag">Season-to-date rates, and the same rates as of earlier games</p>
+      </div>
+    </div>
+    <div class="toolbar">
+      <div class="toolbar-row nav-controls">
+        <label>Stat
+          <select id="stat" aria-label="Stat">
+            <option value="winPct">Win %</option>
+            <option value="gf">GF/g</option>
+            <option value="sog">SOG/g</option>
+            <option value="sogShare">Shots-on-goal share</option>
+            <option value="xgfPct5v5">Even-strength expected-goals share</option>
+            <option value="cfPct">Shot-attempt share</option>
+            <option value="pdo">Shooting plus save percentage</option>
+            <option value="ga">GA/g</option>
+            <option value="sogAgainst">SOG-against share</option>
+            <option value="xgaPct5v5">5v5 expected-goals-against share</option>
+            <option value="caPct">Shot-attempt-against share</option>
+          </select>
+        </label>
+      </div>
+      <p id="meta" class="meta meta-line">Loading…</p>
+    </div>
+    </div>
+  </header>
+  <main>
+    <div class="trend-legend" aria-label="Percentile shading">
+      <span class="band-0">Top 17%</span>
+      <span class="band-1">83–67%</span>
+      <span class="band-2">67–50%</span>
+      <span class="band-3">50–33%</span>
+      <span class="band-4">33–17%</span>
+      <span class="band-5">Bottom 17%</span>
+    </div>
+    <section class="board">
+      <div class="table-wrap">
+        <table id="trends">
+          <thead>
+            <tr>
+              <th data-key="team" title="Team abbreviation and name. Click to sort." aria-label="Team abbreviation and name. Click to sort.">Team</th>
+              <th data-key="current" class="num" title="Current win percentage, wins divided by games played. Overtime and shootout losses count as losses. Click to sort." aria-label="Current win percentage, wins divided by games played. Overtime and shootout losses count as losses. Click to sort.">Current</th>
+              <th data-key="ago1" class="num" title="Win percentage through the game 1 game before this team’s most recent regular-season game this season. Earlier seasons are not included. Click to sort." aria-label="Win percentage through the game 1 game before this team’s most recent regular-season game this season. Earlier seasons are not included. Click to sort.">1 game ago</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+    <p id="definition" class="trend-note">Win % is wins divided by games played; overtime and shootout losses count as losses. GF/g is goals for per game and SOG/g is shots on goal per game, over the same games. Shots-on-goal share is shots on goal for divided by shots for plus shots against, all situations. Even-strength expected-goals share is 5-on-5 expected goals for divided by 5-on-5 expected goals for plus against. Shot-attempt share is shot attempts for divided by shot attempts for plus against, all situations. Shooting plus save percentage is shooting percentage plus save percentage: goals for divided by shots on goal, plus shots against minus goals against divided by shots against. It is shown to three decimals. GA/g is goals against per game. Shots-on-goal against share, 5-on-5 expected-goals-against share, and shot-attempt against share use the same spans with the against count in the numerator. Each share sums those counts over the games in that span that MoneyPuck has published, not an average of single-game shares. A share is n/a only when that span has no MoneyPuck game. MoneyPuck can lag the NHL log by a game. Current is the 2026-27 regular season to date. 1, 2, 3, 4, and so on games ago is that same season-to-date rate through the game that many games before the team’s most recent 2026-27 regular-season game. n/a means that team has not played that many 2026-27 games. The count stops at the first game of 2026-27. Earlier seasons are not used. A column is shown when at least one team has played more games than that offset. Playoffs and preseason are excluded. Each column is shaded by that value’s percentile among the teams with a number in the same column. Higher is greener for win percentage, goals for, shots on goal, the for-shares, and shooting plus save percentage. Lower is greener for goals against and the against-shares. Ties use the mid-rank. n/a is not shaded and is left out of that column’s percentile.</p>
+  </main>
+  <footer>
+    <span>v2.7</span>
+  </footer>
+  <script src="/js/loading.js"></script>
+  <script src="/js/trends-app.js"></script>
+</body>
+</html>

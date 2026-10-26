@@ -4,59 +4,115 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Hockey Stats — Matchups</title>
+  <link rel="icon" href="/favicon.ico?v=1.9" sizes="any">
+  <link rel="icon" href="/favicon.svg?v=1.9" type="image/svg+xml">
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png?v=1.9">
+  <link rel="icon" type="image/png" sizes="192x192" href="/favicon-192x192.png?v=1.9">
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png?v=1.9">
   <link rel="stylesheet" href="/css/style.css">
 </head>
-<body>
+<body data-page="matchups">
   <header class="top">
+    <script src="/js/site-nav.js"></script>
+    <div class="header-body">
     <div class="brand">
-      <img class="nhl-logo" src="/img/nhl.svg" alt="NHL">
+      <img class="site-logo" src="/favicon.svg?v=1.9" alt="Hockey Stats">
       <div>
         <h1>Hockey Stats</h1>
         <p class="tag">Current NHL matchups · possession, finishing, and luck</p>
       </div>
     </div>
     <div class="toolbar">
-      <div class="toolbar-row">
-      <nav class="nav">
-        <a href="/" aria-current="page">Matchups</a>
-        <a href="/teams.html">Team Stats</a>
-        <a href="/streaks.html">Player Streaks</a>
-        <a href="/review.html">Review</a>
-        <a href="/backtest.html">Backtest</a>
-      </nav>
-      <button type="button" id="refresh">Refresh</button>
+      <div class="toolbar-row nav-controls">
+        <div class="date-nav">
+          <button type="button" id="prev-date">Previous day</button>
+          <button type="button" id="today-date">Today</button>
+          <button type="button" id="next-date">Next day</button>
+        </div>
+        <button type="button" id="refresh">Refresh</button>
+        <button type="button" id="cards-toggle">Expand all</button>
+        <div class="choose-stats">
+          <button type="button" id="choose-stats" aria-expanded="false" aria-controls="choose-stats-panel">Choose stats</button>
+          <div id="choose-stats-panel" class="choose-stats-panel" hidden></div>
+        </div>
+        <label class="sort-control">Sort
+          <select id="sort-key" aria-label="Sort matchups"></select>
+        </label>
+        <button type="button" id="sort-dir">Descending</button>
+        <label class="sort-control">Pick
+          <select id="tier" aria-label="Filter by pick tier">
+            <option value="all">All</option>
+            <option value="toss-up">Toss-Up</option>
+            <option value="lean">Lean</option>
+            <option value="confident">Confident</option>
+            <option value="strong">Strong</option>
+          </select>
+        </label>
+        <label class="sort-control">B2B
+          <select id="b2b" aria-label="Filter by back-to-back" title="Show every game, or only games where a team is on a back-to-back.">
+            <option value="all">All</option>
+            <option value="b2b">Back-to-back</option>
+          </select>
+        </label>
+        <label class="sort-control why-flag" title="Show or hide the Why section on the matchup cards.">
+          <input type="checkbox" id="show-why" checked> Why
+        </label>
       </div>
       <p id="meta" class="meta meta-line">Loading…</p>
+    </div>
     </div>
   </header>
 
   <main>
     <p id="note" class="note hidden"></p>
+    <section id="take-list" class="take-list" aria-label="Teams to take" hidden></section>
     <div id="cards" class="cards"></div>
     <section class="board">
       <h2>Matchup board</h2>
-      <div class="table-wrap">
+      <div class="table-wrap fit">
         <table id="board">
           <thead>
             <tr>
-              <th data-key="time">Time</th>
-              <th data-key="away">Away</th>
-              <th data-key="home">Home</th>
-              <th data-key="edge" class="num">Edge</th>
-              <th data-key="awayRecord">Away wins–losses–overtime losses</th>
-              <th data-key="homeRecord">Home wins–losses–overtime losses</th>
-              <th data-key="gd" class="num">Goal differential gap</th>
-              <th data-key="pdo" class="num">Shooting plus save gap</th>
-              <th data-key="l5" class="num">Last-five goal differential gap</th>
-              <th data-key="sog" class="num">Shots-on-goal share gap</th>
-              <th data-key="xg" class="num">Goals versus expected gap</th>
-              <th data-key="cf" class="num">Shot-attempt share gap</th>
-              <th data-key="hdcf" class="num">High-danger chance share gap</th>
-              <th data-key="xgf5" class="num">Even-strength expected-goals gap</th>
-              <th data-key="proj" class="num">Estimated score</th>
-              <th data-key="mlAway" class="num">Away moneyline</th>
-              <th data-key="mlHome" class="num">Home moneyline</th>
-              <th data-key="ou" class="num">Over/under</th>
+              <th data-key="time" title="Game start time in Eastern Time. Click to sort." aria-label="Game start time in Eastern Time. Click to sort.">Time</th>
+              <th data-key="away" title="Away team. Click to sort." aria-label="Away team. Click to sort.">Away</th>
+              <th data-key="home" title="Home team. Click to sort." aria-label="Home team. Click to sort.">Home</th>
+              <th data-key="score" class="num" title="Current or final score. Click to sort." aria-label="Current or final score. Click to sort.">Score</th>
+              <th data-key="edge" class="num" title="Edge pick from the logistic win model. Click to sort." aria-label="Edge pick from the logistic win model. Click to sort.">Edge</th>
+              <th data-key="awayRecord" title="Away points percentage. Click to sort." aria-label="Away points percentage. Click to sort.">Away record</th>
+              <th data-key="homeRecord" title="Home points percentage. Click to sort." aria-label="Home points percentage. Click to sort.">Home record</th>
+              <th data-key="gd" class="num" title="Goal differential gap, away minus home. Click to sort." aria-label="Goal differential gap, away minus home. Click to sort.">Goal diff gap</th>
+              <th data-key="pdo" class="num" title="PDO gap — absolute difference in PDO, shooting percentage plus save percentage. Click to sort." aria-label="PDO gap — absolute difference in PDO, shooting percentage plus save percentage. Click to sort.">PDO gap</th>
+              <th data-key="l5" class="num" title="Last five games goal differential gap, away minus home. Click to sort." aria-label="Last five games goal differential gap, away minus home. Click to sort.">Last five GD</th>
+              <th data-key="sog" class="num" title="Shots-on-goal share gap, away minus home. Click to sort." aria-label="Shots-on-goal share gap, away minus home. Click to sort.">Shot share gap</th>
+              <th data-key="xg" class="num" title="Goals versus expected goals gap, away minus home. Click to sort." aria-label="Goals versus expected goals gap, away minus home. Click to sort.">Goals vs xG</th>
+              <th data-key="cf" class="num" title="Corsi for percentage gap, away minus home. Click to sort." aria-label="Corsi for percentage gap, away minus home. Click to sort.">Corsi gap</th>
+              <th data-key="hdcf" class="num" title="High-danger chance share gap, away minus home. Click to sort." aria-label="High-danger chance share gap, away minus home. Click to sort.">High danger gap</th>
+              <th data-key="xgf5" class="num" title="Even-strength expected-goals share gap, away minus home. Click to sort." aria-label="Even-strength expected-goals share gap, away minus home. Click to sort.">Even strength xG</th>
+              <th data-key="proj" class="num" title="Estimated score, away goals then home goals. Click to sort." aria-label="Estimated score, away goals then home goals. Click to sort.">Estimate</th>
+              <th data-key="mlAway" class="num" title="Away moneyline. Click to sort." aria-label="Away moneyline. Click to sort.">Away line</th>
+              <th data-key="mlHome" class="num" title="Home moneyline. Click to sort." aria-label="Home moneyline. Click to sort.">Home line</th>
+              <th data-key="ou" class="num" title="Over/under total. Click to sort." aria-label="Over/under total. Click to sort.">Total</th>
+            </tr>
+            <tr class="filters">
+              <th><input data-filter="time" aria-label="Filter start time" placeholder="date"></th>
+              <th><input data-filter="away" aria-label="Filter away team" placeholder="PIT"></th>
+              <th><input data-filter="home" aria-label="Filter home team" placeholder="CBJ"></th>
+              <th><input data-filter="score" aria-label="Filter score" placeholder="1-0"></th>
+              <th><input data-filter="edge" aria-label="Filter Edge pick" placeholder="PIT"></th>
+              <th><input data-filter="awayRecord" aria-label="Filter away record" placeholder="record"></th>
+              <th><input data-filter="homeRecord" aria-label="Filter home record" placeholder="record"></th>
+              <th><input data-filter="gd" aria-label="Filter goal diff gap" placeholder=">=0"></th>
+              <th><input data-filter="pdo" aria-label="Filter PDO gap" placeholder=">=1"></th>
+              <th><input data-filter="l5" aria-label="Filter last five gap" placeholder=">=0"></th>
+              <th><input data-filter="sog" aria-label="Filter shot share gap" placeholder=">=0"></th>
+              <th><input data-filter="xg" aria-label="Filter goals vs xG gap" placeholder=">=0"></th>
+              <th><input data-filter="cf" aria-label="Filter Corsi gap" placeholder=">=0"></th>
+              <th><input data-filter="hdcf" aria-label="Filter high danger gap" placeholder=">=0"></th>
+              <th><input data-filter="xgf5" aria-label="Filter even strength xG gap" placeholder=">=0"></th>
+              <th><input data-filter="proj" aria-label="Filter estimate" placeholder="2–4"></th>
+              <th><input data-filter="mlAway" aria-label="Filter away line" placeholder="<=-120"></th>
+              <th><input data-filter="mlHome" aria-label="Filter home line" placeholder=">=100"></th>
+              <th><input data-filter="ou" aria-label="Filter total" placeholder=">=6"></th>
             </tr>
           </thead>
           <tbody></tbody>
@@ -67,23 +123,36 @@
       <h2>How the edge is scored</h2>
       <ul>
         <li><strong>Season record</strong> — regulation/OT wins–losses–OT losses. Compared on points percentage.</li>
-        <li><strong>PDO</strong> — shooting % + save % from shots on goal. ~100 is league-normal; much higher is finishing/save luck.</li>
+        <li><strong>PDO</strong> — shooting % + save % from shots on goal. ~100 is league-normal; much higher is finishing/save luck. The board opens sorted by the absolute PDO gap, largest first. A game missing PDO on either side sorts last. PDO does not add to the Edge score.</li>
         <li><strong>Avg GD last 5</strong> — (GF − GA) / games in each club’s last five completed regular-season games.</li>
         <li><strong>SOG share</strong> — shots on goal for / (SF + SA).</li>
-        <li><strong>Expected vs actual</strong> — MoneyPuck xGoals vs actual goals (GF − xGF). Positive means outscoring the shot quality.</li>
+        <li><strong>Expected vs actual</strong> — MoneyPuck xGoals vs actual goals (GF − xGF). Positive means outscoring the shot quality. Goals versus expected goals do not add to the Edge score.</li>
         <li><strong>CF%</strong> — Corsi for percentage: shot attempts for / (CF + CA), all situations.</li>
         <li><strong>HDCF%</strong> — high-danger chances for / (HDCF + HDCA).</li>
         <li><strong>5v5 xGF%</strong> — MoneyPuck 5-on-5 expected goals for / (xGF + xGA).</li>
         <li><strong>Estimated score</strong> — projected goals from season scoring rate, xG rate, last-5 form, HDCF tilt, and a small home-ice bump.</li>
-        <li><strong>Moneyline / O/U</strong> — NHL partner board for the US (DraftKings when posted).</li>
+        <li><strong>Moneyline / O/U</strong> — NHL partner board for the US (DraftKings when posted). The line is saved before puck drop and locked at the start time. A price that first appears after the game has started is not saved. A played game with no saved line says so. A “≠ DK” mark means the model edge and the DraftKings favorite are different teams.</li>
+        <li><strong>Seasons</strong> — the scoreboard season is the slate on the board. Records and rates use the latest season that already has a final regular-season game, for every date, and that choice stays. Before any final, they stay on the previous regular season. Early in the season the sample is small. A team with no regular-season games yet shows 2026-27 preseason for record, goals, shots, PDO, last five, and rest, marked pre. A stat with no preseason source stays blank. MoneyPuck does not publish 2026-27 preseason, so shot-attempt share, high-danger chances, expected goals, and special-teams expected goals stay blank until a regular-season MoneyPuck row exists. Regular-season numbers replace preseason as soon as that stat has them.</li>
+        <li><strong>Edge sample</strong> — the board’s Edge cell counts how many of the 11 measures had a number for both teams. A blank on either side scores zero and is not counted. Fewer than 6 of 11 is marked low data. The matchup card does not repeat that count.</li>
+        <li><strong>Win chance</strong> — the card’s percentage is a logistic model fit on 2021-22 through 2024-25 (home ice, 5-on-5 xG share, last-five goal differential, back-to-back, and projected margin). PDO and last-five save percentage stay on the card and add nothing to this percentage or to the Edge score. The percentage is the model’s confidence. If the projected score picks the other team, the card shows that team and keeps this confidence. Strong means 65% or more and the pick leads shots-on-goal share, even-strength expected-goals share, and shot-attempt share by an average of 3 points or more. Confident is 65% or more and leads all three, with a smaller average lead. Lean is 55% up to 65% when the absolute Edge score is at least 0.50. After the side is chosen, a firm pick becomes a Toss-up when it trails on last-five expected-goals share, disagrees with the moneyline favorite, or fails the combined filter. The combined filter keeps a pick only when the projected score agrees, the side is not behind on last-five expected-goals share, and the side is not on a back-to-back against a rested opponent. If there is no moneyline, the market check does not apply. The Pick menu filters the cards and the board by that label. Review and Backtest grade the same rules.</li>
+        <li><strong>Score</strong> — finals show the official score. A game in progress shows the live score, period, and clock when the NHL scoreboard has them, and the page checks again about every 90 seconds while any game is live. A finished game keeps its saved final if a later feed drops the score.</li>
+        <li><strong>Toss-up</strong> — no firm pick. That is a win chance under 55%, a Lean whose absolute Edge score is under 0.50, a side that trails on last-five expected-goals share, a side that disagrees with the moneyline favorite, or a side that fails the combined filter. Strong, Confident, and Lean are the firm picks. The projected-score winner is chosen first. The toss-up checks run after that and do not flip the side again.</li>
+        <li><strong>Result</strong> — a finished game shows the locked estimate against the actual score (winner right or wrong) and whether the Edge pick was right. The Edge pick uses the same rules as the card.</li>
+        <li><strong>Updates</strong> — a scheduled job refreshes the board, re-locks estimates before puck drop, and grades finals. Opening the page is not required. Live scores are not on that job.</li>
       </ul>
     </section>
   </main>
   <footer>
-    <span>hockey-stats v1.4.1</span>
-    <span>NHL.com schedule + standings · MoneyPuck team summary</span>
+    <span>v2.7</span>
   </footer>
+  <script src="/js/dates.js"></script>
+  <script src="/js/prefs.js"></script>
+  <script src="/js/loading.js"></script>
+  <script src="/js/archive.js"></script>
   <script src="/js/stats.js"></script>
+  <script src="/js/table-filter.js"></script>
+  <script src="/js/edge-model.js"></script>
+  <script src="/js/card-league.js"></script>
   <script src="/js/app.js"></script>
 </body>
 </html>

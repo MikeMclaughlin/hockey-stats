@@ -4,34 +4,34 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Hockey Stats — Player Streaks</title>
+  <link rel="icon" href="/favicon.ico?v=1.9" sizes="any">
+  <link rel="icon" href="/favicon.svg?v=1.9" type="image/svg+xml">
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png?v=1.9">
+  <link rel="icon" type="image/png" sizes="192x192" href="/favicon-192x192.png?v=1.9">
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png?v=1.9">
   <link rel="stylesheet" href="/css/style.css">
 </head>
-<body>
+<body data-page="streaks">
   <header class="top">
+    <script src="/js/site-nav.js"></script>
+    <div class="header-body">
     <div class="brand">
-      <img class="nhl-logo" src="/img/nhl.svg" alt="NHL">
+      <img class="site-logo" src="/favicon.svg?v=1.9" alt="Hockey Stats">
       <div>
         <h1>Player Streaks</h1>
         <p class="tag">Minimum per game over the last N completed games</p>
       </div>
     </div>
     <div class="toolbar">
-      <div class="toolbar-row">
-      <nav class="nav">
-        <a href="/">Matchups</a>
-        <a href="/teams.html">Team Stats</a>
-        <a href="/streaks.html" aria-current="page">Player Streaks</a>
-        <a href="/review.html">Review</a>
-        <a href="/backtest.html">Backtest</a>
-      </nav>
-      </div>
+      <div class="toolbar-row nav-controls"></div>
       <p id="meta" class="meta meta-line">Loading…</p>
+    </div>
     </div>
   </header>
   <main>
     <form id="controls" class="controls">
       <label>Streak length
-        <input id="length" type="number" min="1" max="15" value="5">
+        <input id="length" type="number" min="1" max="15" placeholder="5">
       </label>
       <label>Min goals
         <input id="minGoals" type="number" min="0" max="10" value="1">
@@ -58,9 +58,11 @@
     <div id="panels"></div>
   </main>
   <footer>
-    <span>hockey-stats v1.4.1</span>
-    <span>NHL boxscores · cached game logs</span>
+    <span>v2.7</span>
   </footer>
+  <script src="/js/dates.js"></script>
+  <script src="/js/prefs.js"></script>
+  <script src="/js/loading.js"></script>
   <script src="/js/table-filter.js"></script>
   <script src="/js/streaks.js"></script>
   <script src="/js/streaks-app.js"></script>
