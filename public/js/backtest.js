@@ -16,7 +16,6 @@
         var away = g.awayTeam || {};
         var home = g.homeTeam || {};
         if (away.score == null || home.score == null) return;
-        var outcome = g.gameOutcome || {};
         byId[g.id] = {
           id: g.id,
           gameDate: g.gameDate,
@@ -24,8 +23,7 @@
           awayAbbrev: away.abbrev,
           homeAbbrev: home.abbrev,
           actualAway: Number(away.score),
-          actualHome: Number(home.score),
-          lastPeriodType: outcome.lastPeriodType || (g.periodDescriptor && g.periodDescriptor.periodType) || "REG"
+          actualHome: Number(home.score)
         };
       });
     });
@@ -37,10 +35,7 @@
   function emptyTeam() {
     return {
       gp: 0, gf: 0, ga: 0, sf: 0, sa: 0,
-      xgf: 0, xga: 0, xgf5: 0, xga5: 0,
-      hdf: 0, hda: 0, cf: 0, ca: 0, ppXgf: 0, pkXga: 0,
-      hasMp: false,
-      gds: [], svLog: [], xg5Log: [], results: [], dates: [],
+      xgf5: 0, xga5: 0, gds: [], svLog: [], results: [], dates: [],
       lastDate: null, w: 0, l: 0, otl: 0
     };
   }
@@ -152,21 +147,9 @@
     return notes.join(" · ");
   }
 
-  function last5XgFromState(st) {
-    var last = (st.xg5Log || []).slice(-5);
-    var f = 0;
-    var a = 0;
-    last.forEach(function (g) {
-      f += g.f || 0;
-      a += g.a || 0;
-    });
-    if (!last.length || f + a <= 0) return null;
-    return stats.round((100 * f) / (f + a), 1);
-  }
-
   function last5Avg(st) {
     var last = (st.gds || []).slice(-5);
-    if (!last.length) return null;
+    if (!last.length) return 0;
     return stats.round(last.reduce(function (s, n) { return s + n; }, 0) / last.length, 2);
   }
 
@@ -175,40 +158,23 @@
       last5AvgGd: last5Avg(st),
       pdo: (st.sf > 0 && st.sa > 0) ? stats.pdoFromShots(st.gf, st.ga, st.sf, st.sa) : null,
       xgfPct5v5: (st.xgf5 + st.xga5) > 0 ? stats.sogShare(st.xgf5, st.xga5) : null,
-      last5SvPct: stats.last5SavePct(st.svLog),
-      last5Xgf: last5XgFromState(st)
+      last5SvPct: stats.last5SavePct(st.svLog)
     };
   }
 
-  function lossKind(periodType) {
-    var p = String(periodType || "REG").toUpperCase();
-    return (p === "OT" || p === "SO") ? "OTL" : "L";
-  }
-
-  function profileFromState(abbrev, st, gameDate, goalieSv) {
+  function profileFromState(abbrev, st) {
     var snap = snapshotStats(st);
-    var mp = !!st.hasMp;
     return {
       abbrev: abbrev,
       name: abbrev,
       gamesPlayed: st.gp || 1,
       goalsFor: st.gf,
       goalsAgainst: st.ga,
-      xGoalsFor: mp ? st.xgf : null,
+      xGoalsFor: st.gf,
       last5AvgGd: snap.last5AvgGd,
       pdo: snap.pdo,
-      sogShare: mp && st.sf ? stats.sogShare(st.sf, st.sa) : null,
-      // Same sign as the season profile: this team's goals minus its
-      // expected goals. Not home minus away, and not opponent minus team.
-      gfMinusXg: mp ? stats.round(st.gf - st.xgf, 2) : null,
-      cfPct: mp && (st.cf + st.ca) ? stats.sogShare(st.cf, st.ca) : null,
-      hdcfPct: mp && (st.hdf + st.hda) ? stats.sogShare(st.hdf, st.hda) : null,
       xgfPct5v5: snap.xgfPct5v5,
-      stXg: mp ? stats.round(st.ppXgf - st.pkXga, 2) : null,
-      ptsPct: st.gp ? stats.round(stats.pointsPct(st.w, st.l, st.otl), 4) : null,
-      goalDiff: st.gf - st.ga,
-      restDays: dayDiff(st.lastDate, gameDate),
-      goalieSv: goalieSv == null ? null : goalieSv
+      hdcfPct: 50
     };
   }
 
@@ -219,24 +185,9 @@
     st.ga += ga;
     if (extra.sf) st.sf += extra.sf;
     if (extra.sa) st.sa += extra.sa;
-    if (extra.xgf) st.xgf += extra.xgf;
-    if (extra.xga) st.xga += extra.xga;
     if (extra.xgf5) st.xgf5 += extra.xgf5;
     if (extra.xga5) st.xga5 += extra.xga5;
-    if (extra.hdf) st.hdf += extra.hdf;
-    if (extra.hda) st.hda += extra.hda;
-    if (extra.cf) st.cf += extra.cf;
-    if (extra.ca) st.ca += extra.ca;
-    if (extra.ppXgf) st.ppXgf += extra.ppXgf;
-    if (extra.pkXga) st.pkXga += extra.pkXga;
-    if (extra.sf || extra.xgf5 || extra.xgf) st.hasMp = true;
     if (extra.sa) st.svLog.push({ sa: extra.sa, ga: extra.ga != null ? extra.ga : ga });
-    if (extra.xgf5 != null || extra.xga5 != null || extra.xgf != null || extra.xga != null) {
-      st.xg5Log.push({
-        f: extra.xgf5 != null ? extra.xgf5 : (extra.xgf || 0),
-        a: extra.xga5 != null ? extra.xga5 : (extra.xga || 0)
-      });
-    }
     st.gds.push(gf - ga);
     st.results.push(winKind);
     if (extra.date) {
@@ -260,7 +211,7 @@
       var cols = lines[i].split(",");
       if (String(cols[idx.season]) !== seasonYear) continue;
       var sit = cols[idx.situation];
-      if (sit !== "all" && sit !== "5on5" && sit !== "5on4" && sit !== "4on5") continue;
+      if (sit !== "all" && sit !== "5on5") continue;
       var id = String(cols[idx.gameId] || "");
       if (!id) continue;
       if (!byGame[id]) {
@@ -271,30 +222,14 @@
         };
       }
       var row = byGame[id];
-      function col(name) {
-        if (idx[name] == null) return 0;
-        return Number(cols[idx[name]]) || 0;
-      }
       if (sit === "all") {
-        row.sf = col("shotsOnGoalFor");
-        row.sa = col("shotsOnGoalAgainst");
-        row.gf = col("goalsFor");
-        row.ga = col("goalsAgainst");
-        row.xgf = col("xGoalsFor");
-        row.xga = col("xGoalsAgainst");
-        row.hdf = col("highDangerShotsFor");
-        row.hda = col("highDangerShotsAgainst");
-        row.cf = col("shotAttemptsFor");
-        row.ca = col("shotAttemptsAgainst");
-      } else if (sit === "5on5") {
-        row.xgf5 = col("xGoalsFor");
-        row.xga5 = col("xGoalsAgainst");
-      } else if (sit === "5on4") {
-        row.ppXgf = col("xGoalsFor");
-      } else if (sit === "4on5") {
-        row.pkXga = col("xGoalsAgainst");
+        row.sf = Number(cols[idx.shotsOnGoalFor]) || 0;
+        row.sa = Number(cols[idx.shotsOnGoalAgainst]) || 0;
+        row.gf = Number(cols[idx.goalsFor]) || 0;
+        row.ga = Number(cols[idx.goalsAgainst]) || 0;
       } else {
-        continue;
+        row.xgf5 = Number(cols[idx.xGoalsFor]) || 0;
+        row.xga5 = Number(cols[idx.xGoalsAgainst]) || 0;
       }
     }
     return Object.keys(byGame).map(function (k) { return byGame[k]; });
@@ -323,28 +258,10 @@
       var ready = ast.gp >= minGp && hst.gp >= minGp;
       var awaySnap = snapshotStats(ast);
       var homeSnap = snapshotStats(hst);
-      var awayRest = dayDiff(ast.lastDate, g.gameDate);
-      var homeRest = dayDiff(hst.lastDate, g.gameDate);
-      var awayProfile = profileFromState(g.awayAbbrev, ast, g.gameDate, g.awayGoalieSv);
-      var homeProfile = profileFromState(g.homeAbbrev, hst, g.gameDate, g.homeGoalieSv);
-      var proj = stats.estimateScore(awayProfile, homeProfile, opts.score || null);
-      var edge = stats.matchupEdge(awayProfile, homeProfile);
-      var toss = stats.isTossUp(edge);
-      var awayPts = awayProfile.ptsPct;
-      var homePts = homeProfile.ptsPct;
-      var favorite = null;
-      if (awayPts != null && homePts != null && awayPts !== homePts) {
-        favorite = awayPts > homePts ? "away" : "home";
-      }
-      var edgeRole = "even";
-      if (toss) edgeRole = "toss-up";
-      else if (favorite && edge.winner === favorite) edgeRole = "favorite";
-      else if (favorite) edgeRole = "underdog";
+      var proj = stats.estimateScore(profileFromState(g.awayAbbrev, ast), profileFromState(g.homeAbbrev, hst));
       var row = {
         id: g.id,
-        season: g.season || opts.season || null,
         gameDate: g.gameDate,
-        startTimeUTC: g.startTimeUTC || null,
         awayAbbrev: g.awayAbbrev,
         homeAbbrev: g.homeAbbrev,
         projectedAway: proj.away,
@@ -361,38 +278,10 @@
         homeXgf5: homeSnap.xgfPct5v5,
         awayLast5Sv: awaySnap.last5SvPct,
         homeLast5Sv: homeSnap.last5SvPct,
-        awayLast5Xgf: awaySnap.last5Xgf,
-        homeLast5Xgf: homeSnap.last5Xgf,
-        awayPtsPct: awayProfile.ptsPct,
-        homePtsPct: homeProfile.ptsPct,
-        awayGd: awayProfile.goalDiff,
-        homeGd: homeProfile.goalDiff,
-        awaySog: awayProfile.sogShare,
-        homeSog: homeProfile.sogShare,
-        awayXgDiff: awayProfile.gfMinusXg,
-        homeXgDiff: homeProfile.gfMinusXg,
-        awayCf: awayProfile.cfPct,
-        homeCf: homeProfile.cfPct,
-        awayHdcf: awayProfile.hdcfPct,
-        homeHdcf: homeProfile.hdcfPct,
-        awayStXg: awayProfile.stXg,
-        homeStXg: homeProfile.stXg,
-        awayRest: awayProfile.restDays,
-        homeRest: homeProfile.restDays,
-        openingAwayMl: null,
-        openingHomeMl: null,
-        openingTotal: null,
-        awayB2B: awayRest === 1,
-        homeB2B: homeRest === 1,
-        edgeAbbrev: edge.winner === "away" ? g.awayAbbrev : g.homeAbbrev,
-        edgeScore: edge.score,
-        edgeTossUp: toss,
-        edgeRole: edgeRole,
-        favoriteMethod: "points-percentage",
         notes: buildNotes(g, ast, hst, proj),
         skipped: !ready
       };
-      if (g.actualAway != null && g.actualHome != null) {
+      if (ready) {
         archive.applyResult(row, g.actualAway, g.actualHome, "OFF");
         row.awayErr = Math.abs(proj.away - g.actualAway);
         row.homeErr = Math.abs(proj.home - g.actualHome);
@@ -401,22 +290,21 @@
       rows.push(row);
       var awayWin = g.actualAway > g.actualHome;
       var homeWin = g.actualHome > g.actualAway;
-      var loser = lossKind(g.lastPeriodType);
       var amp = mpIndex[g.id + ":" + g.awayAbbrev] || {};
       var hmp = mpIndex[g.id + ":" + g.homeAbbrev] || {};
       amp.date = g.gameDate;
       hmp.date = g.gameDate;
-      applyGame(ast, g.actualAway, g.actualHome, awayWin ? "W" : loser, amp);
-      applyGame(hst, g.actualHome, g.actualAway, homeWin ? "W" : loser, hmp);
+      applyGame(ast, g.actualAway, g.actualHome, awayWin ? "W" : "L", amp);
+      applyGame(hst, g.actualHome, g.actualAway, homeWin ? "W" : awayWin ? "L" : "OTL", hmp);
     });
     var graded = rows.filter(function (r) { return r.graded; });
     var sum = archive.summarize(graded);
     var mae = 0;
     graded.forEach(function (r) { mae += r.totalErr; });
     sum.maeGoals = graded.length ? stats.round(mae / graded.length, 2) : null;
-    sum.skipped = rows.filter(function (r) { return r.skipped; }).length;
+    sum.skipped = rows.length - graded.length;
     sum.games = rows.length;
-    return { season: String((opts && opts.season) || "20252026"), rows: rows, summary: sum };
+    return { season: "20252026", rows: rows, summary: sum };
   }
 
   return {

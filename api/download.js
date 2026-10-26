@@ -1,5 +1,0 @@
-"use strict";
-module.exports = function (req, res) {
-  req.url = "/api/download";
-  return require("../server.js")(req, res);
-};

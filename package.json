@@ -1,14 +1,11 @@
 {
   "name": "hockey-stats",
-  "version": "2.7",
-  "private": false,
+  "version": "1.4.1",
+  "private": true,
   "description": "SPA for current NHL matchups with record, PDO, last-5 GD, SOG share, xG vs GF, CF%, HDCF%, locked score estimates",
   "main": "server.js",
   "dependencies": {
-    "@azure/storage-blob": "^12.34.0"
-  },
-  "devDependencies": {
-    "@vercel/blob": "^2.8.0"
+    "@vercel/blob": "^2.0.0"
   },
   "scripts": {
     "start": "node server.js",

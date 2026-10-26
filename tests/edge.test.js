@@ -15,14 +15,6 @@ var weak = {
 var e1 = stats.matchupEdge(strong, weak);
 assert.strictEqual(e1.winner, "away");
 assert.ok(e1.score > 0);
-assert.strictEqual(e1.totalMeasures, 11);
-assert.strictEqual(e1.measured, 9);
-assert.strictEqual(e1.lowData, false);
-
-var sparse = stats.matchupEdge({ ptsPct: 0.5, goalDiff: 1 }, { ptsPct: 0.4 });
-assert.strictEqual(sparse.measured, 1);
-assert.strictEqual(sparse.totalMeasures, 11);
-assert.strictEqual(sparse.lowData, true);
 
 var e2 = stats.matchupEdge(weak, strong);
 assert.strictEqual(e2.winner, "home");

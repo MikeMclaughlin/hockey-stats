@@ -3,85 +3,55 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Hockey Stats — score backtest</title>
-  <link rel="icon" href="/favicon.ico?v=1.9" sizes="any">
-  <link rel="icon" href="/favicon.svg?v=1.9" type="image/svg+xml">
-  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png?v=1.9">
-  <link rel="icon" type="image/png" sizes="192x192" href="/favicon-192x192.png?v=1.9">
-  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png?v=1.9">
+  <title>Hockey Stats — 2025-26 backtest</title>
   <link rel="stylesheet" href="/css/style.css">
 </head>
-<body data-page="backtest">
+<body>
   <header class="top">
-    <script src="/js/site-nav.js"></script>
-    <div class="header-body">
     <div class="brand">
-      <img class="site-logo" src="/favicon.svg?v=1.9" alt="Hockey Stats">
+      <img class="nhl-logo" src="/img/nhl.svg" alt="NHL">
       <div>
-        <h1 id="title">Score backtest</h1>
+        <h1>2025-26 score backtest</h1>
         <p class="tag">Walk-forward estimates vs official finals</p>
       </div>
     </div>
     <div class="toolbar">
-      <div class="toolbar-row nav-controls">
-        <label>Season
-          <select id="season">
-            <option value="all" selected>All seasons</option>
-            <option value="20212022">2021-22</option>
-            <option value="20222023">2022-23</option>
-            <option value="20232024">2023-24</option>
-            <option value="20242025">2024-25</option>
-            <option value="20252026">2025-26</option>
-            <option value="20262027">2026-27</option>
-          </select>
-        </label>
+      <div class="toolbar-row">
+      <nav class="nav">
+        <a href="/">Matchups</a>
+        <a href="/teams.html">Team Stats</a>
+        <a href="/streaks.html">Player Streaks</a>
+        <a href="/review.html">Review</a>
+        <a href="/backtest.html" aria-current="page">Backtest</a>
+      </nav>
       </div>
       <p id="meta" class="meta meta-line">Loading…</p>
     </div>
-    </div>
   </header>
   <main>
-    <p class="note" id="note"><span id="stamp"></span> Each row uses only games before that night. Last five goal differential is from official scores. Shots, expected goals, Corsi, high danger shots, and special teams expected goals are MoneyPuck running totals when that game has a log. <span id="limits"></span></p>
-    <div class="controls">
-      <label>Team
-        <input id="team" type="text" placeholder="BOS or Boston">
-      </label>
-      <label class="check"><input id="b2b" type="checkbox"> Played last night</label>
-      <label>Edge pick
-        <select id="side">
-          <option value="">Any side</option>
-          <option value="favorite">Favorite</option>
-          <option value="underdog">Underdog</option>
-        </select>
-      </label>
-    </div>
-    <p class="note" id="fav-note">Favorite is the club with the higher points percentage before the game. The favorite and underdog filters use the 2.6 Edge pick against that favorite. A Toss-up is left out of those filters. When a row has an opening moneyline, a pick that disagrees with that favorite is a Toss-up. Older seasons have no moneylines, so that market check does not apply there.</p>
+    <p class="note" id="note"><span id="stamp"></span> Each row uses only games before that night. Last-5 GD is from official scores. PDO and 5v5 xGF% are running totals from MoneyPuck game logs (situation all / 5on5).</p>
     <section id="summary" class="summary"></section>
-    <p id="model-note" class="model-note"></p>
-    <section id="edge-splits" class="edge-splits"></section>
     <section class="board">
       <h2>Graded games <small id="shown" class="meta"></small></h2>
       <div class="table-wrap">
         <table id="bt">
           <thead>
             <tr>
-              <th data-key="gameDate" title="Game date and start time in Eastern Time. Click to sort." aria-label="Game date and start time in Eastern Time. Click to sort.">Date</th>
-              <th data-key="awayAbbrev" title="Away team. Click to sort." aria-label="Away team. Click to sort.">Away</th>
-              <th data-key="homeAbbrev" title="Home team. Click to sort." aria-label="Home team. Click to sort.">Home</th>
-              <th data-key="projectedLabel" title="Walk-forward score estimate. Click to sort." aria-label="Walk-forward score estimate. Click to sort.">Estimate</th>
-              <th data-key="actualLabel" title="Final score. Click to sort." aria-label="Final score. Click to sort.">Final</th>
-              <th data-key="verdict" title="Exact, winner only, or miss. Click to sort." aria-label="Exact, winner only, or miss. Click to sort.">Result</th>
-              <th data-key="awayPdo" class="num" title="Away PDO before the game, shooting percentage plus save percentage. Click to sort." aria-label="Away PDO before the game, shooting percentage plus save percentage. Click to sort.">Away PDO</th>
-              <th data-key="homePdo" class="num" title="Home PDO before the game, shooting percentage plus save percentage. Click to sort." aria-label="Home PDO before the game, shooting percentage plus save percentage. Click to sort.">Home PDO</th>
-              <th data-key="awayLast5" class="num" title="Away last-five goal differential. Click to sort." aria-label="Away last-five goal differential. Click to sort.">Away L5 GD</th>
-              <th data-key="homeLast5" class="num" title="Home last-five goal differential. Click to sort." aria-label="Home last-five goal differential. Click to sort.">Home L5 GD</th>
-              <th data-key="awayLast5Sv" class="num" title="Away last-five save percentage. Click to sort." aria-label="Away last-five save percentage. Click to sort.">Away L5 SV%</th>
-              <th data-key="homeLast5Sv" class="num" title="Home last-five save percentage. Click to sort." aria-label="Home last-five save percentage. Click to sort.">Home L5 SV%</th>
-              <th data-key="awayXgf5" class="num" title="Away even-strength expected-goals share before the game. Click to sort." aria-label="Away even-strength expected-goals share before the game. Click to sort.">Away 5v5 xGF%</th>
-              <th data-key="homeXgf5" class="num" title="Home even-strength expected-goals share before the game. Click to sort." aria-label="Home even-strength expected-goals share before the game. Click to sort.">Home 5v5 xGF%</th>
-              <th data-key="edgeAbbrev" title="Edge pick and tier from the 2.6 model: projected-score winner, then the toss-up gates. Click to sort." aria-label="Edge pick and tier from the 2.6 model: projected-score winner, then the toss-up gates. Click to sort.">Edge</th>
-              <th data-key="edgeRole" title="Whether the 2.6 Edge pick is the points-percentage favorite or the underdog. Toss-up when the model says Toss-up. Click to sort." aria-label="Whether the 2.6 Edge pick is the points-percentage favorite or the underdog. Toss-up when the model says Toss-up. Click to sort.">Side</th>
-              <th data-key="notes" title="Rest, streak, and fatigue notes. Click to sort." aria-label="Rest, streak, and fatigue notes. Click to sort.">Notes</th>
+              <th data-key="gameDate">Date</th>
+              <th data-key="awayAbbrev">Away</th>
+              <th data-key="homeAbbrev">Home</th>
+              <th data-key="projectedLabel">Estimate</th>
+              <th data-key="actualLabel">Final</th>
+              <th data-key="verdict">Result</th>
+              <th data-key="awayPdo" class="num">Away PDO</th>
+              <th data-key="homePdo" class="num">Home PDO</th>
+              <th data-key="awayLast5" class="num">Away L5 GD</th>
+              <th data-key="homeLast5" class="num">Home L5 GD</th>
+              <th data-key="awayLast5Sv" class="num">Away L5 SV%</th>
+              <th data-key="homeLast5Sv" class="num">Home L5 SV%</th>
+              <th data-key="awayXgf5" class="num">Away 5v5 xGF%</th>
+              <th data-key="homeXgf5" class="num">Home 5v5 xGF%</th>
+              <th data-key="notes">Notes</th>
             </tr>
             <tr class="filters">
               <th><input data-filter="gameDate" placeholder="contains"></th>
@@ -98,8 +68,6 @@
               <th><input data-filter="homeLast5Sv" placeholder="<=89"></th>
               <th><input data-filter="awayXgf5" placeholder=">=52"></th>
               <th><input data-filter="homeXgf5" placeholder="<=48"></th>
-              <th></th>
-              <th></th>
               <th><input data-filter="notes" placeholder="b2b / streak / rest"></th>
             </tr>
           </thead>
@@ -109,15 +77,11 @@
     </section>
   </main>
   <footer>
-    <span>v2.7</span>
+    <span>hockey-stats v1.4.1</span>
+    <span>NHL club-schedule-season 20252026</span>
   </footer>
-  <script src="/js/dates.js"></script>
-  <script src="/js/prefs.js"></script>
-  <script src="/js/loading.js"></script>
-  <script src="/js/stats.js"></script>
   <script src="/js/archive.js"></script>
   <script src="/js/table-filter.js"></script>
-  <script src="/js/edge-model.js"></script>
   <script src="/js/backtest-app.js"></script>
 </body>
 </html>

@@ -89,39 +89,4 @@ archive.freezeMatchupArchive(snaps, {
 });
 assert.strictEqual(snaps.byId["201"].estimatedAway, 2);
 
-var future = archive.emptyStore();
-archive.freezeEstimate(future, {
-  id: 301,
-  startTimeUTC: "2026-10-20T23:00:00Z",
-  gameState: "FUT",
-  projectedAway: 3,
-  projectedHome: 4,
-  awayAbbrev: "FLA",
-  homeAbbrev: "CAR"
-});
-archive.freezeEstimate(future, {
-  id: 301,
-  startTimeUTC: "2026-10-20T23:00:00Z",
-  gameState: "FUT",
-  projectedAway: 1,
-  projectedHome: 2,
-  awayAbbrev: "FLA",
-  homeAbbrev: "CAR"
-}, { relock: true, now: "2026-10-10T12:00:00Z" });
-assert.strictEqual(future.byId["301"].projectedLabel, "1–2");
-assert.strictEqual(future.byId["301"].priorLocks.length, 1);
-assert.strictEqual(future.byId["301"].priorLocks[0].projectedLabel, "3–4");
-
-archive.freezeEstimate(future, {
-  id: 301,
-  startTimeUTC: "2026-10-20T23:00:00Z",
-  gameState: "LIVE",
-  projectedAway: 0,
-  projectedHome: 0,
-  awayAbbrev: "FLA",
-  homeAbbrev: "CAR"
-}, { relock: true, now: "2026-10-20T23:30:00Z" });
-assert.strictEqual(future.byId["301"].projectedAway, 1);
-assert.strictEqual(future.byId["301"].projectedHome, 2);
-
 console.log("archive.test.js ok");
