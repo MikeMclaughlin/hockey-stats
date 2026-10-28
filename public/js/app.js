@@ -1085,7 +1085,7 @@
       slate +
       (scoreLabel ? " · scoreboard " + scoreLabel : "") +
       (statsLabel ? " · stats " + statsLabel : "") +
-      " · " + (data.matchupCount || 0) + " games";
+      " · " + (data.matchupCount || 0) + "\u00A0games";
     var prev = $("prev-date");
     var next = $("next-date");
     if (prev) {
