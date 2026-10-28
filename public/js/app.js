@@ -3,7 +3,6 @@
 
   var state = { data: null, sortKey: "pdo", sortDir: -1, filters: {}, tier: "all", showWhy: true, cardsExpanded: false, featured: null };
   var B2B_KEY = "hs-b2b-filter";
-  var PICK_KEY = "hs-pick-filter";
   var PICK_VALUES = { all: true, "toss-up": true, lean: true, confident: true, strong: true, b2b: true };
   var WHY_KEY = "hs-show-why";
   var CARDS_KEY = "hs-cards-expanded";
@@ -497,13 +496,43 @@
     return '<div class="split-records">' + cell(m.away, "Away") + cell(m.home, "Home") + "</div>";
   }
 
-  function periodSlot(period) {
-    var p = String(period || "").toUpperCase();
-    if (p === "1ST") return 1;
-    if (p === "2ND") return 2;
-    if (p === "3RD") return 3;
-    if (p.indexOf("OT") === 0 || p === "SO") return 4;
+  function isShootoutText(value) {
+    var raw = String(value || "").toUpperCase();
+    if (!raw) return false;
+    if (raw.indexOf("SHOOTOUT") !== -1) return true;
+    return /(^|[^A-Z])SO([^A-Z]|$)/.test(raw);
+  }
+
+  function textSlot(value) {
+    var raw = String(value || "").toUpperCase().trim();
+    if (!raw) return 0;
+    if (isShootoutText(raw) || raw.indexOf("OT") !== -1 || raw.indexOf("OVERTIME") !== -1) return 4;
+    if (raw.indexOf("1ST") !== -1) return 1;
+    if (raw.indexOf("2ND") !== -1) return 2;
+    if (raw.indexOf("3RD") !== -1) return 3;
+    var nth = raw.match(/(^|[^0-9])(\d+)(ST|ND|RD|TH)\b/);
+    if (nth) {
+      var n = Number(nth[2]);
+      if (n <= 1) return 1;
+      if (n === 2) return 2;
+      if (n === 3) return 3;
+      return 4;
+    }
+    if (/^\d+$/.test(raw)) {
+      var num = Number(raw);
+      if (num <= 1) return 1;
+      if (num === 2) return 2;
+      if (num === 3) return 3;
+      return 4;
+    }
     return 0;
+  }
+
+  function scoreboardSlot(s) {
+    s = s || {};
+    var fromPeriod = textSlot(s.period);
+    if (fromPeriod) return fromPeriod;
+    return textSlot(s.status);
   }
 
   function periodTheme(slot) {
@@ -513,13 +542,22 @@
       3: { color: "#1f5f9c", tint: "#c0d8ee" },
       4: { color: "#143e6e", tint: "#aac6e3" }
     };
-    return themes[slot] || themes[1];
+    return themes[slot] || themes[4];
+  }
+
+  function themeForScore(s) {
+    var slot = scoreboardSlot(s);
+    if (slot) return periodTheme(slot);
+    var blob = (String((s && s.period) || "") + " " + String((s && s.status) || "")).toUpperCase();
+    if (blob.indexOf("OT") !== -1 || blob.indexOf("OVERTIME") !== -1 || blob.indexOf("SHOOTOUT") !== -1 || isShootoutText(blob)) {
+      return periodTheme(4);
+    }
+    return periodTheme(1);
   }
 
   function applyLiveTheme(article, m) {
     if (!article) return;
-    var s = m.scoreboard || {};
-    var theme = periodTheme(periodSlot(s.period) || 1);
+    var theme = themeForScore(m.scoreboard || {});
     article.style.setProperty("--period-color", theme.color);
     article.style.setProperty("--period-tint", theme.tint);
   }
@@ -528,7 +566,7 @@
     var status = s && s.status ? String(s.status) : "";
     if (status.toLowerCase().indexOf("intermission") !== -1) return "LIVE · " + status.toUpperCase();
     var period = s && s.period ? String(s.period).toUpperCase() : "";
-    if (period === "SO") return "LIVE · SO";
+    if (isShootoutText(period) || (!period && isShootoutText(status))) return "LIVE · SO";
     if (period) return "LIVE · " + period + " PERIOD";
     if (status) return "LIVE · " + status.toUpperCase();
     return "LIVE";
@@ -536,10 +574,10 @@
 
   function periodDots(s) {
     var labels = ["1st", "2nd", "3rd", "OT"];
-    var current = periodSlot(s && s.period);
+    var current = scoreboardSlot(s);
     var status = s && s.status ? String(s.status).toLowerCase() : "";
     var intermission = status.indexOf("intermission") !== -1 || !!(s && s.inIntermission);
-    var shootout = String(s && s.period || "").toUpperCase() === "SO";
+    var shootout = isShootoutText(s && s.period) || isShootoutText(s && s.status);
     var html = labels.map(function (label, i) {
       var n = i + 1;
       var cls = "period-dot";
@@ -641,6 +679,13 @@
     var shade = gap == null || gap === 0 ? "" : (gap > 0 ? "above" : "below");
     var rankTone = gap == null || gap === 0 ? "even" : (gap > 0 ? "good" : "bad");
     var deltaTone = delta == null || Number(delta) === 0 ? "even" : (Number(delta) > 0 ? "good" : "bad");
+    var valueCls = "stat-cur";
+    if ((spec.fmt === "signed1" || spec.fmt === "signed2") && window.HockeyStats && HockeyStats.pillSign) {
+      var sign = HockeyStats.pillSign(num, spec.kind);
+      if (sign === "pos") valueCls += " good";
+      else if (sign === "neg") valueCls += " bad";
+    }
+    var gapText = gap == null ? "—" : signedDelta(gap, digits) + " vs avg";
     var deltaHtml = delta == null
       ? "—"
       : esc(signedDelta(delta, digits)) + ' <span class="delta-unit">5d</span>';
@@ -653,6 +698,8 @@
       valueHtml: valueHtml,
       rankText: rankText,
       rankTone: rankTone,
+      gapText: gapText,
+      valueCls: valueCls,
       deltaHtml: deltaHtml,
       deltaTone: deltaTone,
       rankTitle: rankTitle,
@@ -663,17 +710,37 @@
 
   function halfBlock(side) {
     return '<div class="stat-half ' + side.shade + '">' +
-      '<div class="stat-cur" title="' + esc(side.valueTitle) + '">' + side.valueHtml + "</div>" +
+      '<div class="' + side.valueCls + '" title="' + esc(side.valueTitle) + '">' + side.valueHtml + "</div>" +
       '<div class="stat-sub">' +
-        '<span class="stat-rank ' + side.rankTone + '" title="' + esc(side.rankTitle) + '">' + esc(side.rankText) + "</span>" +
+        '<span class="stat-rank ' + side.rankTone + '" title="' + esc(side.rankTitle) + '">' +
+          '<span class="rank-no">' + esc(side.rankText) + "</span>" +
+          '<span class="rank-gap">' + esc(side.gapText) + "</span>" +
+        "</span>" +
         '<span class="stat-delta ' + side.deltaTone + '" title="' + esc(side.deltaTitle) + '">' + side.deltaHtml + "</span>" +
       "</div></div>";
+  }
+
+  function statColumnHead() {
+    var heads = [
+      ["delta", "5 day delta", "Change versus the snapshot saved about five days earlier for the away team. Green is an improvement. Red is a decline."],
+      ["rank", "league rank", "Where the away team ranks, 1st best. Ties are marked T-. Under the rank is this team minus the league average. Green is better than average. Red is worse."],
+      ["value", "current value", "Away team’s current value for this stat."],
+      ["stat", "stat", "Stat name. The league average of the clubs with a number is underneath."],
+      ["value", "current value", "Home team’s current value for this stat."],
+      ["rank", "league rank", "Where the home team ranks, 1st best. Ties are marked T-. Under the rank is this team minus the league average. Green is better than average. Red is worse."],
+      ["delta", "5 day delta", "Change versus the snapshot saved about five days earlier for the home team. Green is an improvement. Red is a decline."]
+    ];
+    var cells = heads.map(function (h) {
+      var cls = h[0] === "stat" ? "stat-label" : "val";
+      return '<th class="' + cls + '" title="' + esc(h[2]) + '" aria-label="' + esc(h[2]) + '">' + esc(h[1]) + "</th>";
+    }).join("");
+    return '<div class="stat-colhead-scroll"><table class="stat-colhead"><thead><tr>' + cells + "</tr></thead></table></div>";
   }
 
   function statBlocks(rows, away, home) {
     if (!rows.length) return "";
     var boards = leagueBoards();
-    return '<div class="stat-blocks">' + rows.map(function (spec) {
+    return statColumnHead() + '<div class="stat-blocks">' + rows.map(function (spec) {
       var board = boards[spec.field] || { byAbbrev: {}, avg: null, n: 0 };
       var left = sideFacts(spec, away, board, "Away");
       var right = sideFacts(spec, home, board, "Home");
@@ -801,7 +868,7 @@
         : "";
       var whyHtml = state.showWhy ? '<p class="why">' + esc(why) + "</p>" : "";
       var live = cardIsLive(m);
-      var theme = live ? periodTheme(periodSlot((m.scoreboard || {}).period) || 1) : null;
+      var theme = live ? themeForScore(m.scoreboard || {}) : null;
       var liveStyle = live
         ? ' style="--period-color:' + theme.color + ";--period-tint:" + theme.tint + '"'
         : "";
@@ -1306,16 +1373,18 @@
     return !!PICK_VALUES[value];
   }
 
+  function b2bStored() {
+    return state.tier === "b2b" ? "b2b" : "all";
+  }
+
   function readViewPrefs() {
     try {
       var legacy = localStorage.getItem(B2B_KEY);
-      var tier = localStorage.getItem(PICK_KEY);
-      if (isPick(tier)) state.tier = tier;
-      else if (legacy === "b2b") state.tier = "b2b";
-      if (legacy != null) {
-        localStorage.removeItem(B2B_KEY);
-        localStorage.setItem(PICK_KEY, state.tier || "all");
-      }
+      var stray = localStorage.getItem("hs-pick-filter");
+      if (legacy === "b2b" || (legacy == null && stray === "b2b")) state.tier = "b2b";
+      if (legacy != null) localStorage.removeItem(B2B_KEY);
+      localStorage.removeItem("hs-pick-filter");
+      if (state.tier === "b2b") localStorage.setItem(B2B_KEY, "b2b");
       var why = localStorage.getItem(WHY_KEY);
       if (why === "0") state.showWhy = false;
       if (why === "1") state.showWhy = true;
@@ -1325,8 +1394,8 @@
 
   function writeViewPrefs() {
     try {
-      localStorage.setItem(PICK_KEY, state.tier || "all");
-      localStorage.removeItem(B2B_KEY);
+      localStorage.setItem(B2B_KEY, b2bStored());
+      localStorage.removeItem("hs-pick-filter");
       localStorage.setItem(WHY_KEY, state.showWhy ? "1" : "0");
     } catch (e) {}
   }
@@ -1344,8 +1413,7 @@
       sortKey: state.sortKey,
       sortDir: state.sortDir,
       cardsExpanded: !!state.cardsExpanded,
-      tier: state.tier || "all",
-      b2b: null,
+      b2b: b2bStored(),
       showWhy: !!state.showWhy
     });
   }
@@ -1376,8 +1444,8 @@
           state.cardsExpanded = true;
           writeStoredCards(true);
         }
-        if (isPick(saved.tier)) state.tier = saved.tier;
-        else if (saved.b2b === "b2b") state.tier = "b2b";
+        if (saved.b2b === "b2b") state.tier = "b2b";
+        else if (saved.b2b === "all" && state.tier === "b2b") state.tier = "all";
         if (saved.showWhy === true || saved.showWhy === false) state.showWhy = saved.showWhy;
         writeViewPrefs();
         syncViewControls();

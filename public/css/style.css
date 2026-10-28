@@ -152,8 +152,8 @@ select#season {
 }
 .auth-slot {
   margin-left: 0;
-  flex: 0 0 auto;
-  width: auto;
+  flex: 0 0 11rem;
+  width: 11rem;
   max-width: 11rem;
   min-height: 2rem;
   display: flex;
@@ -1720,6 +1720,27 @@ body[data-page="teams"] .table-wrap.scroll-port {
 .stat-half.below {
   background: #fbdde2;
 }
+.stat-colhead-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.stat-colhead {
+  width: 100%;
+  min-width: 28rem;
+  border-collapse: collapse;
+  margin: 0 0 2px;
+}
+.stat-colhead th {
+  cursor: default;
+  background: transparent;
+  font-size: 14px;
+  font-weight: 700;
+  color: #4b5b72;
+  text-align: center;
+  padding: 6px 4px;
+  white-space: nowrap;
+  border-bottom: 2px solid #dde3ea;
+}
 .stat-cur {
   font-size: 24px;
   font-weight: 800;
@@ -1728,6 +1749,22 @@ body[data-page="teams"] .table-wrap.scroll-port {
   line-height: 1.1;
   color: #10203a;
   font-variant-numeric: tabular-nums;
+}
+.stat-cur.good { color: #14632d; }
+.stat-cur.bad { color: #c62828; }
+.stat-rank {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+.stat-pair .stat-half:last-child .stat-rank {
+  align-items: flex-end;
+}
+.stat-rank .rank-gap {
+  margin-top: 2px;
+  font-size: 14px;
+  font-weight: 650;
+  line-height: 1.15;
 }
 .stat-sub {
   display: flex;
@@ -1957,6 +1994,11 @@ body[data-page="teams"] .table-wrap.scroll-port {
     margin: 0;
     justify-content: space-between;
     padding: 8px 14px 4px;
+  }
+  .nav-meta .auth-slot {
+    flex: 0 1 auto;
+    width: auto;
+    max-width: 60%;
   }
   .app-version { font-size: 14px; }
   .toolbar { order: 4; }
