@@ -9,18 +9,22 @@
 
   document.write(
     '<div class="toolbar-row nav-links">' +
-      '<nav class="nav" aria-label="Pages">' +
-        link("/", "matchups", "Matchups") +
-        link("/teams.html", "teams", "Team Stats") +
-        link("/trends.html", "trends", "Team Trends") +
-        link("/streaks.html", "streaks", "Player Streaks") +
-        link("/scorers.html", "scorers", "Scorers") +
-        link("/review.html", "review", "Review") +
-        link("/backtest.html", "backtest", "Backtest") +
-        link("/download.html", "download", "Download") +
-      "</nav>" +
-      '<span class="app-version" title="App version">v2.7</span>' +
-      '<div class="auth-slot" id="auth-slot"><a class="auth-btn" href="/api/auth/login">Sign in</a></div>' +
+      '<div class="nav-scroll">' +
+        '<nav class="nav" aria-label="Pages">' +
+          link("/", "matchups", "Matchups") +
+          link("/teams.html", "teams", "Team Stats") +
+          link("/trends.html", "trends", "Team Trends") +
+          link("/streaks.html", "streaks", "Player Streaks") +
+          link("/scorers.html", "scorers", "Scorers") +
+          link("/review.html", "review", "Review") +
+          link("/backtest.html", "backtest", "Backtest") +
+          link("/download.html", "download", "Download") +
+        "</nav>" +
+      "</div>" +
+      '<div class="nav-meta">' +
+        '<span class="app-version" title="App version">v2.8</span>' +
+        '<div class="auth-slot" id="auth-slot"><a class="auth-btn" href="/api/auth/login">Sign in</a></div>' +
+      "</div>" +
     "</div>"
   );
 })();
