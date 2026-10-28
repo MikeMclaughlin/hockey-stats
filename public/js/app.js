@@ -1,8 +1,10 @@
 (function () {
   "use strict";
 
-  var state = { data: null, sortKey: "pdo", sortDir: -1, filters: {}, tier: "all", b2b: "all", showWhy: true, cardsExpanded: false, featured: null };
+  var state = { data: null, sortKey: "pdo", sortDir: -1, filters: {}, tier: "all", showWhy: true, cardsExpanded: false, featured: null };
   var B2B_KEY = "hs-b2b-filter";
+  var PICK_KEY = "hs-pick-filter";
+  var PICK_VALUES = { all: true, "toss-up": true, lean: true, confident: true, strong: true, b2b: true };
   var WHY_KEY = "hs-show-why";
   var CARDS_KEY = "hs-cards-expanded";
   var STATS_KEY = "hs-card-stats";
@@ -447,20 +449,29 @@
     return time || venue || fmtTime(m.startTimeUTC);
   }
 
+  function recordTitle(team, venue) {
+    var record = hyphenRecord(team && team.record);
+    var splitRaw = venue === "Away" ? (team && team.roadRecord) : (team && team.homeRecord);
+    var split = hyphenRecord(splitRaw);
+    if (split) return venue + " " + split + (record ? ", overall " + record : "");
+    return record || "";
+  }
+
+  function recordPre(team) {
+    return team && team.preseason && team.preseason.record ? " " + preMark(true) : "";
+  }
+
   function splitBanner(m) {
     function half(team, venue) {
       var bg = teamColor(team && team.abbrev);
       var fg = inkOn(bg);
       var logo = team && team.logo ? '<img class="split-logo" src="' + esc(team.logo) + '" alt="">' : "";
       var record = hyphenRecord(team && team.record);
-      var splitRaw = venue === "Away" ? (team && team.roadRecord) : (team && team.homeRecord);
-      var split = hyphenRecord(splitRaw);
-      var title = split ? (venue + " " + split + (record ? ", overall " + record : "")) : (record || "");
-      var pre = team && team.preseason && team.preseason.record ? " " + preMark(true) : "";
+      var title = recordTitle(team, venue);
       return '<div class="split-side" style="background:' + bg + ";color:" + fg + '">' +
         '<div class="split-season">' + esc(seasonMark(m)) + "</div>" +
         logo +
-        '<div class="split-record" title="' + esc(title) + '">' + esc(record || "—") + pre + "</div>" +
+        '<div class="split-record" title="' + esc(title) + '">' + esc(record || "—") + recordPre(team) + "</div>" +
         '<div class="split-name">' + esc(shortTeam(team)) + "</div>" +
         "</div>";
     }
@@ -468,8 +479,119 @@
       half(m.away, "Away") +
       half(m.home, "Home") +
       '<div class="split-vs" aria-hidden="true">VS</div>' +
-      "</div>" +
-      '<p class="split-meta">' + esc(bannerWhen(m)) + "</p>";
+      "</div>";
+  }
+
+  function splitMeta(m) {
+    return '<p class="split-meta">' + esc(bannerWhen(m)) + "</p>";
+  }
+
+  function splitRecords(m) {
+    function cell(team, venue) {
+      var splitRaw = venue === "Away" ? (team && team.roadRecord) : (team && team.homeRecord);
+      var split = hyphenRecord(splitRaw);
+      return '<div title="' + esc(recordTitle(team, venue)) + '">' +
+        esc(venue) + " " + esc(split || "—") + recordPre(team) +
+        "</div>";
+    }
+    return '<div class="split-records">' + cell(m.away, "Away") + cell(m.home, "Home") + "</div>";
+  }
+
+  function periodSlot(period) {
+    var p = String(period || "").toUpperCase();
+    if (p === "1ST") return 1;
+    if (p === "2ND") return 2;
+    if (p === "3RD") return 3;
+    if (p.indexOf("OT") === 0 || p === "SO") return 4;
+    return 0;
+  }
+
+  function periodTheme(slot) {
+    var themes = {
+      1: { color: "#4f9fd6", tint: "#e3f1fa" },
+      2: { color: "#2f7fbf", tint: "#d3e6f5" },
+      3: { color: "#1f5f9c", tint: "#c0d8ee" },
+      4: { color: "#143e6e", tint: "#aac6e3" }
+    };
+    return themes[slot] || themes[1];
+  }
+
+  function applyLiveTheme(article, m) {
+    if (!article) return;
+    var s = m.scoreboard || {};
+    var theme = periodTheme(periodSlot(s.period) || 1);
+    article.style.setProperty("--period-color", theme.color);
+    article.style.setProperty("--period-tint", theme.tint);
+  }
+
+  function liveHeaderText(s) {
+    var status = s && s.status ? String(s.status) : "";
+    if (status.toLowerCase().indexOf("intermission") !== -1) return "LIVE · " + status.toUpperCase();
+    var period = s && s.period ? String(s.period).toUpperCase() : "";
+    if (period === "SO") return "LIVE · SO";
+    if (period) return "LIVE · " + period + " PERIOD";
+    if (status) return "LIVE · " + status.toUpperCase();
+    return "LIVE";
+  }
+
+  function periodDots(s) {
+    var labels = ["1st", "2nd", "3rd", "OT"];
+    var current = periodSlot(s && s.period);
+    var status = s && s.status ? String(s.status).toLowerCase() : "";
+    var intermission = status.indexOf("intermission") !== -1 || !!(s && s.inIntermission);
+    var shootout = String(s && s.period || "").toUpperCase() === "SO";
+    var html = labels.map(function (label, i) {
+      var n = i + 1;
+      var cls = "period-dot";
+      if (shootout || (intermission && current && n <= current) || (!intermission && current && n < current)) cls += " is-done";
+      else if (!intermission && current && n === current) cls += " is-now";
+      return '<div class="' + cls + '"><b></b><span>' + label + "</span></div>";
+    }).join("");
+    var described = (s && (s.status || s.period)) || "Live";
+    return '<div class="period-dots" role="img" aria-label="' + esc("Game progress: " + described) + '">' + html + "</div>";
+  }
+
+  function logoOnLight(url) {
+    return String(url || "").replace("_light.svg", "_dark.svg");
+  }
+
+  function sogLine(n) {
+    if (n == null || !isFinite(Number(n))) return "";
+    return '<div class="live-sog">' + esc(Number(n)) + " SOG</div>";
+  }
+
+  function liveSide(team, venue, goals, sog) {
+    var src = logoOnLight(team && team.logo);
+    var logo = src ? '<img src="' + esc(src) + '" alt="">' : "";
+    var record = hyphenRecord(team && team.record);
+    return '<div class="live-side">' +
+      logo +
+      '<div class="live-name">' + esc(shortTeam(team)) + "</div>" +
+      '<div class="live-rec" title="' + esc(recordTitle(team, venue)) + '">' + esc(record || "—") + recordPre(team) + "</div>" +
+      '<div class="live-score">' + esc(goals) + "</div>" +
+      sogLine(sog) +
+      "</div>";
+  }
+
+  function liveBannerInner(m) {
+    var s = m.scoreboard || {};
+    var clock = s.clock ? '<span class="live-clock">' + esc(s.clock) + "</span>" : "";
+    return '<div class="live-bar"><span class="live-title"><span class="live-dot" aria-hidden="true"></span>' +
+      esc(liveHeaderText(s)) + "</span>" + clock + "</div>" +
+      '<div class="live-body"><div class="live-scoreline">' +
+        liveSide(m.away, "Away", s.away, s.awaySog) +
+        periodDots(s) +
+        liveSide(m.home, "Home", s.home, s.homeSog) +
+      "</div></div>";
+  }
+
+  function cardIsLive(m) {
+    var s = m.scoreboard || {};
+    return !!(s.live && s.away != null && s.home != null);
+  }
+
+  function liveBanner(m) {
+    return '<div class="live-banner" data-score="' + m.id + '">' + liveBannerInner(m) + "</div>";
   }
 
   function leagueTeams() {
@@ -500,12 +622,7 @@
     return signedText(n, digits);
   }
 
-  function toneClass(n) {
-    if (n == null || !isFinite(Number(n)) || Number(n) === 0) return "flat";
-    return Number(n) > 0 ? "good" : "bad";
-  }
-
-  function compareSide(spec, team, board, which) {
+  function sideFacts(spec, team, board, which) {
     var value = team ? team[spec.field] : null;
     var num = value == null || !isFinite(Number(value)) ? null : Number(value);
     var entry = teamPrior(team && team.abbrev);
@@ -514,66 +631,66 @@
     var info = board && board.byAbbrev ? board.byAbbrev[team && team.abbrev] : null;
     var digits = deltaDigits(spec);
     var pre = spec.pre && team && team.preseason && team.preseason[spec.pre];
-    var valueText = statText(spec, value);
-    if (pre && valueText !== "—") valueText = statText(spec, value) + " " + preMark(true);
-    else valueText = esc(valueText);
-    var valueCls = "val current";
-    if (spec.fmt === "signed1" || spec.fmt === "signed2") {
-      var sign = HockeyStats.pillSign(num, spec.kind);
-      if (sign === "pos") valueCls += " good";
-      else if (sign === "neg") valueCls += " bad";
-    }
+    var plain = statText(spec, value);
+    var valueHtml = plain === "—" ? "—" : esc(plain);
+    if (pre && plain !== "—") valueHtml += " " + preMark(true);
     var rankText = info && window.HockeyCardLeague
       ? HockeyCardLeague.rankLabel(info.rank, info.tied)
       : "—";
-    var gapText = info && info.gap != null ? signedDelta(info.gap, digits) + " vs avg" : "—";
-    var gapCls = info && info.gap != null ? toneClass(info.gap) : "flat";
-    var deltaCls = delta == null ? "flat" : toneClass(delta);
-    var rankTitle = which + " rank for " + spec.label + ". 1st is best. Ties are marked T-. The gap is this team minus the league average.";
+    var gap = info && info.gap != null && isFinite(Number(info.gap)) ? Number(info.gap) : null;
+    var shade = gap == null || gap === 0 ? "" : (gap > 0 ? "above" : "below");
+    var rankTone = gap == null || gap === 0 ? "even" : (gap > 0 ? "good" : "bad");
+    var deltaTone = delta == null || Number(delta) === 0 ? "even" : (Number(delta) > 0 ? "good" : "bad");
+    var deltaHtml = delta == null
+      ? "—"
+      : esc(signedDelta(delta, digits)) + ' <span class="delta-unit">5d</span>';
+    var rankTitle = which + " rank for " + spec.label + ". 1st is best. Ties are marked T-. Green is above the league average. Red is below.";
     var deltaTitle = which + " 5-day change in " + spec.label + ". Green is an improvement. Red is a decline.";
     var valueTitle = (PILL_TITLES[spec.kind] || spec.label) + " Current " + which.toLowerCase() + " value.";
     if (pre) valueTitle += " " + ((state.data && state.data.preseasonLabel) || "2026-27 preseason") + ".";
     return {
-      delta: '<td class="val delta ' + deltaCls + '" title="' + esc(deltaTitle) + '">' + esc(signedDelta(delta, digits)) + "</td>",
-      rank: '<td class="val rank ' + gapCls + '" title="' + esc(rankTitle) + '">' +
-        '<div class="rank-no">' + esc(rankText) + "</div>" +
-        '<div class="rank-gap">' + esc(gapText) + "</div></td>",
-      value: '<td class="' + valueCls + '" title="' + esc(valueTitle) + '">' + valueText + "</td>"
+      shade: shade,
+      valueHtml: valueHtml,
+      rankText: rankText,
+      rankTone: rankTone,
+      deltaHtml: deltaHtml,
+      deltaTone: deltaTone,
+      rankTitle: rankTitle,
+      deltaTitle: deltaTitle,
+      valueTitle: valueTitle
     };
   }
 
-  function statTable(rows, away, home) {
+  function halfBlock(side) {
+    return '<div class="stat-half ' + side.shade + '">' +
+      '<div class="stat-cur" title="' + esc(side.valueTitle) + '">' + side.valueHtml + "</div>" +
+      '<div class="stat-sub">' +
+        '<span class="stat-rank ' + side.rankTone + '" title="' + esc(side.rankTitle) + '">' + esc(side.rankText) + "</span>" +
+        '<span class="stat-delta ' + side.deltaTone + '" title="' + esc(side.deltaTitle) + '">' + side.deltaHtml + "</span>" +
+      "</div></div>";
+  }
+
+  function statBlocks(rows, away, home) {
     if (!rows.length) return "";
     var boards = leagueBoards();
-    var body = rows.map(function (spec) {
+    return '<div class="stat-blocks">' + rows.map(function (spec) {
       var board = boards[spec.field] || { byAbbrev: {}, avg: null, n: 0 };
-      var left = compareSide(spec, away, board, "Away");
-      var right = compareSide(spec, home, board, "Home");
+      var left = sideFacts(spec, away, board, "Away");
+      var right = sideFacts(spec, home, board, "Home");
       var avgText = board.avg == null ? "—" : statText(spec, HockeyStats.round(board.avg, deltaDigits(spec) === 2 ? 2 : 1));
       var avgTitle = "League average of " + (board.n || 0) + " teams with a " + spec.label + " number. The average is the mean of those clubs.";
-      return "<tr>" +
-        left.delta + left.rank + left.value +
-        '<td class="stat-label" title="' + esc((PILL_TITLES[spec.kind] || spec.label) + " League average underneath.") + '">' +
-          '<div class="stat-name">' + esc(spec.short || spec.label) + "</div>" +
-          '<div class="lg-avg" title="' + esc(avgTitle) + '">lg avg ' + esc(avgText) + "</div>" +
-        "</td>" +
-        right.value + right.rank + right.delta +
-        "</tr>";
-    }).join("");
-    var heads = [
-      ["delta", "5 day delta", "Change versus the snapshot saved about five days earlier for the away team. Green is an improvement. Red is a decline."],
-      ["rank", "league rank", "Where the away team ranks, 1st best. Ties are marked T-. Under the rank is this team minus the league average. Green is better than average. Red is worse."],
-      ["value", "current value", "Away team’s current value for this stat."],
-      ["stat", "stat", "Stat name. The league average of the clubs with a number is underneath."],
-      ["value", "current value", "Home team’s current value for this stat."],
-      ["rank", "league rank", "Where the home team ranks, 1st best. Ties are marked T-. Under the rank is this team minus the league average. Green is better than average. Red is worse."],
-      ["delta", "5 day delta", "Change versus the snapshot saved about five days earlier for the home team. Green is an improvement. Red is a decline."]
-    ];
-    var head = "<tr>" + heads.map(function (h) {
-      var cls = h[0] === "stat" ? "stat-label" : "val";
-      return '<th class="' + cls + '" title="' + esc(h[2]) + '" aria-label="' + esc(h[2]) + '">' + esc(h[1]) + "</th>";
-    }).join("") + "</tr>";
-    return '<div class="compare-scroll"><table class="stat-table compare-table"><thead>' + head + "</thead><tbody>" + body + "</tbody></table></div>";
+      var nameTitle = (PILL_TITLES[spec.kind] || spec.label) + " League average alongside the name.";
+      return '<div class="stat-block">' +
+        '<div class="stat-block-name" title="' + esc(nameTitle) + '">' +
+          esc(spec.short || spec.label) +
+          '<span class="lg-avg" title="' + esc(avgTitle) + '">lg avg ' + esc(avgText) + "</span>" +
+        "</div>" +
+        '<div class="stat-pair">' +
+          halfBlock(left) +
+          '<div class="stat-sep" aria-hidden="true"></div>' +
+          halfBlock(right) +
+        "</div></div>";
+    }).join("") + "</div>";
   }
 
   function snapshotNote(away, home) {
@@ -655,7 +772,7 @@
     var root = $("cards");
     if (!matchups.length) {
       var any = state.data && state.data.matchups && state.data.matchups.length;
-      var filtered = any && ((state.tier && state.tier !== "all") || state.b2b === "b2b");
+      var filtered = any && state.tier && state.tier !== "all";
       var emptyText = filtered
         ? "No games match these filters."
         : "No games on the current NHL scoreboard. The board will pick up the next published slate.";
@@ -679,15 +796,22 @@
       var more = rest.length
         ? '<details class="more-stats"' + (state.cardsExpanded ? " open" : "") + ">" +
             "<summary>More stats</summary>" +
-            statTable(rest, m.away, m.home) +
+            statBlocks(rest, m.away, m.home) +
           "</details>"
         : "";
       var whyHtml = state.showWhy ? '<p class="why">' + esc(why) + "</p>" : "";
+      var live = cardIsLive(m);
+      var theme = live ? periodTheme(periodSlot((m.scoreboard || {}).period) || 1) : null;
+      var liveStyle = live
+        ? ' style="--period-color:' + theme.color + ";--period-tint:" + theme.tint + '"'
+        : "";
       return (
-        '<article class="card" id="game-' + m.id + '">' +
-          splitBanner(m) +
+        '<article class="card' + (live ? " card-live" : "") + '" id="game-' + m.id + '"' + liveStyle + ">" +
+          (live ? liveBanner(m) : splitBanner(m)) +
+          splitMeta(m) +
+          splitRecords(m) +
           '<div class="card-head">' +
-            '<div class="score-block" data-score="' + m.id + '">' + cardScoreInner(m) + "</div>" +
+            (live ? "" : '<div class="score-block" data-score="' + m.id + '">' + cardScoreInner(m) + "</div>") +
             '<p class="est-row"><span class="est-label">Est.</span> ' +
               esc(m.away.abbrev) + " " + proj.away + " – " + proj.home + " " + esc(m.home.abbrev) + "</p>" +
             '<div class="pick-row">' +
@@ -704,7 +828,7 @@
           "</div>" +
           '<div class="card-stats">' +
             '<div class="stat-head-row">' + head + "</div>" +
-            statTable(featured, m.away, m.home) +
+            statBlocks(featured, m.away, m.home) +
             more +
             '<p class="snapshot-note">' + esc(snapshotNote(m.away, m.home)) + "</p>" +
           "</div>" +
@@ -786,12 +910,13 @@
   }
 
   function passesFilters(m) {
-    if (state.tier && state.tier !== "all") {
+    if (state.tier === "b2b") {
+      if (!teamOnB2b(m.away) && !teamOnB2b(m.home)) return false;
+    } else if (state.tier && state.tier !== "all") {
       var model = modelOf(m);
       var label = model && model.label ? String(model.label).toLowerCase() : "";
       if (label !== state.tier) return false;
     }
-    if (state.b2b === "b2b" && !teamOnB2b(m.away) && !teamOnB2b(m.home)) return false;
     if (!window.TableFilter) return true;
     var display = {};
     Object.keys(state.filters).forEach(function (key) {
@@ -873,6 +998,13 @@
         th.classList.add(state.sortDir === 1 ? "sort-asc" : "sort-desc");
       }
     });
+    document.querySelectorAll("#board tbody tr[data-game]").forEach(function (tr) {
+      tr.style.cursor = "pointer";
+      tr.addEventListener("click", function () {
+        var el = document.getElementById("game-" + tr.getAttribute("data-game"));
+        if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+    });
   }
 
   function render(data) {
@@ -914,13 +1046,6 @@
     syncSortControl();
     syncCardsButton();
     armScores();
-    document.querySelectorAll("#board tbody tr[data-game]").forEach(function (tr) {
-      tr.style.cursor = "pointer";
-      tr.addEventListener("click", function () {
-        var el = document.getElementById("game-" + tr.getAttribute("data-game"));
-        if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
-      });
-    });
   }
 
   function boardQuery(refresh) {
@@ -948,14 +1073,34 @@
   }
 
   function paintScores() {
+    var structural = false;
+    ((state.data && state.data.matchups) || []).forEach(function (m) {
+      var article = document.getElementById("game-" + m.id);
+      if (article && cardIsLive(m) !== article.classList.contains("card-live")) structural = true;
+    });
+    if (structural) {
+      renderCards(visibleRows());
+      renderTable();
+      return;
+    }
     ((state.data && state.data.matchups) || []).forEach(function (m) {
       document.querySelectorAll('[data-score="' + m.id + '"]').forEach(function (el) {
-        el.innerHTML = el.classList.contains("score-cell") ? scoreInner(m) : cardScoreInner(m);
+        if (el.classList.contains("score-cell")) el.innerHTML = scoreInner(m);
+        else if (el.classList.contains("live-banner")) {
+          el.innerHTML = liveBannerInner(m);
+          applyLiveTheme(el.closest("article"), m);
+        } else el.innerHTML = cardScoreInner(m);
       });
       document.querySelectorAll('[data-result="' + m.id + '"]').forEach(function (el) {
         el.textContent = resultInner(m);
       });
     });
+  }
+
+  function keepShown(next, prev) {
+    if (next != null && next !== "") return next;
+    if (prev != null && prev !== "") return prev;
+    return next != null ? next : prev;
   }
 
   function applyScorePayload(body) {
@@ -975,14 +1120,17 @@
         });
       }
       m.scoreboard = {
-        away: g.away,
-        home: g.home,
-        state: g.state,
+        away: keepShown(g.away, prev.away),
+        home: keepShown(g.home, prev.home),
+        state: g.state || prev.state,
         live: !!g.live,
         final: !!g.final,
-        status: g.status,
-        period: g.period,
-        clock: g.clock
+        status: keepShown(g.status, prev.status),
+        period: keepShown(g.period, prev.period),
+        clock: keepShown(g.clock, prev.clock),
+        awaySog: keepShown(g.awaySog, prev.awaySog),
+        homeSog: keepShown(g.homeSog, prev.homeSog),
+        inIntermission: !!g.inIntermission
       };
       if (g.state) m.gameState = g.state;
     });
@@ -1154,10 +1302,20 @@
     if (btn) btn.textContent = state.cardsExpanded ? "Collapse all" : "Expand all";
   }
 
+  function isPick(value) {
+    return !!PICK_VALUES[value];
+  }
+
   function readViewPrefs() {
     try {
-      var b2b = localStorage.getItem(B2B_KEY);
-      if (b2b === "b2b" || b2b === "all") state.b2b = b2b;
+      var legacy = localStorage.getItem(B2B_KEY);
+      var tier = localStorage.getItem(PICK_KEY);
+      if (isPick(tier)) state.tier = tier;
+      else if (legacy === "b2b") state.tier = "b2b";
+      if (legacy != null) {
+        localStorage.removeItem(B2B_KEY);
+        localStorage.setItem(PICK_KEY, state.tier || "all");
+      }
       var why = localStorage.getItem(WHY_KEY);
       if (why === "0") state.showWhy = false;
       if (why === "1") state.showWhy = true;
@@ -1167,14 +1325,15 @@
 
   function writeViewPrefs() {
     try {
-      localStorage.setItem(B2B_KEY, state.b2b);
+      localStorage.setItem(PICK_KEY, state.tier || "all");
+      localStorage.removeItem(B2B_KEY);
       localStorage.setItem(WHY_KEY, state.showWhy ? "1" : "0");
     } catch (e) {}
   }
 
   function syncViewControls() {
-    var b2b = $("b2b");
-    if (b2b) b2b.value = state.b2b === "b2b" ? "b2b" : "all";
+    var tier = $("tier");
+    if (tier) tier.value = isPick(state.tier) ? state.tier : "all";
     var why = $("show-why");
     if (why) why.checked = !!state.showWhy;
   }
@@ -1185,7 +1344,8 @@
       sortKey: state.sortKey,
       sortDir: state.sortDir,
       cardsExpanded: !!state.cardsExpanded,
-      b2b: state.b2b,
+      tier: state.tier || "all",
+      b2b: null,
       showWhy: !!state.showWhy
     });
   }
@@ -1216,7 +1376,8 @@
           state.cardsExpanded = true;
           writeStoredCards(true);
         }
-        if (saved.b2b === "all" || saved.b2b === "b2b") state.b2b = saved.b2b;
+        if (isPick(saved.tier)) state.tier = saved.tier;
+        else if (saved.b2b === "b2b") state.tier = "b2b";
         if (saved.showWhy === true || saved.showWhy === false) state.showWhy = saved.showWhy;
         writeViewPrefs();
         syncViewControls();
@@ -1297,12 +1458,7 @@
   if (dirBtn) dirBtn.addEventListener("click", function () { applySort(state.sortKey, state.sortDir * -1); });
   var tierSel = $("tier");
   if (tierSel) tierSel.addEventListener("change", function () {
-    state.tier = tierSel.value || "all";
-    if (state.data) render(state.data);
-  });
-  var b2bSel = $("b2b");
-  if (b2bSel) b2bSel.addEventListener("change", function () {
-    state.b2b = b2bSel.value === "b2b" ? "b2b" : "all";
+    state.tier = isPick(tierSel.value) ? tierSel.value : "all";
     saveViewPrefs();
     if (state.data) render(state.data);
   });

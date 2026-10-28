@@ -263,7 +263,7 @@
   }
 
   // American prices at or beyond this size are live-board junk, not a pregame line.
-  var IMPOSSIBLE_ML = 10000;
+  var IMPOSSIBLE_ML = 1000;
 
   function priceImpossible(ml) {
     if (ml == null || ml === "" || !isFinite(Number(ml))) return false;

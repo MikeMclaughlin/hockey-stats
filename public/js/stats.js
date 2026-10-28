@@ -329,6 +329,11 @@
     var away = Number(awayRaw);
     var home = Number(homeRaw);
     var show = (final || live) && isFinite(away) && isFinite(home);
+    function shots(team) {
+      if (!show || !team || team.sog == null || team.sog === "") return null;
+      var n = Number(team.sog);
+      return isFinite(n) ? n : null;
+    }
     return {
       away: show ? away : null,
       home: show ? home : null,
@@ -337,7 +342,10 @@
       final: final,
       status: status,
       period: period || null,
-      clock: clock.timeRemaining || null
+      clock: clock.timeRemaining || null,
+      awaySog: shots(game.awayTeam),
+      homeSog: shots(game.homeTeam),
+      inIntermission: !!(live && clock.inIntermission)
     };
   }
 
