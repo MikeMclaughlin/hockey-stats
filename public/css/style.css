@@ -1951,11 +1951,11 @@ body[data-page="teams"] .table-wrap.scroll-port {
     position: absolute;
     right: 0;
     top: 0;
-    bottom: 0;
-    width: 28px;
+    height: 48px;
+    width: 40px;
     pointer-events: none;
-    background: linear-gradient(90deg, rgba(255, 255, 255, 0), #fff);
-    z-index: 1;
+    background: linear-gradient(90deg, rgba(255, 255, 255, 0), #fff 72%);
+    z-index: 3;
   }
   .nav {
     flex-wrap: nowrap;
@@ -1963,7 +1963,7 @@ body[data-page="teams"] .table-wrap.scroll-port {
     height: 48px;
     min-height: 48px;
     gap: 4px;
-    padding: 0 12px;
+    padding: 0 36px 0 12px;
     scrollbar-width: none;
   }
   .nav::-webkit-scrollbar { display: none; }
@@ -2132,5 +2132,91 @@ body[data-page="teams"] .table-wrap.scroll-port {
     left: 0;
     right: 0;
     width: auto;
+  }
+  body[data-page="matchups"] .stat-kicker,
+  body[data-page="matchups"] .backtested,
+  body[data-page="matchups"] .stat-block-name .lg-avg,
+  body[data-page="matchups"] .stat-rank,
+  body[data-page="matchups"] .rank-no,
+  body[data-page="matchups"] .stat-rank .rank-gap,
+  body[data-page="matchups"] .stat-delta,
+  body[data-page="matchups"] .delta-unit,
+  body[data-page="matchups"] .stat-colhead th,
+  body[data-page="matchups"] .snapshot-note {
+    font-size: 14px;
+  }
+  body[data-page="matchups"] .stat-block-name {
+    font-size: 16px;
+  }
+  body[data-page="matchups"] .stat-block-name .lg-avg,
+  body[data-page="matchups"] .rank-no,
+  body[data-page="matchups"] .stat-rank .rank-gap,
+  body[data-page="matchups"] .stat-delta {
+    white-space: nowrap;
+  }
+  body[data-page="matchups"] .stat-half,
+  body[data-page="matchups"] .stat-pair .stat-half:last-child {
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: flex-start;
+    gap: 2px;
+    padding: 8px 10px 10px;
+    min-width: 0;
+  }
+  body[data-page="matchups"] .stat-cur {
+    min-width: 0;
+    width: 100%;
+    font-size: 24px;
+    text-align: left;
+    white-space: nowrap;
+  }
+  body[data-page="matchups"] .stat-pair .stat-half:last-child .stat-cur {
+    text-align: right;
+  }
+  body[data-page="matchups"] .stat-sub {
+    width: 100%;
+    min-width: 0;
+    align-items: flex-start;
+  }
+  body[data-page="matchups"] .stat-pair .stat-half:last-child .stat-sub,
+  body[data-page="matchups"] .stat-pair .stat-half:last-child .stat-rank {
+    align-items: flex-end;
+  }
+  body[data-page="matchups"] .stat-colhead-scroll {
+    overflow: visible;
+  }
+  body[data-page="matchups"] .stat-colhead,
+  body[data-page="matchups"] .stat-colhead thead {
+    display: block;
+    width: 100%;
+    min-width: 0;
+  }
+  body[data-page="matchups"] .stat-colhead tr {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    width: 100%;
+    min-width: 0;
+  }
+  body[data-page="matchups"] .stat-colhead th {
+    display: block;
+    white-space: nowrap;
+    text-align: left;
+    padding: 1px 10px;
+    border-bottom: 0;
+  }
+  body[data-page="matchups"] .stat-colhead th:nth-child(4) {
+    order: 0;
+    grid-column: 1 / -1;
+    text-align: center;
+    padding-bottom: 4px;
+  }
+  body[data-page="matchups"] .stat-colhead th:nth-child(3) { order: 1; }
+  body[data-page="matchups"] .stat-colhead th:nth-child(5) { order: 2; text-align: right; }
+  body[data-page="matchups"] .stat-colhead th:nth-child(2) { order: 3; }
+  body[data-page="matchups"] .stat-colhead th:nth-child(6) { order: 4; text-align: right; }
+  body[data-page="matchups"] .stat-colhead th:nth-child(1) { order: 5; }
+  body[data-page="matchups"] .stat-colhead th:nth-child(7) { order: 6; text-align: right; }
+  body[data-page="matchups"] .meta-line {
+    line-height: 1.35;
   }
 }
