@@ -22,7 +22,7 @@
         "</nav>" +
       "</div>" +
       '<div class="nav-meta">' +
-        '<span class="app-version" title="App version">v2.9</span>' +
+        '<span class="app-version" title="App version">v3.0</span>' +
         '<div class="auth-slot" id="auth-slot"><a class="auth-btn" href="/api/auth/login">Sign in</a></div>' +
       "</div>" +
     "</div>"
