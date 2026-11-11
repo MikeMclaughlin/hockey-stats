@@ -239,10 +239,14 @@
     var head = $(spec.headId);
     var body = $(spec.bodyId);
     if (!head || !body) return;
-    var cols = ["<th data-key='name' class='sticky'>Player</th>", "<th data-key='team'>Team</th>", "<th data-key='gp' class='num'>GP</th>"];
+    var cols = [
+      "<th data-key='name' class='sticky'>Player</th>",
+      "<th data-key='" + spec.totalKey + "' class='num'>Total</th>",
+      "<th data-key='" + spec.rateKey + "' class='num'>" + spec.rateLabel + "</th>",
+      "<th data-key='team'>Team</th>",
+      "<th data-key='gp' class='num'>GP</th>"
+    ];
     for (var g = 1; g <= maxGames; g++) cols.push("<th data-key='g" + g + "' class='num'>G" + g + "</th>");
-    cols.push("<th data-key='" + spec.totalKey + "' class='num'>Total</th>");
-    cols.push("<th data-key='" + spec.rateKey + "' class='num'>" + spec.rateLabel + "</th>");
     head.innerHTML = "<tr>" + cols.join("") + "</tr>";
     head.querySelectorAll("th[data-key]").forEach(function (th) {
       var key = th.getAttribute("data-key");
@@ -260,8 +264,8 @@
       var seq = p[spec.seqKey] || [];
       var games = "";
       for (var i = 0; i < maxGames; i++) games += cell(seq[i] || 0, i < seq.length);
-      return "<tr><td class='sticky'></td><td class='scorer-team'></td><td class='num'>" + (p.gp || 0) + "</td>" +
-        games + "<td class='num'>" + spec.total(p) + "</td><td class='num'>" + spec.rate(p) + "</td></tr>";
+      return "<tr><td class='sticky'></td><td class='num'>" + spec.total(p) + "</td><td class='num'>" + spec.rate(p) + "</td><td class='scorer-team'></td><td class='num'>" + (p.gp || 0) + "</td>" +
+        games + "</tr>";
     }).join("");
     var rows = body.querySelectorAll("tr");
     players.forEach(function (p, i) {
